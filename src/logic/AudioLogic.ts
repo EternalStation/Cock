@@ -120,7 +120,7 @@ function playBgmLoop() {
 }
 
 // No longer needed - kept for compatibility
-export function updateBGMPhase(gameTime: number) {
+export function updateBGMPhase(_gameTime: number) {
     // Music just loops continuously, no phase changes
 }
 
