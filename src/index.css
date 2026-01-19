@@ -1,0 +1,430 @@
+:root {
+  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: light dark;
+  color: rgba(255, 255, 255, 0.87);
+  background-color: #242424;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  font-weight: 500;
+  color: #646cff;
+  text-decoration: inherit;
+}
+
+a:hover {
+  color: #535bf2;
+}
+
+body {
+  margin: 0;
+  display: flex;
+  place-items: center;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+h1 {
+  font-size: 3.2em;
+  line-height: 1.1;
+}
+
+button {
+  border-radius: 8px;
+  border: 1px solid transparent;
+  padding: 0.6em 1.2em;
+  font-size: 1em;
+  font-weight: 500;
+  font-family: inherit;
+  background-color: #1a1a1a;
+  cursor: pointer;
+  transition: border-color 0.25s;
+}
+
+button:hover {
+  border-color: #646cff;
+}
+
+button:focus,
+button:focus-visible {
+  outline: 4px auto -webkit-focus-ring-color;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    color: #213547;
+    background-color: #ffffff;
+  }
+
+  a:hover {
+    color: #747bff;
+  }
+
+  button {
+    background-color: #f9f9f9;
+  }
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 10px rgba(255, 215, 0, 0.4), inset 0 0 20px rgba(255, 215, 0, 0.1);
+  }
+
+  50% {
+    transform: scale(1.02);
+    box-shadow: 0 0 25px rgba(255, 215, 0, 0.7), inset 0 0 40px rgba(255, 215, 0, 0.3);
+  }
+
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 10px rgba(255, 215, 0, 0.4), inset 0 0 20px rgba(255, 215, 0, 0.1);
+  }
+}
+
+@keyframes glitch {
+  0% {
+    transform: translate(0);
+  }
+
+  20% {
+    transform: translate(-2px, 2px);
+  }
+
+  40% {
+    transform: translate(-2px, -2px);
+  }
+
+  60% {
+    transform: translate(2px, 2px);
+  }
+
+  80% {
+    transform: translate(2px, -2px);
+  }
+
+  100% {
+    transform: translate(0);
+  }
+}
+
+@keyframes orbit {
+  0% {
+    transform: rotateY(0deg) rotateX(20deg) translateZ(60px);
+  }
+
+  100% {
+    transform: rotateY(360deg) rotateX(20deg) translateZ(60px);
+  }
+}
+
+/* Rarity Styles */
+.card-common {
+  border-color: #94a3b8;
+}
+
+.card-uncommon {
+  border-color: #22d3ee;
+}
+
+.card-rare {
+  border-color: #3b82f6;
+  box-shadow: 0 0 15px rgba(59, 130, 246, 0.3);
+}
+
+.card-epic {
+  border-color: #a855f7;
+  box-shadow: 0 0 15px rgba(168, 85, 247, 0.4);
+}
+
+.card-legendary {
+  border-color: #f59e0b;
+  box-shadow: 0 0 15px rgba(245, 158, 11, 0.5);
+}
+
+.card-mythical {
+  border-color: #d946ef;
+  box-shadow: 0 0 30px rgba(217, 70, 239, 0.6), inset 0 0 20px rgba(217, 70, 239, 0.2);
+  animation: pulse 2s infinite ease-in-out;
+  transform-style: preserve-3d;
+  overflow: visible !important;
+  /* Allow orbit to go outside */
+}
+
+/* 3D Orbiting Particle */
+.card-mythical::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 6px;
+  height: 6px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 10px #d946ef, 0 0 20px #d946ef;
+  animation: orbit 3s linear infinite;
+  pointer-events: none;
+}
+
+.card-divine {
+  border: 3px solid #fcd34d !important;
+  background: linear-gradient(135deg, #1e293b 0%, #334155 100%) !important;
+  box-shadow: 0 0 60px rgba(252, 211, 77, 0.8), inset 0 0 30px rgba(252, 211, 77, 0.4);
+  animation: holy-glow 1.5s infinite alternate;
+  transform-style: preserve-3d;
+  overflow: visible !important;
+}
+
+@keyframes holy-glow {
+  from {
+    box-shadow: 0 0 40px rgba(252, 211, 77, 0.4), inset 0 0 20px rgba(252, 211, 77, 0.2);
+    transform: scale(1);
+  }
+
+  to {
+    box-shadow: 0 0 100px rgba(252, 211, 77, 1), inset 0 0 40px rgba(252, 211, 77, 0.6);
+    transform: scale(1.03);
+  }
+}
+
+/* Rays of light for Divine */
+.card-divine::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: repeating-conic-gradient(from 0deg, transparent 0deg, rgba(252, 211, 77, 0.1) 10deg, transparent 20deg);
+  z-index: -2;
+  animation: rotate-slow 20s linear infinite;
+  pointer-events: none;
+}
+
+/* Junk Styles */
+.card-junk {
+  background: linear-gradient(135deg, #1a1512 0%, #2d241e 100%) !important;
+  border-color: #574338 !important;
+  filter: grayscale(0.5) contrast(1.1);
+  overflow: hidden;
+  position: relative;
+}
+
+.card-junk::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background:
+    radial-gradient(circle at 30% 20%, rgba(60, 40, 20, 0.4), transparent 40%),
+    radial-gradient(circle at 70% 80%, rgba(40, 30, 10, 0.4), transparent 50%);
+  pointer-events: none;
+  mix-blend-mode: multiply;
+}
+
+/* Broken Styles (Scratched Metal) */
+.card-broken {
+  background: linear-gradient(135deg, #2d2d2d 0%, #1a1a1a 100%) !important;
+  border-color: #4b5563 !important;
+  filter: contrast(1.2);
+  overflow: hidden;
+  position: relative;
+}
+
+.card-broken::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image:
+    repeating-linear-gradient(60deg, transparent, transparent 15px, rgba(255, 255, 255, 0.03) 16px, transparent 17px),
+    repeating-linear-gradient(-20deg, transparent, transparent 40px, rgba(0, 0, 0, 0.1) 41px, transparent 42px),
+    linear-gradient(to right, rgba(255, 255, 255, 0.05), transparent 1px, transparent);
+  background-size: 200% 200%;
+  pointer-events: none;
+}
+
+.card-junk h3,
+.card-broken h3 {
+  text-shadow: 1px 1px 2px #000;
+  font-family: 'Courier New', monospace;
+  letter-spacing: -0.5px;
+  color: #94a3b8 !important;
+  text-transform: uppercase;
+}
+
+.card-junk:hover,
+.card-broken:hover {
+  transform: scale(1.02);
+  /* No rotation */
+  filter: grayscale(0.2);
+}
+
+/* Higher Tiers Visual Padding */
+.card-epic,
+.card-legendary,
+.card-mythical,
+.card-divine {
+  position: relative;
+}
+
+/* Floating Energy Lines for Epic+ */
+.card-epic::before,
+.card-legendary::before,
+.card-mythical::after,
+.card-divine::after {
+  content: '';
+  position: absolute;
+  background: currentColor;
+  opacity: 0.3;
+  pointer-events: none;
+}
+
+/* Specific floating bit for higher tiers */
+.card-epic::before {
+  width: 40px;
+  height: 1px;
+  top: 10%;
+  right: 10%;
+  animation: float-line 4s infinite linear;
+}
+
+.card-legendary::before {
+  width: 60px;
+  height: 1px;
+  bottom: 15%;
+  left: 5%;
+  animation: float-line 5s infinite linear reverse;
+}
+
+@keyframes float-line {
+  0% {
+    transform: translateX(-20px) scaleX(0.5);
+    opacity: 0;
+  }
+
+  50% {
+    opacity: 0.4;
+  }
+
+  100% {
+    transform: translateX(20px) scaleX(1.5);
+    opacity: 0;
+  }
+}
+
+.card-mythical {
+  border-color: #d946ef;
+  box-shadow: 0 0 40px rgba(217, 70, 239, 0.4), inset 0 0 20px rgba(217, 70, 239, 0.1);
+  animation: pulse-mythic 3s infinite ease-in-out;
+  overflow: visible !important;
+}
+
+@keyframes pulse-mythic {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 30px rgba(217, 70, 239, 0.3);
+  }
+
+  50% {
+    transform: scale(1.01);
+    box-shadow: 0 0 50px rgba(217, 70, 239, 0.6);
+  }
+
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 30px rgba(217, 70, 239, 0.3);
+  }
+}
+
+.card-mythical::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 15px #d946ef, 0 0 30px #d946ef;
+  animation: orbit 3s linear infinite;
+  pointer-events: none;
+}
+
+.card-divine {
+  border-color: #fcd34d;
+  box-shadow: 0 0 60px rgba(252, 211, 77, 0.8), inset 0 0 30px rgba(252, 211, 77, 0.4);
+  animation: holy-glow 1.5s infinite alternate;
+  transform-style: preserve-3d;
+  overflow: visible !important;
+}
+
+/* Extra Divine Particles */
+.card-divine::after {
+  content: '';
+  position: absolute;
+  top: -10%;
+  left: -10%;
+  width: 120%;
+  height: 120%;
+  background: radial-gradient(circle, rgba(252, 211, 77, 0.15) 0%, transparent 70%);
+  z-index: -1;
+  animation: rotate-slow 10s linear infinite;
+}
+
+@keyframes holy-glow {
+  from {
+    box-shadow: 0 0 40px rgba(252, 211, 77, 0.6);
+    transform: scale(1);
+  }
+
+  to {
+    box-shadow: 0 0 80px rgba(252, 211, 77, 1);
+    transform: scale(1.02);
+  }
+}
+
+@keyframes rotate-slow {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.glitch-text {
+  animation: glitch 1s infinite;
+}
+
+.modal-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(4px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  pointer-events: auto;
+}
+
+.glitch-text {
+  animation: glitch 1s infinite;
+}

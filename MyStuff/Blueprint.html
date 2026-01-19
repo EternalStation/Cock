@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neon Survivor - Master Concept Blueprint</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #0f172a;
+            color: #e2e8f0;
+            line-height: 1.6;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 40px;
+        }
+
+        h1 {
+            color: #22d3ee;
+            border-bottom: 2px solid #1e293b;
+            padding-bottom: 10px;
+            font-size: 2.5em;
+        }
+
+        h2 {
+            color: #38bdf8;
+            margin-top: 40px;
+            border-left: 5px solid #38bdf8;
+            padding-left: 15px;
+        }
+
+        h3 {
+            color: #94a3b8;
+            margin-top: 25px;
+        }
+
+        p {
+            margin-bottom: 15px;
+        }
+
+        strong {
+            color: #facc15;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            background-color: #1e293b;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        th,
+        td {
+            text-align: left;
+            padding: 12px 15px;
+            border-bottom: 1px solid #334155;
+        }
+
+        th {
+            background-color: #0f172a;
+            color: #22d3ee;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tr:hover {
+            background-color: #283548;
+        }
+
+        code {
+            background-color: #334155;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            color: #ff90e8;
+        }
+
+        .color-box {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 5px;
+            background-color: currentColor;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>Neon Survivor - Master Concept Blueprint</h1>
+
+    <h2>1. Combat & Targeting</h2>
+
+    <h3>Player Mechanics</h3>
+    <ul>
+        <li><strong>Movement:</strong> WASD / Arrow Keys. Physics-based movement (Speed boosted 15% to 4.85).</li>
+        <li><strong>Targeting:</strong> Auto-aims at the nearest enemy. Grid View expanded to cover full map.</li>
+        <li><strong>Stats:</strong>
+            <ul>
+                <li><strong>Health:</strong> Auto-regens over time (based on <code>reg</code> stat).</li>
+                <li><strong>Attack Speed:</strong> SCORE Based. Base 200 = 1s delay. Cap 9999 = 0.02s delay. (Higher is
+                    Faster).</li>
+                <li><strong>Damage:</strong> Base 50.</li>
+            </ul>
+        </li>
+    </ul>
+
+    <h3>Archetypes</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Shape</th>
+                <th>Role</th>
+                <th>Size</th>
+                <th>Speed</th>
+                <th>Special Logic</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>Circle</strong></td>
+                <td>Chaser</td>
+                <td>1.0x</td>
+                <td>High</td>
+                <td>Standard chase. Minions use <strong>Spiral Orbit</strong> logic.</td>
+            </tr>
+            <tr>
+                <td><strong>Triangle</strong></td>
+                <td>Charger</td>
+                <td>1.2x</td>
+                <td>Medium</td>
+                <td><strong>Dash Attack</strong> (Speed 20+) every 5s.</td>
+            </tr>
+            <tr>
+                <td><strong>Square</strong></td>
+                <td>Tank</td>
+                <td>1.5x</td>
+                <td>Slow</td>
+                <td>High HP, steady tracking.</td>
+            </tr>
+            <tr>
+                <td><strong>Diamond</strong></td>
+                <td>Sniper</td>
+                <td>1.2x</td>
+                <td>Fast (1.2x)</td>
+                <td><strong>Kiting AI:</strong> Maintains 500-900px distance. Retreats if too close.
+                    <strong>Dodge</strong> strafes every ~3s.</td>
+            </tr>
+            <tr>
+                <td><strong>Pentagon</strong></td>
+                <td>Leader</td>
+                <td>2.0x</td>
+                <td>Slow</td>
+                <td><strong>Snake Summoner:</strong> Activates at 1000px. Spawns 5 Minions in a <strong>Sequential Snake
+                        Line</strong> spiraling towards player.</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h3>Game Engine</h3>
+    <ul>
+        <li><strong>Clock:</strong> Fixed Time Step (60Hz normalized) for consistent speed on all monitors.</li>
+        <li><strong>Global Speed:</strong> All entities boosted +15% to compensate for clock normalization.</li>
+    </ul>
+
+    <h3>Visual Evolution</h3>
+    <p>Detailed 3-Stage Shell System per Era:</p>
+    <ul>
+        <li><strong>Stage 1 (Core):</strong> Bright Color.</li>
+        <li><strong>Stage 2 (Shell):</strong> Core Dimmed, Inner Shell Visible.</li>
+        <li><strong>Stage 3 (Full):</strong> Core Dark, Inner Dim, Outer Shell Bright.</li>
+    </ul>
+
+    <h3>Bosses</h3>
+    <ul>
+        <li><strong>Spawn:</strong> Every 2 Minutes.</li>
+        <li><strong>Types:</strong>
+            <ul>
+                <li>Type 0: Spread Shot (5-way spread).</li>
+                <li>Type 1: Tracking Snipe (Single high-damage shot).</li>
+            </ul>
+        </li>
+        <li><strong>HP:</strong> 15x Base Enemy HP.</li>
+    </ul>
+
+</body>
+
+</html>
