@@ -7,7 +7,7 @@ interface SettingsMenuProps {
     onQuit: () => void;
 }
 
-export const SettingsMenu: React.FC<SettingsMenuProps> = ({ onClose, onRestart, onQuit }) => {
+export const SettingsMenu = ({ onClose, onRestart, onQuit }: SettingsMenuProps) => {
     const [musVol, setMusVol] = useState(getMusicVolume());
     const [sfxVol, setSfxVol] = useState(getSfxVolume());
 
@@ -56,6 +56,13 @@ export const SettingsMenu: React.FC<SettingsMenuProps> = ({ onClose, onRestart, 
             </div>
 
             <div style={{ marginTop: 40, display: 'flex', flexDirection: 'column', gap: 10, width: '100%', maxWidth: 300 }}>
+
+                <button
+                    onClick={onClose}
+                    style={{ padding: '15px 0', background: '#22d3ee', border: 'none', color: '#000', borderRadius: 6, cursor: 'pointer', fontWeight: 900, marginBottom: 10 }}
+                >
+                    RESUME
+                </button>
 
                 <div style={{ display: 'flex', gap: 10 }}>
                     <button
