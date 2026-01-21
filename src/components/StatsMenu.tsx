@@ -127,37 +127,44 @@ export const StatsMenu: React.FC<StatsMenuProps> = ({ gameState }) => {
     const { player } = gameState;
 
     return (
-        <div className="modal-overlay" style={{ background: 'rgba(2, 6, 23, 0.95)', pointerEvents: 'auto' }}>
-            <h2 style={{ color: '#22d3ee', margin: '0 0 20px 0', textTransform: 'uppercase', letterSpacing: 2 }}>System Diagnostics</h2>
+        <div className="stats-panel-slide open">
+            <h2 style={{ color: '#22d3ee', margin: '40px 0 20px 0', textTransform: 'uppercase', letterSpacing: 2, fontSize: 24, paddingBottom: 10, borderBottom: '1px solid #22d3ee' }}>
+                System Stats
+            </h2>
 
-            <div style={{ display: 'flex', gap: 20 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 30 }}>
+                {/* Radar Chart */}
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{ color: '#64748b', fontSize: 10, marginBottom: 10, textTransform: 'uppercase' }}>Build Profile</div>
+                    <RadarChart player={player} />
+                </div>
+
                 {/* Left: Table */}
-                <div style={{ width: '100%', maxWidth: 400, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 4 }}>
                     <StatRow label="Health" stat={player.hp} />
                     <StatRow label="Damage" stat={player.dmg} />
                     <StatRow
                         label="Attack Speed"
                         stat={player.atk}
-                        extraInfo={`${(Math.min(9999, calcStat(player.atk)) / 200).toFixed(1)} shots/s (Cap 9999)`}
+                        extraInfo={`${(Math.min(9999, calcStat(player.atk)) / 200).toFixed(1)}/s`}
                     />
                     <StatRow label="Regeneration" stat={player.reg} />
-                    <StatRow label="Armor" stat={player.arm} extraInfo={`(${(0.95 * (calcStat(player.arm) / (calcStat(player.arm) + 5263)) * 100).toFixed(1)}% Reduction, 95% Max)`} />
+                    <StatRow label="Armor" stat={player.arm} extraInfo={`(${(0.95 * (calcStat(player.arm) / (calcStat(player.arm) + 5263)) * 100).toFixed(1)}%)`} />
 
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', marginTop: 10 }}>
-                        <span style={{ color: '#94a3b8', fontSize: 12, fontWeight: 700 }}>Projectiles</span>
-                        <span style={{ color: '#fff', fontSize: 12, fontWeight: 900 }}>{player.multi} (Pierce: {player.pierce})</span>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderTop: '1px solid #333', marginTop: 10 }}>
+                        <span style={{ color: '#94a3b8', fontSize: 12, fontWeight: 700 }}>PROJECTILES</span>
+                        <span style={{ color: '#fff', fontSize: 12, fontWeight: 900 }}>{player.multi} <span style={{ color: '#666' }}>(Pierce: {player.pierce})</span></span>
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0' }}>
+                        <span style={{ color: '#94a3b8', fontSize: 12, fontWeight: 700 }}>LEVEL</span>
+                        <span style={{ color: '#00FF88', fontSize: 14, fontWeight: 900 }}>{player.level}</span>
                     </div>
                 </div>
 
-                {/* Right: Radar */}
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: 200 }}>
-                    <div style={{ color: '#64748b', fontSize: 10, marginBottom: 10, textTransform: 'uppercase' }}>Build Profile</div>
-                    <RadarChart player={player} />
+                <div style={{ marginTop: 'auto', padding: '20px 0', color: '#475569', fontSize: 10, textAlign: 'center' }}>
+                    PRESS [C] TO CLOSE
                 </div>
-            </div>
-
-            <div style={{ marginTop: 20, color: '#475569', fontSize: 10 }}>
-                PRESS [C] TO RESUME
             </div>
         </div>
     );

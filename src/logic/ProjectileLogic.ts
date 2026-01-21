@@ -1,6 +1,7 @@
 import type { GameState, Bullet } from './types';
 import { calcStat, getDefenseReduction } from './MathUtils';
 import { spawnParticles } from './ParticleLogic';
+import { playSfx } from './AudioLogic';
 // import { spawnUpgrades } from './UpgradeLogic'; // Triggered via callback now
 
 export function spawnBullet(state: GameState, x: number, y: number, angle: number, dmg: number, pierce: number, offset: number = 0) {
@@ -55,6 +56,83 @@ export function updateProjectiles(state: GameState, onEvent?: (type: string, dat
                 b.pierce--;
                 if (onEvent) onEvent('hit');
 
+                if (e.isRare) {
+                    // PHASE 0 & 1: TRANSITION TO PHASE 2 (SPLIT) ON HIT
+                    if (e.rarePhase === 0 || e.rarePhase === 1) {
+                        b.hits.add(e.id);
+                        b.pierce--; // Bullet consumed
+
+                        // Trigger Split
+                        e.rarePhase = 2; // Real one becomes Phase 2 (Panic)
+                        e.rareTimer = state.gameTime;
+                        e.spd = 9; // Fast Panic Speed
+                        e.invincibleUntil = Date.now() + 2000; // Invincible for 2s
+                        e.teleported = true;
+                        e.longTrail = []; // Clear trail
+
+                        // Spawn Decoy
+                        const decoy: any = { ...e }; // Shallow copy
+                        decoy.id = Math.random();
+                        decoy.rareReal = false; // It's a fake
+                        decoy.hp = e.maxHp; // Match HP so player can't tell instantly by health bar
+                        decoy.maxHp = e.maxHp;
+                        decoy.parentId = e.id; // Link to master
+                        decoy.x += 80; decoy.y += 80; // Split offset
+                        e.x -= 80; e.y -= 80;
+
+                        state.enemies.push(decoy);
+                        return; // Don't deal damage yet
+                    }
+
+                    // PHASE 2: CHECK REAL VS FAKE
+                    if (e.rarePhase === 2) {
+                        // Check Invincibility
+                        if (e.invincibleUntil && Date.now() < e.invincibleUntil) {
+                            return; // Invincible! Ignore hit.
+                        }
+
+                        // DEAL DAMAGE (Both take damage)
+                        if (!b.hits.has(e.id)) {
+                            e.hp -= b.dmg;
+                            state.player.damageDealt += b.dmg;
+                            b.hits.add(e.id);
+                            b.pierce--;
+                        }
+
+                        // DEATH LOGIC
+                        if (e.hp <= 0 && !e.dead) {
+                            e.dead = true;
+
+                            // IF REAL ONE DIES
+                            if (e.rareReal) {
+                                spawnParticles(state, e.x, e.y, '#F59E0B', 40); // Massive Gold explosion
+                                playSfx('rare-kill'); // Jackpot Sound!
+                                state.score += 5000;
+                                state.rareRewardActive = true;
+
+                                // XP Reward: FULL LEVEL
+                                // Add exactly what is needed for current level, ensuring a level up occurs
+                                // The loop below handles the actual leveling
+                                player.xp.current += player.xp.needed;
+
+                                // Kill ALL fakes
+                                state.enemies.forEach(other => {
+                                    if (other.parentId === e.id || (!other.rareReal && other.isRare && other.id !== e.id)) {
+                                        other.dead = true;
+                                        spawnParticles(state, other.x, other.y, '#ffffff', 10);
+                                    }
+                                });
+                            } else {
+                                // FAKE DIES
+                                spawnParticles(state, e.x, e.y, '#ef4444', 15); // Glitch/Red/Fake explosion
+                                // Real one continues...
+                            }
+                            return;
+                        }
+                        return;
+                    }
+                }
+
                 if (e.hp <= 0 && !e.dead) {
                     e.dead = true;
                     spawnParticles(state, e.x, e.y, e.palette[0], 8);
@@ -67,9 +145,10 @@ export function updateProjectiles(state: GameState, onEvent?: (type: string, dat
                         if (onEvent) onEvent('boss_kill');
                     }
 
-                    if (player.xp.current >= player.xp.needed) {
+                    // Level Up Logic with Rollover
+                    while (player.xp.current >= player.xp.needed) {
+                        player.xp.current -= player.xp.needed; // Keep overflow
                         player.level++;
-                        player.xp.current = 0;
                         player.xp.needed *= 1.22;
                         if (onEvent) onEvent('level_up');
                     }
@@ -119,6 +198,14 @@ export function updateProjectiles(state: GameState, onEvent?: (type: string, dat
 
             // Check if enemy is touching the honeycomb edge - ENEMY DIES on contact
             if (dist < e.size + honeycombRadius) {
+                if (e.isRare) {
+                    // Startle / Teleport Logic
+                    const escapeA = Math.random() * 6.28;
+                    e.x += Math.cos(escapeA) * 200;
+                    e.y += Math.sin(escapeA) * 200;
+                    return; // Skip death and damage
+                }
+
                 e.dead = true; // Enemy dies on contact
 
                 // Percentage Based Damage Logic

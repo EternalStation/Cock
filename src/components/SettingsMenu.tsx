@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
-import { setMusicVolume, setSfxVolume } from '../logic/AudioLogic';
+import { setMusicVolume, setSfxVolume, getMusicVolume, getSfxVolume } from '../logic/AudioLogic';
 
 interface SettingsMenuProps {
     onClose: () => void;
     onRestart: () => void;
+    onQuit: () => void;
 }
 
-export const SettingsMenu: React.FC<SettingsMenuProps> = ({ onClose, onRestart }) => {
-    const [musVol, setMusVol] = useState(0.5);
-    const [sfxVol, setSfxVol] = useState(0.5);
+export const SettingsMenu: React.FC<SettingsMenuProps> = ({ onClose, onRestart, onQuit }) => {
+    const [musVol, setMusVol] = useState(getMusicVolume());
+    const [sfxVol, setSfxVol] = useState(getSfxVolume());
 
     const handleMusChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const v = parseFloat(e.target.value);
@@ -23,8 +24,8 @@ export const SettingsMenu: React.FC<SettingsMenuProps> = ({ onClose, onRestart }
     };
 
     return (
-        <div className="modal-overlay" style={{ zIndex: 100 }}>
-            <h2 style={{ color: '#fff', fontSize: 24, letterSpacing: 4, marginBottom: 40, borderBottom: '2px solid #22d3ee', paddingBottom: 10 }}>PAUSED</h2>
+        <div className="modal-overlay overlay-blur" style={{ zIndex: 100 }}>
+            <h2 style={{ color: '#fff', fontSize: 24, letterSpacing: 4, marginBottom: 40, borderBottom: '2px solid #22d3ee', paddingBottom: 10, textShadow: '0 0 10px #22d3ee' }}>PAUSED</h2>
 
             <div style={{ width: '100%', maxWidth: 300, display: 'flex', flexDirection: 'column', gap: 20 }}>
                 {/* Music Volume */}
@@ -54,19 +55,22 @@ export const SettingsMenu: React.FC<SettingsMenuProps> = ({ onClose, onRestart }
                 </div>
             </div>
 
-            <div style={{ marginTop: 40, display: 'flex', gap: 10, width: '100%', maxWidth: 300 }}>
-                <button
-                    onClick={onClose}
-                    style={{ flex: 1, padding: '12px 0', background: '#334155', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 700 }}
-                >
-                    RESUME (ESC)
-                </button>
-                <button
-                    onClick={onRestart}
-                    style={{ flex: 1, padding: '12px 0', background: '#ef4444', color: '#000', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 900 }}
-                >
-                    RESTART
-                </button>
+            <div style={{ marginTop: 40, display: 'flex', flexDirection: 'column', gap: 10, width: '100%', maxWidth: 300 }}>
+
+                <div style={{ display: 'flex', gap: 10 }}>
+                    <button
+                        onClick={onRestart}
+                        style={{ flex: 1, padding: '15px 0', background: 'transparent', border: '1px solid #ef4444', color: '#ef4444', borderRadius: 6, cursor: 'pointer', fontWeight: 900 }}
+                    >
+                        RESTART
+                    </button>
+                    <button
+                        onClick={onQuit}
+                        style={{ flex: 1, padding: '15px 0', background: 'transparent', border: '1px solid #94a3b8', color: '#94a3b8', borderRadius: 6, cursor: 'pointer', fontWeight: 700 }}
+                    >
+                        QUIT
+                    </button>
+                </div>
             </div>
         </div>
     );

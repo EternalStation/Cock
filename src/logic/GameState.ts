@@ -42,4 +42,6 @@ export const createInitialGameState = (): GameState => ({
     gameOver: false,
     nextBossSpawnTime: 120, // 2 minutes
     nextBossId: 0,
+    rareSpawnCycle: 0,
+    rareSpawnActive: false
 });

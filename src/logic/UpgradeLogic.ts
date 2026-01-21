@@ -20,13 +20,26 @@ export function spawnUpgrades(state: GameState, isBoss: boolean = false): Upgrad
             const type = pool.splice(idx, 1)[0];
 
             // Pick Rarity
-            const r = Math.random();
+            let r = Math.random();
+
+            // Calculate total weight with modifiers
+            const activeWeights = RARITIES.map(rar => {
+                let w = rar.weight;
+                if (state.rareRewardActive && rar.id !== 'common' && rar.id !== 'broken') {
+                    w *= 3; // 3x chance for better items
+                }
+                return { ...rar, w };
+            });
+
+            const weightSum = activeWeights.reduce((a, b) => a + b.w, 0);
+            r = r * weightSum; // Scale random to new total
+
             let c = 0;
             let selectedRarity = RARITIES[2]; // Default Common
-            for (const rar of RARITIES) {
-                c += rar.weight;
+            for (const rar of activeWeights) {
+                c += rar.w;
                 if (r <= c) {
-                    selectedRarity = rar;
+                    selectedRarity = rar; // Note: 'rar' here is the modified object but ID/Color are same
                     break;
                 }
             }
@@ -39,6 +52,11 @@ export function spawnUpgrades(state: GameState, isBoss: boolean = false): Upgrad
 
 export function applyUpgrade(state: GameState, choice: UpgradeChoice) {
     const { player } = state;
+
+    // CONSUME RARE REWARD
+    if (state.rareRewardActive) {
+        state.rareRewardActive = false;
+    }
 
     if (choice.isSpecial) {
         if (choice.type.id === 'm') player.multi++;
@@ -73,7 +91,7 @@ export function applyUpgrade(state: GameState, choice: UpgradeChoice) {
             if (id === 'arm_f') player.arm.flat += (b[key] || b[id]);
             if (id === 'arm_m') player.arm.mult += (b[key] || b[id]);
 
-            player.upgradesCollected.push(`${choice.rarity.label} ${choice.type.name}`);
+            player.upgradesCollected.push(choice);
         }
     }
 

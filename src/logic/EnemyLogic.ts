@@ -1,41 +1,49 @@
 import type { GameState, Enemy, ShapeType } from './types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT, SHAPE_DEFS, PALETTES, PULSE_RATES, SHAPE_CYCLE_ORDER } from './constants';
 import { spawnEnemyBullet } from './ProjectileLogic';
+import { playSfx } from './AudioLogic';
 
-// Helper to adjust color brightness
-function adjustBrightness(hex: string, percent: number) {
-    const num = parseInt(hex.replace("#", ""), 16);
-    const amt = Math.round(2.55 * percent);
-    const R = (num >> 16) + amt;
-    const G = (num >> 8 & 0x00FF) + amt;
-    const B = (num & 0x0000FF) + amt;
-    return "#" + (0x1000000 + (R < 255 ? R < 1 ? 0 : R : 255) * 0x10000 + (G < 255 ? G < 1 ? 0 : G : 255) * 0x100 + (B < 255 ? B < 1 ? 0 : B : 255)).toString(16).slice(1);
-}
+
 
 // Helper to determine current game era params
 function getProgressionParams(gameTime: number) {
     const minutes = Math.floor(gameTime / 60);
     const eraIndex = Math.floor(minutes / 15);
-    const stageIndex = Math.floor((minutes % 15) / 5); // 0, 1, 2 (Core, Inner, Outer)
+    const cycleIndex = Math.floor((minutes % 15) / 5); // 0, 1, 2
     const shapeIndex = minutes % 5;
 
     // Cycle shapes: Circle -> Triangle -> Square -> Diamond -> Pentagon
     const shapeId = SHAPE_CYCLE_ORDER[shapeIndex];
     const shapeDef = SHAPE_DEFS[shapeId];
 
-    // Palette: Cycle through defined palettes, loop if game goes super long
-    const paletteDef = PALETTES[eraIndex % PALETTES.length];
+    // Era Palette (Green -> Blue -> Purple -> Orange -> Red)
+    const eraPalette = PALETTES[eraIndex % PALETTES.length];
+    const baseColors = eraPalette.colors; // [Bright, Medium, Dark]
+
+    // Determine Active Colors based on Cycle (0-5m, 5-10m, 10-15m)
+    let activeColors: string[];
+
+    if (cycleIndex === 0) {
+        // Cycle 1: Bright Core, Med Inside, Dark Outline
+        activeColors = [baseColors[0], baseColors[1], baseColors[2]];
+    } else if (cycleIndex === 1) {
+        // Cycle 2: Med Core, Bright Inside, Med Outline
+        activeColors = [baseColors[1], baseColors[0], baseColors[1]];
+    } else {
+        // Cycle 3: Bright Core, Med Inside, Bright Outline
+        activeColors = [baseColors[0], baseColors[1], baseColors[0]];
+    }
 
     // Pulse Speed
     const pulseDef = PULSE_RATES.find(p => minutes < p.time) || PULSE_RATES[PULSE_RATES.length - 1];
 
-    return { shapeDef, paletteDef, stageIndex, pulseDef };
+    return { shapeDef, activeColors, pulseDef };
 }
 
 export function spawnEnemy(state: GameState, isBoss: boolean = false) {
     const { player, gameTime } = state;
 
-    const { shapeDef, paletteDef, stageIndex } = getProgressionParams(gameTime);
+    const { shapeDef, activeColors } = getProgressionParams(gameTime);
 
     // Position: Random angle at distance
     const a = Math.random() * 6.28;
@@ -62,15 +70,7 @@ export function spawnEnemy(state: GameState, isBoss: boolean = false) {
     // Stage 1 (0-5m): Bright Core, Faint Shells (shells hidden or very dark)
     // Stage 2 (5-10m): Dimmer Core, Visible Inner Shell
     // Stage 3 (10-15m): Dim Core, Clear Inner, Brightest Outer Edge
-    const baseColors = [...paletteDef.colors];
 
-    if (stageIndex === 1) { // 5-10m (Stage 2 in User Terms)
-        baseColors[0] = adjustBrightness(baseColors[0], -20); // Dim Core
-    } else if (stageIndex >= 2) { // 10m+ (Stage 3 in User Terms)
-        baseColors[0] = adjustBrightness(baseColors[0], -40); // Dimmer Core
-        baseColors[1] = adjustBrightness(baseColors[1], -20); // Dim Inner
-        // Outer is default bright
-    }
 
     const newEnemy: Enemy = {
         id: Math.random(),
@@ -82,21 +82,133 @@ export function spawnEnemy(state: GameState, isBoss: boolean = false) {
         spd: 2.4 * shapeDef.speedMult, // Global base speed 2.4
         boss: isBoss,
         bossType: isBoss ? Math.floor(Math.random() * 2) : 0,
+        bossAttackPattern: 0,
         dead: false,
 
-        shape: shapeDef.type,
-        shellStage: stageIndex,
-        palette: baseColors,
+        shape: shapeDef.type as ShapeType,
+        shellStage: 2,
+        palette: activeColors,
         pulsePhase: 0,
+        rotationPhase: Math.random() * Math.PI * 2,
 
         // Init AI timers with some randomness so they don't all act at once
         lastAttack: Date.now() + Math.random() * 2000,
         timer: 0,
         summonState: 0,
-        dodgeDir: Math.random() > 0.5 ? 1 : -1
+        dodgeDir: Math.random() > 0.5 ? 1 : -1,
+
+        // Boss Visual Effects initialization
+        wobblePhase: isBoss ? Math.random() * Math.PI * 2 : 0,
+        jitterX: isBoss ? 0 : 0,
+        jitterY: isBoss ? 0 : 0,
+        glitchPhase: isBoss ? Math.random() * Math.PI * 2 : 0,
+        crackPhase: isBoss ? Math.random() * Math.PI * 2 : 0,
+        particleOrbit: isBoss ? Math.random() * Math.PI * 2 : 0
     };
 
     state.enemies.push(newEnemy);
+}
+
+// --- RARE "QUANTUM FRAME" ENEMY LOGIC ---
+
+export function spawnRareEnemy(state: GameState) {
+    const { player } = state;
+
+    // Position: Random angle at safe distance
+    const a = Math.random() * 6.28;
+    const d = 1150 + Math.random() * 100; // Spawn range 1150-1250px
+    const x = player.x + Math.cos(a) * d;
+    const y = player.y + Math.sin(a) * d;
+
+    const rareEnemy: Enemy = {
+        id: Math.random(),
+        type: 'square', // Uses square physics/base stats but custom renderer
+        x, y,
+
+        hp: 1, // Special Health Logic
+        maxHp: 3,
+        spd: 1.5,
+        boss: false,
+        bossType: 0,
+        bossAttackPattern: 0,
+        lastAttack: 0,
+        dead: false,
+
+        shape: 'snitch',
+        shellStage: 2,
+        palette: ['#FFD700', '#FF4500', '#00FFFF'], // Gold, Orange-Red, Cyan (Saturated)
+        pulsePhase: 0,
+        rotationPhase: 0,
+        timer: Date.now(),
+
+        // Rare Props
+        isRare: true,
+        size: 15,
+        rarePhase: 0, // Phase 1: Passive
+        rareTimer: state.gameTime, // Phase start time (Seconds)
+        rareIntent: 0,
+        rareReal: true,
+        canBlock: true,
+
+        // Visuals
+        trails: [],
+        longTrail: [{ x, y }],
+        wobblePhase: 0
+    };
+
+    state.enemies.push(rareEnemy);
+    playSfx('rare-spawn'); // SFX!
+    state.rareSpawnActive = true;
+    console.log("RARE SPAWN: Quantum Frame spawned at", x, y);
+}
+
+function manageRareSpawnCycles(state: GameState) {
+    const { gameTime, rareSpawnCycle, rareSpawnActive } = state;
+    if (rareSpawnActive) return;
+
+    // Cycle Logic: 3m total (2m active, 1m pause)
+    const effectiveTime = gameTime;
+    const cycleLength = 180;
+    const cycleIndex = Math.floor(effectiveTime / cycleLength);
+    const timeInCycle = effectiveTime % cycleLength;
+    const isWindowActive = timeInCycle < 120;
+
+    if (isWindowActive) {
+        if (cycleIndex >= rareSpawnCycle) {
+            // Forces spawn at 30s mark for testing
+            if (effectiveTime > 30) {
+                spawnRareEnemy(state);
+                state.rareSpawnCycle = cycleIndex + 1;
+            }
+        }
+    }
+}
+
+// Helper to check if player is aiming at target
+function checkPlayerIntent(player: any, enemy: Enemy, bullets: any[]): boolean {
+    const dx = player.x - enemy.x;
+    const dy = player.y - enemy.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist > 1000) return false;
+
+    const recentBullets = bullets.filter(b => !b.isEnemy && b.life > 0.9);
+    let aimedShots = 0;
+    recentBullets.forEach(b => {
+        const toEnemyX = enemy.x - b.x;
+        const toEnemyY = enemy.y - b.y;
+        const len = Math.hypot(toEnemyX, toEnemyY);
+        const nx = toEnemyX / len;
+        const ny = toEnemyY / len;
+
+        const bLen = Math.hypot(b.vx, b.vy);
+        const bnx = b.vx / bLen;
+        const bny = b.vy / bLen;
+
+        const dot = bnx * nx + bny * ny;
+        if (dot > 0.9) aimedShots++;
+    });
+
+    return aimedShots > 0;
 }
 
 export function updateEnemies(state: GameState) {
@@ -112,6 +224,9 @@ export function updateEnemies(state: GameState) {
     if (Math.random() < actualRate / 60) {
         spawnEnemy(state, false);
     }
+
+    // Rare Spawning Logic
+    manageRareSpawnCycles(state);
 
     // Boss Spawning
     if (gameTime >= state.nextBossSpawnTime) {
@@ -131,12 +246,179 @@ export function updateEnemies(state: GameState) {
         const pulseSpeed = (Math.PI * 2) / pulseDef.interval;
         e.pulsePhase = (e.pulsePhase + pulseSpeed) % (Math.PI * 2);
 
-        // Behavior State Machine
+        // Rotation Animation (Slow spin)
+        e.rotationPhase = (e.rotationPhase || 0) + 0.01;
+
+        // --- RARE ENEMY UPDATE ---
+        if (e.isRare) {
+            const timeAlive = state.gameTime - (e.rareTimer || state.gameTime);
+
+            // Update Trails (History)
+            if (!e.trails) e.trails = [];
+            // Add trail every 3 frames approx
+            if (state.gameTime % (3 / 60) < 0.02) {
+                e.trails.unshift({ x: e.x, y: e.y, alpha: 1.0, rotation: e.wobblePhase || 0 });
+                if (e.trails.length > 20) e.trails.pop();
+            }
+            e.trails.forEach(t => t.alpha -= 0.02);
+
+            // PHASE 1: PASSIVE / WANDER (Orbit)
+            if (e.rarePhase === 0) {
+                // Circle around player at distance
+                const currentAngle = Math.atan2(e.y - player.y, e.x - player.x);
+                const nextAngle = currentAngle + (0.005); // Slow orbit
+
+                // Maintain distance band 1150-1250
+                let targetDist = Math.hypot(e.x - player.x, e.y - player.y);
+                if (targetDist < 1150) targetDist += 2;
+                else if (targetDist > 1250) targetDist -= 2;
+
+                e.x = player.x + Math.cos(nextAngle) * targetDist;
+                e.y = player.y + Math.sin(nextAngle) * targetDist;
+
+                // Long Paint Trail (Thick Yellow Line)
+                if (!e.longTrail) e.longTrail = [];
+                // Add point every frame for smooth line
+                e.longTrail.push({ x: e.x, y: e.y });
+                // Trail stays until Phase 2 starts, so we don't shift/remove elements yet!
+                // Unless it gets too long for memory, but user said "stays until phase 2"
+
+                // Activation Condition: Distance < 400 AND Player Looking
+                if (dist < 400) {
+                    // Check Logic: Player Velocity or Face Angle vs Direction to Enemy
+                    // Using player.targetAngle (mouse aim) implies "looking"
+                    const toEnemyX = e.x - player.x;
+                    const toEnemyY = e.y - player.y;
+                    const angleToEnemy = Math.atan2(toEnemyY, toEnemyX);
+
+                    // Difference between look angle and angle to enemy
+                    let angleDiff = Math.abs(player.targetAngle - angleToEnemy);
+                    // Normalize to -PI..PI
+                    while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+                    while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+
+                    // If looking within ~45 degrees (0.8 rads)
+                    if (Math.abs(angleDiff) < 0.8) {
+                        e.rarePhase = 1;
+                        e.rareTimer = state.gameTime;
+                        e.spd = 8; // Burst speed
+                        e.teleported = true;
+                        e.longTrail = []; // Clear trail on activation
+
+                        // Sfx
+                        playSfx('rare-spawn'); // Alert sound
+                    }
+                }
+
+                // Despawn (60s Reset for Phase 1 - give them time to find it)
+                if (timeAlive > 60) {
+                    e.dead = true;
+                    playSfx('rare-despawn');
+                    state.rareSpawnActive = false;
+                }
+            }
+            // PHASE 2: ALERT / BURST FLEE
+            else if (e.rarePhase === 1) {
+                // Cycle: 3s total. 2s Rush, 1s Chill.
+                const phaseTime = timeAlive % 3.0;
+                const isRushing = phaseTime < 2.0;
+
+                if (isRushing) {
+                    const escapeAngle = angleToPlayer + Math.PI;
+                    const zagFreq = 8.0;
+                    const zagAmp = 1.5;
+                    const zag = Math.sin(timeAlive * zagFreq) * zagAmp;
+                    const moveAngle = escapeAngle + zag;
+                    const rushSpd = 7.2;
+
+                    e.x += Math.cos(moveAngle) * rushSpd;
+                    e.y += Math.sin(moveAngle) * rushSpd;
+                } else {
+                    const driftAngle = angleToPlayer + Math.PI;
+                    e.x += Math.cos(driftAngle) * 1.0;
+                    e.y += Math.sin(driftAngle) * 1.0;
+                }
+
+                // Defense Check (Wall)
+                const now = Date.now();
+                if (now - e.lastAttack > 5000 && checkPlayerIntent(player, e, state.bullets)) {
+                    const blockX = e.x + Math.cos(angleToPlayer) * 50;
+                    const blockY = e.y + Math.sin(angleToPlayer) * 50;
+
+                    for (let i = -2; i <= 2; i++) {
+                        const blocker: Enemy = {
+                            id: Math.random(),
+                            type: 'minion', shape: 'circle',
+                            x: blockX + Math.cos(angleToPlayer + Math.PI / 2) * (i * 20),
+                            y: blockY + Math.sin(angleToPlayer + Math.PI / 2) * (i * 20),
+                            size: 8, hp: 1, maxHp: 1, spd: 0,
+                            boss: false, bossType: 0, bossAttackPattern: 0, lastAttack: 0, dead: false,
+                            shellStage: 0, palette: ['#06b6d4', '#fff', '#fff'], pulsePhase: 0, rotationPhase: 0, timer: now + 2000,
+                            isRare: false, untargetable: true
+                        };
+                        state.enemies.push(blocker);
+                    }
+                    e.lastAttack = now;
+                }
+
+                // Timeout (30s Reset)
+                if (timeAlive > 30) {
+                    e.dead = true;
+                    playSfx('rare-despawn');
+                    state.rareSpawnActive = false;
+                }
+            }
+            // PHASE 3: PANIC / SPLIT (Activated by Hit)
+            else if (e.rarePhase === 2) {
+                // Movement: Panic running away
+                e.spd = 6.0;
+                e.x -= Math.cos(angleToPlayer) * e.spd;
+                e.y -= Math.sin(angleToPlayer) * e.spd;
+
+                // Glitch Logic for FAKE
+                if (!e.rareReal) {
+                    const timeInPhase3 = state.gameTime - (e.rareTimer || 0);
+                    if (timeInPhase3 > 3.0) {
+                        e.glitchPhase = (e.glitchPhase || 0) + 1.0;
+                    }
+                }
+
+                if (timeAlive > 60) {
+                    e.dead = true;
+                    if (e.rareReal) {
+                        state.rareSpawnActive = false;
+                    }
+                }
+            }
+
+            return; // Skip normal behavior
+        }
+
+        // Boss visual effects update
         if (e.boss) {
+            e.wobblePhase = (e.wobblePhase || 0) + 0.1;
+            e.glitchPhase = (e.glitchPhase || 0) + 0.5;
+            e.crackPhase = (e.crackPhase || 0) + 0.1;
+            e.particleOrbit = (e.particleOrbit || 0) + 0.1;
+
+            // Update trail data (glitchy after-images)
+            if (!e.trails) e.trails = [];
+            // Add new trail segment every few frames
+            if (Math.random() > 0.7) {
+                e.trails.unshift({ x: e.x, y: e.y, alpha: 0.5, rotation: e.wobblePhase * 0.7 });
+            }
+            // Fade and remove old trails
+            e.trails.forEach(t => t.alpha -= 0.05);
+            e.trails = e.trails.filter(t => t.alpha > 0).slice(0, 5);
+
+            // Pentagon pulses faster
+            if (e.shape === 'pentagon') {
+                e.pulsePhase += pulseSpeed * 0.3; // 30% faster pulse
+            }
+
             // Basic Boss Movement
             e.x += Math.cos(angleToPlayer) * e.spd;
             e.y += Math.sin(angleToPlayer) * e.spd;
-            // Boss attacks handled separately or can be added here
         } else {
             // Apply Speed Modifiers
             // Circle gets +50% baseline

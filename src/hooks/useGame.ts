@@ -10,7 +10,7 @@ import { calcStat } from '../logic/MathUtils';
 import { playSfx, startBGM, updateBGMPhase, duckMusic, restoreMusic, pauseMusic, resumeMusic } from '../logic/AudioLogic';
 import { updateParticles } from '../logic/ParticleLogic';
 
-export function useGameLoop() {
+export function useGameLoop(gameStarted: boolean) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const gameState = useRef<GameState>(createInitialGameState());
     const requestRef = useRef<number>(0);
@@ -39,6 +39,8 @@ export function useGameLoop() {
 
     // Input Handling
     useEffect(() => {
+        if (!gameStarted) return; // Ignore inputs if game hasn't started
+
         const handleDown = (e: KeyboardEvent) => {
             startBGM();
             if (e.key === 'Escape') {
@@ -60,7 +62,7 @@ export function useGameLoop() {
             window.removeEventListener('keydown', handleDown);
             window.removeEventListener('keyup', handleUp);
         };
-    }, [showSettings, showStats]); // Re-bind if blocking state changes
+    }, [showSettings, showStats, gameStarted]); // Re-bind if blocking state changes
 
     const restartGame = () => {
         gameState.current = createInitialGameState();
@@ -89,6 +91,17 @@ export function useGameLoop() {
             const safeDt = Math.min(dt, 0.1);
 
             const state = gameState.current;
+
+            // If game hasn't started, just render one frame and pause logic
+            if (!gameStarted) {
+                // Drawing (Always draw to ensure canvas isn't blank if needed, though MainMenu covers it)
+                const ctx = canvasRef.current?.getContext('2d');
+                if (ctx) {
+                    // renderGame(ctx, state); // Optional: render static frame or nothing
+                }
+                requestRef.current = requestAnimationFrame(loop);
+                return;
+            }
 
             // Pausing Logic (check refs for current values)
             const isMenuOpen = showStatsRef.current || showSettingsRef.current || upgradeChoicesRef.current !== null;
@@ -204,7 +217,7 @@ export function useGameLoop() {
             cancelled = true;
             cancelAnimationFrame(requestRef.current!);
         };
-    }, []); // Run once - loop checks refs dynamically
+    }, [gameStarted]); // Run when gameStarted changes
 
     return {
         canvasRef,
@@ -237,8 +250,8 @@ function renderGame(ctx: CanvasRenderingContext2D, state: GameState) {
     // To keep player centered:
     // 1. Move origin to center of screen
     ctx.translate(width / 2, height / 2);
-    // 2. Apply Scale
-    ctx.scale(0.8, 0.8);
+    // 2. Apply Scale - Zoom scale reduced by 15% (0.68 -> 0.58)
+    ctx.scale(0.58, 0.58);
     // 3. Move origin to camera position (which follows player)
     ctx.translate(-camera.x, -camera.y);
 
@@ -283,13 +296,14 @@ function renderGame(ctx: CanvasRenderingContext2D, state: GameState) {
     ctx.save();
     ctx.translate(player.x, player.y);
 
-    const cellSize = 8; // Increased from 5.5 for cleaner, more visible honeycomb
+    const cellSize = 15.7; // Increased by 40% from 11.2
 
     // Helper function to draw a hexagon
     const drawHexagon = (x: number, y: number, r: number) => {
         ctx.beginPath();
         for (let i = 0; i < 6; i++) {
-            const angle = (Math.PI / 3) * i - Math.PI / 2; // Start from top
+            // Flat-topped: Vertices at 0, 60, 120...
+            const angle = (Math.PI / 3) * i;
             const px = x + r * Math.cos(angle);
             const py = y + r * Math.sin(angle);
             if (i === 0) ctx.moveTo(px, py);
@@ -301,9 +315,10 @@ function renderGame(ctx: CanvasRenderingContext2D, state: GameState) {
 
     // Setup style for honeycomb cells
     ctx.strokeStyle = '#22d3ee';
-    ctx.lineWidth = 2;
-    ctx.lineCap = 'butt'; // Remove dots at line endpoints for smooth honeycomb
-    ctx.lineJoin = 'miter'; // Sharp corners, no dots at vertices
+    ctx.lineWidth = 2.5; // Slightly thicker for visibility
+    ctx.setLineDash([]); // Ensure solid lines
+    ctx.lineCap = 'round'; // Smooth corners
+    ctx.lineJoin = 'round'; // Smooth joins to prevent "dots" at sharp corners
     ctx.shadowColor = '#22d3ee';
     ctx.shadowBlur = 15;
 
@@ -314,7 +329,8 @@ function renderGame(ctx: CanvasRenderingContext2D, state: GameState) {
     // 6 surrounding cells - positioned to share edges with center
     const cellDistance = cellSize * Math.sqrt(3); // Perfect honeycomb spacing (no gaps)
     for (let i = 0; i < 6; i++) {
-        const angle = (Math.PI / 3) * i - Math.PI / 2;
+        // Neighbors at 30, 90, 150... (Edges of flat-topped hex)
+        const angle = (Math.PI / 3) * i + Math.PI / 6;
         const cx = cellDistance * Math.cos(angle);
         const cy = cellDistance * Math.sin(angle);
         drawHexagon(cx, cy, cellSize);
@@ -330,41 +346,75 @@ function renderGame(ctx: CanvasRenderingContext2D, state: GameState) {
         ctx.fill();
     });
 
+    // Snitch Trails (Breadcrumbs) - Draw BEHIND enemies
+    enemies.forEach(e => {
+        if (e.longTrail && e.longTrail.length > 1) {
+            ctx.save();
+            ctx.strokeStyle = '#FFD700'; // Gold
+            ctx.lineWidth = 4;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.shadowColor = '#FFD700';
+            ctx.shadowBlur = 10;
+            ctx.globalAlpha = 0.8;
+
+            ctx.beginPath();
+            e.longTrail.forEach((p, i) => {
+                if (i === 0) ctx.moveTo(p.x, p.y);
+                else ctx.lineTo(p.x, p.y);
+            });
+            ctx.stroke();
+            ctx.restore();
+        }
+    });
+
     // Enemies
     enemies.forEach(e => {
         ctx.save();
         ctx.translate(e.x, e.y);
 
-        // Pulse Animation (Breathing effect)
-        // const pulse = Math.sin(e.pulsePhase) * 0.15 + 1; 
+        // Apply Rotation
+        if (e.rotationPhase) {
+            ctx.rotate(e.rotationPhase);
+        }
+
+        // Pulse Animation (Breathing effect) - Scale 1.0 to 1.05
+        const pulse = 1.0 + (Math.sin(e.pulsePhase || 0) * 0.05);
+        ctx.scale(pulse, pulse);
 
         // Colors from Palette
         const coreColor = e.palette[0];
         const innerColor = e.palette[1];
         const outerColor = e.palette[2];
 
-        // Shadow/Glow
-        ctx.shadowBlur = 10 + (Math.sin(e.pulsePhase) * 5); // Pulsing glow
-        ctx.shadowColor = coreColor;
+        // GLITCH EFFECT (Fake Snitch)
+        if (e.glitchPhase && e.glitchPhase > 0) {
+            const jitter = (Math.random() - 0.5) * 10;
+            ctx.translate(jitter, -jitter);
+            if (Math.random() > 0.8) {
+                ctx.globalAlpha = 0.5; // Flicker
+            }
+        }
 
-        // --- DRAW SHAPES ---
-        // Helper to draw path
+        // Shapes Helper
         const drawShape = (size: number) => {
             ctx.beginPath();
             if (e.shape === 'circle' || e.shape === 'minion') {
                 ctx.arc(0, 0, size, 0, Math.PI * 2);
             } else if (e.shape === 'triangle') {
+                // Equilateral Triangle
+                // const h = size * Math.sqrt(3) / 2;
                 ctx.moveTo(0, -size);
                 ctx.lineTo(size * 0.866, size * 0.5);
                 ctx.lineTo(-size * 0.866, size * 0.5);
                 ctx.closePath();
             } else if (e.shape === 'square') {
-                ctx.rect(-size / 1.2, -size / 1.2, size * 1.6, size * 1.6);
+                ctx.rect(-size, -size, size * 2, size * 2);
             } else if (e.shape === 'diamond') {
-                ctx.moveTo(0, -size);
-                ctx.lineTo(size * 0.8, 0);
-                ctx.lineTo(0, size);
-                ctx.lineTo(-size * 0.8, 0);
+                ctx.moveTo(0, -size * 1.3);
+                ctx.lineTo(size, 0);
+                ctx.lineTo(0, size * 1.3);
+                ctx.lineTo(-size, 0);
                 ctx.closePath();
             } else if (e.shape === 'pentagon') {
                 for (let i = 0; i < 5; i++) {
@@ -375,57 +425,84 @@ function renderGame(ctx: CanvasRenderingContext2D, state: GameState) {
                     else ctx.lineTo(px, py);
                 }
                 ctx.closePath();
+            } else if (e.shape === 'snitch') {
+                // Golden Snitch: Diamond-ish Body + Wings
+                // Body
+                ctx.moveTo(0, -size);
+                ctx.lineTo(size, 0);
+                ctx.lineTo(0, size);
+                ctx.lineTo(-size, 0);
+                ctx.closePath();
+
+                // Add wings to the path so they get filled/stroked
+                // Right Wing
+                ctx.moveTo(size, 0);
+                ctx.lineTo(size * 2.5, -size * 0.5);
+                ctx.lineTo(size * 1.5, size * 0.5);
+                ctx.lineTo(size, 0);
+
+                // Left Wing
+                ctx.moveTo(-size, 0);
+                ctx.lineTo(-size * 2.5, -size * 0.5);
+                ctx.lineTo(-size * 1.5, size * 0.5);
+                ctx.lineTo(-size, 0);
             }
         };
 
-        // --- LAYER 3: OUTER SHELL (Stage 3+) ---
-        if (e.shellStage >= 2 || e.boss) {
-            ctx.strokeStyle = outerColor;
-            ctx.lineWidth = 2;
-            ctx.globalAlpha = 1;
-            drawShape(e.size + 5);
-            ctx.stroke();
-        }
+        // --- VISUAL LAYER SYSTEM ---
 
-        // --- LAYER 2: INNER SHELL OUTLINE (Stage 2+) ---
-        if (e.shellStage >= 1 || e.boss) {
-            ctx.strokeStyle = innerColor;
-            ctx.lineWidth = 2;
-            ctx.globalAlpha = 0.9;
-            drawShape(e.size);
-            ctx.stroke();
-        }
+        // 1. OUTLINE (Thin glowing ring)
+        // Offset 5-10% outward -> size * 1.1
+        ctx.strokeStyle = outerColor;
+        ctx.lineWidth = 1.5;
+        // Subtle glow bloom
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = outerColor;
+        drawShape(e.size * 1.1);
+        ctx.stroke();
 
-        // --- BASE BODY (Always Active - Faint Background) ---
+        // 2. INSIDE LAYER (Remaining 50%)
+        // Semi-transparent glow overlay
+        // We draw the full size shape, but the Core will cover the inner 50%
         ctx.fillStyle = innerColor;
-        ctx.globalAlpha = 0.4; // Faint "not so bright" outer layer
+        // Adjust alpha manually since we only have hex codes
+        ctx.globalAlpha = 0.4;
+        ctx.shadowBlur = 0; // No blur on fill to save perf/clean look
         drawShape(e.size);
         ctx.fill();
 
-        // --- CORE (Always Active - Small & Bright) ---
+        // 3. CORE (Innermost 50%)
+        // Solid bright fill
         ctx.fillStyle = coreColor;
-        ctx.globalAlpha = 1;
-        drawShape(e.size * 0.5); // "Core less of size"
+        ctx.globalAlpha = 1.0;
+        ctx.shadowBlur = 15; // Bright bloom for core
+        ctx.shadowColor = coreColor;
+        drawShape(e.size * 0.5);
         ctx.fill();
 
         // Boss Marker
         if (e.boss) {
+            ctx.restore(); // Undo rotation/scale for text
+            ctx.save();
+            ctx.translate(e.x, e.y); // Re-translate
             ctx.fillStyle = "#fff";
-            ctx.font = "12px monospace";
+            ctx.font = "bold 14px monospace";
             ctx.textAlign = "center";
-            ctx.fillText("BOSS", 0, -e.size - 10);
+            ctx.shadowColor = "#000";
+            ctx.shadowBlur = 3;
+            ctx.fillText("BOSS", 0, -e.size - 20);
         }
 
         ctx.restore();
     });
 
     // Bullets
-    ctx.fillStyle = '#facc15';
-    ctx.shadowColor = '#facc15';
+    ctx.fillStyle = '#22d3ee'; // Player Color (Cyan)
+    ctx.shadowColor = '#22d3ee';
     ctx.shadowBlur = 5;
     bullets.forEach(b => {
         ctx.beginPath();
-        ctx.arc(b.x, b.y, 3, 0, Math.PI * 2);
+        ctx.arc(b.x, b.y, 4, 0, Math.PI * 2); // Increased size slightly to match new scale
         ctx.fill();
     });
 

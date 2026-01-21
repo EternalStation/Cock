@@ -30,7 +30,7 @@ export interface Player {
     damageDealt: number;
     damageTaken: number;
     damageBlocked: number;
-    upgradesCollected: string[]; // Names of upgrades collected
+    upgradesCollected: import('./types').UpgradeChoice[]; // Full objects for stat tracking
     reg: PlayerStats;
     arm: PlayerStats;
     xp_per_kill: { base: number; flat: number };
@@ -59,7 +59,7 @@ export interface Bullet {
     color?: string;
 }
 
-export type ShapeType = 'circle' | 'triangle' | 'square' | 'diamond' | 'pentagon' | 'minion';
+export type ShapeType = 'circle' | 'triangle' | 'square' | 'diamond' | 'pentagon' | 'minion' | 'snitch';
 
 export interface ShapeDef {
     type: ShapeType;
@@ -87,7 +87,8 @@ export interface Enemy {
     maxHp: number;
     spd: number;
     boss: boolean;
-    bossType: number;
+    bossType: number; // Shape index for legendary upgrades
+    bossAttackPattern: number; // 0 = Spread Shot, 1 = Tracking Snipe
     lastAttack: number;
     dead: boolean;
 
@@ -96,6 +97,7 @@ export interface Enemy {
     shellStage: number; // 0, 1, 2 (Core, Inner, Outer)
     palette: string[]; // [Core, Inner, Outer]
     pulsePhase: number; // 0-1 for breathing animation
+    rotationPhase: number; // For slow rotation
 
     // AI States
     summonState?: number; // 0: moving, 1: wait, 2: cast
@@ -107,6 +109,28 @@ export interface Enemy {
     seen?: boolean; // Has been seen by camera? (Pentagon)
     spiralAngle?: number; // For Minion Black hole movement
     spiralRadius?: number; // For Minion Black hole movement
+
+    // Boss Visual Effects
+    wobblePhase?: number; // For wobble animation
+    jitterX?: number; // Jitter offset X
+    jitterY?: number; // Jitter offset Y
+    glitchPhase?: number; // For glitch effects
+    crackPhase?: number; // For crack animations
+    particleOrbit?: number; // For orbiting particles (Pentagon)
+    trails?: { x: number; y: number; alpha: number; rotation: number }[]; // After-images
+
+    // Rare Enemy "Quantum Frame" Props
+    isRare?: boolean;
+    rarePhase?: number; // 0=Passive, 1=Alert, 2=Panic
+    rareTimer?: number; // Phase duration tracker
+    rareIntent?: number; // Counter for player intent
+    rareReal?: boolean; // True if real, False if decoy
+    canBlock?: boolean; // For Phase 2 defense (replaces blockedShots boolean flag logic)
+    invincibleUntil?: number; // Timestamp for invincibility (Phase 3 start)
+    parentId?: number; // For decoys to know their master
+    teleported?: boolean; // Flag for Phase 2 entry
+    longTrail?: { x: number; y: number }[]; // Long paint trail
+    untargetable?: boolean; // If true, player bullets won't home in on it
 }
 
 export interface Upgrade {
@@ -144,4 +168,7 @@ export interface GameState {
     gameOver: boolean;
     nextBossSpawnTime: number;
     nextBossId: number; // To track waves
+    rareSpawnCycle: number; // Index of rare spawn cycle
+    rareSpawnActive: boolean; // Is a rare enemy currently alive?
+    rareRewardActive?: boolean; // Flag to show "Increased Rarity" text on next level up
 }

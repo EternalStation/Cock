@@ -1,4 +1,4 @@
-import type { Rarity, Upgrade, ShapeDef, PaletteDef } from './types';
+import type { Rarity, Upgrade } from './types';
 
 export const CANVAS_WIDTH = window.innerWidth;
 export const CANVAS_HEIGHT = window.innerHeight;
@@ -44,29 +44,29 @@ export const BONUSES: Record<string, Record<string, number>> = {
 
 // --- Enemy Progression Constants ---
 
-export const SHAPE_DEFS: Record<string, ShapeDef> = {
-    circle: { type: 'circle', role: 'Chaser', speedMult: 1.3, hpMult: 1.0, behavior: 'chase', spawnWeight: 1.5, sizeMult: 0.8 },
-    triangle: { type: 'triangle', role: 'Charger', speedMult: 1.1, hpMult: 1.2, behavior: 'charge', spawnWeight: 1.0, sizeMult: 1.2 },
-    square: { type: 'square', role: 'Tank', speedMult: 0.8, hpMult: 2.0, behavior: 'tank', spawnWeight: 0.75, sizeMult: 1.5 },
-    diamond: { type: 'diamond', role: 'Sniper', speedMult: 0.85, hpMult: 0.8, behavior: 'snipe', spawnWeight: 0.75, sizeMult: 1.2 },
-    pentagon: { type: 'pentagon', role: 'Swarm Leader', speedMult: 0.8, hpMult: 3.0, behavior: 'summon', spawnWeight: 0.25, sizeMult: 2.0 }
+export const SHAPE_CYCLE_ORDER = ['circle', 'triangle', 'square', 'diamond', 'pentagon'];
+
+export const SHAPE_DEFS: Record<string, { type: string; hpMult: number; speedMult: number; sizeMult: number; spawnWeight: number }> = {
+    circle: { type: 'circle', hpMult: 1, speedMult: 1, sizeMult: 1, spawnWeight: 1.5 },
+    triangle: { type: 'triangle', hpMult: 0.8, speedMult: 1.3, sizeMult: 0.9, spawnWeight: 1.2 },
+    square: { type: 'square', hpMult: 2.5, speedMult: 0.6, sizeMult: 1.2, spawnWeight: 0.8 },
+    diamond: { type: 'diamond', hpMult: 0.6, speedMult: 1.5, sizeMult: 0.8, spawnWeight: 1.0 },
+    pentagon: { type: 'pentagon', hpMult: 4.0, speedMult: 0.8, sizeMult: 1.5, spawnWeight: 0.3 }
 };
 
-export const PALETTES: PaletteDef[] = [
-    { name: 'Bio', id: 'green', colors: ['#4ade80', '#22c55e', '#15803d'] },     // Minutes 0-15
-    { name: 'Energy', id: 'blue', colors: ['#60a5fa', '#3b82f6', '#1d4ed8'] },   // Minutes 15-30
-    { name: 'Void', id: 'purple', colors: ['#c084fc', '#a855f7', '#7e22ce'] },  // Minutes 30-45
-    { name: 'Overcharged', id: 'orange', colors: ['#fb923c', '#f97316', '#c2410c'] }, // Minutes 45-60
-    { name: 'Corrupted', id: 'red', colors: ['#f87171', '#ef4444', '#b91c1c'] }     // Minutes 60+
+// Core, Medium, Dark (for Cycle Logic)
+export const PALETTES = [
+    { name: 'Neon Green', colors: ['#00FF00', '#408040', '#204020'] },
+    { name: 'Cyber Blue', colors: ['#00FFFF', '#206080', '#103040'] }, // Cyan Main
+    { name: 'Void Purple', colors: ['#BF00FF', '#602080', '#301040'] }, // Electric Purple
+    { name: 'Solar Orange', colors: ['#FF9900', '#805020', '#402510'] }, // Deep Orange
+    { name: 'Crimson Red', colors: ['#FF0000', '#802020', '#401010'] }  // Pure Red
 ];
 
 export const PULSE_RATES = [
-    { time: 5, interval: 300 }, // 0-5 mins: 5s (300 frames)
-    { time: 10, interval: 240 }, // 5-10 mins: 4s
-    { time: 15, interval: 180 }, // 10-15 mins: 3s
-    { time: 30, interval: 120 }, // 15-30 mins: 2s
-    { time: 45, interval: 60 },  // 30-45 mins: 1s
-    { time: 999, interval: 30 }  // 45+ mins: 0.5s
+    { time: 5, interval: 300 },   // 0-5 mins: Slow Pulse
+    { time: 10, interval: 180 },  // 5-10 mins: Medium Pulse
+    { time: 15, interval: 120 },  // 10-15 mins: Fast Pulse
+    { time: 999, interval: 60 }   // 15+ mins: Hyper Pulse
 ];
 
-export const SHAPE_CYCLE_ORDER = ['circle', 'triangle', 'square', 'diamond', 'pentagon'];
