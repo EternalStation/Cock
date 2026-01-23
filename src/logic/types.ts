@@ -171,6 +171,7 @@ export interface GameState {
     camera: Vector;
     score: number;
     killCount: number; // Dedicated kill counter
+    bossKills: number; // Track boss kills separately
     gameTime: number;
     isPaused: boolean;
     gameOver: boolean;

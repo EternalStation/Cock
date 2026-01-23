@@ -2,7 +2,7 @@ import type { GameState, Bullet } from './types';
 import { calcStat, getDefenseReduction } from './MathUtils';
 import { spawnParticles } from './ParticleLogic';
 import { playSfx } from './AudioLogic';
-// import { spawnUpgrades } from './UpgradeLogic'; // Triggered via callback now
+
 
 export function spawnBullet(state: GameState, x: number, y: number, angle: number, dmg: number, pierce: number, offset: number = 0) {
     const speed = 13.8; // +15% from 12

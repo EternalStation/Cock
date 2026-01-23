@@ -170,9 +170,14 @@ export function useGameLoop(gameStarted: boolean) {
                     updateEnemies(state);
 
                     updateProjectiles(state, (event) => {
-                        if (event === 'level_up' || event === 'boss_kill') {
-                            const isBoss = (event === 'boss_kill');
-                            const choices = spawnUpgrades(state, isBoss);
+                        if (event === 'level_up') {
+                            const choices = spawnUpgrades(state, false);
+                            setUpgradeChoices(choices);
+                            playSfx('level');
+                        }
+                        if (event === 'boss_kill') {
+                            state.bossKills = (state.bossKills || 0) + 1;
+                            const choices = spawnUpgrades(state, true);
                             setUpgradeChoices(choices);
                             playSfx('level');
                         }

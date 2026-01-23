@@ -74,7 +74,7 @@ function App() {
               stats={{
                 time: hook.gameState.gameTime,
                 kills: hook.gameState.killCount,
-                bosses: 0, // Need to track bosses
+                bosses: hook.gameState.bossKills,
                 level: hook.gameState.player.level,
               }}
               gameState={hook.gameState}

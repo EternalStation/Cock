@@ -38,6 +38,7 @@ export const createInitialGameState = (): GameState => ({
     camera: { x: 0, y: 0 },
     score: 0,
     killCount: 0,
+    bossKills: 0,
     gameTime: 0,
     isPaused: false,
     gameOver: false,
