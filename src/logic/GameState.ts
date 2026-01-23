@@ -45,5 +45,7 @@ export const createInitialGameState = (): GameState => ({
     nextBossId: 0,
     rareSpawnCycle: 0,
     rareSpawnActive: false,
-    spawnTimer: 1.0 // 1 Second animation
+    spawnTimer: 1.0, // 1 Second animation
+    hasPlayedSpawnSound: false,
+    bossPresence: 0
 });

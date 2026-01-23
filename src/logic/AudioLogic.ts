@@ -20,7 +20,12 @@ let bgmGain: GainNode | null = null;
 
 // Shoot System
 let shootBuffer: AudioBuffer | null = null;
-let currentShootSource: AudioBufferSourceNode | null = null;
+
+// Boss Ambience System
+let bossAmbienceOsc: OscillatorNode | null = null;
+let bossAmbienceGain: GainNode | null = null;
+let isBossAmbiencePlaying = false;
+
 
 export function setMusicVolume(vol: number) {
     musicVolume = Math.max(0, Math.min(1, vol));
@@ -150,26 +155,119 @@ export function stopBGM() {
     }
 }
 
-export function playShootDing() {
-    if (audioCtx.state === 'suspended' || !shootBuffer) return;
-
-    // Instant kill previous to avoid mud
-    if (currentShootSource) {
-        try { currentShootSource.stop(); } catch (e) { }
+export function startBossAmbience() {
+    if (isBossAmbiencePlaying) return;
+    if (audioCtx.state === 'suspended') {
+        audioCtx.resume().catch(() => { });
     }
 
-    currentShootSource = audioCtx.createBufferSource();
-    currentShootSource.buffer = shootBuffer;
+    // Ensure SFX Gain exists
+    if (!masterSfxGain) {
+        masterSfxGain = audioCtx.createGain();
+        masterSfxGain.gain.value = sfxVolume;
+        masterSfxGain.connect(audioCtx.destination);
+    }
 
-    // 0.95 - 1.05x random pitch
-    currentShootSource.playbackRate.value = 0.95 + Math.random() * 0.1;
+    isBossAmbiencePlaying = true;
+    const t = audioCtx.currentTime;
 
-    const gain = audioCtx.createGain();
-    gain.gain.value = sfxVolume * 0.4;
+    // Create deep drone
+    bossAmbienceOsc = audioCtx.createOscillator();
+    bossAmbienceGain = audioCtx.createGain();
 
-    currentShootSource.connect(gain);
-    gain.connect(masterSfxGain!);
-    currentShootSource.start();
+    // Pulse low pitch (e.g. 50Hz to 60Hz slow modulation)
+    bossAmbienceOsc.type = 'sawtooth';
+    bossAmbienceOsc.frequency.setValueAtTime(55, t);
+
+    // LFO for pitch instability
+    const lfo = audioCtx.createOscillator();
+    lfo.frequency.value = 0.5; // Slow wobble
+    const lfoGain = audioCtx.createGain();
+    lfoGain.gain.value = 5; // +/- 5Hz
+    lfo.connect(lfoGain);
+    lfoGain.connect(bossAmbienceOsc.frequency);
+    lfo.start(t);
+
+    // Lowpass filter to muffle it (make it background)
+    const filter = audioCtx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 200;
+
+    bossAmbienceGain.gain.setValueAtTime(0, t);
+    bossAmbienceGain.gain.linearRampToValueAtTime(0.3, t + 2.0); // Slow fade in
+
+    bossAmbienceOsc.connect(filter);
+    filter.connect(bossAmbienceGain);
+    bossAmbienceGain.connect(masterSfxGain);
+
+    bossAmbienceOsc.start(t);
+}
+
+export function stopBossAmbience() {
+    if (!isBossAmbiencePlaying || !bossAmbienceGain) return;
+
+    isBossAmbiencePlaying = false;
+    const t = audioCtx.currentTime;
+
+    // Slow fade out
+    bossAmbienceGain.gain.cancelScheduledValues(t);
+    bossAmbienceGain.gain.setValueAtTime(bossAmbienceGain.gain.value, t);
+    bossAmbienceGain.gain.linearRampToValueAtTime(0, t + 2.0);
+
+    const oldOsc = bossAmbienceOsc;
+    const oldGain = bossAmbienceGain; // capture closure
+
+    setTimeout(() => {
+        if (oldOsc) {
+            try { oldOsc.stop(); } catch (e) { }
+        }
+        // Cleanup happens naturally via GC once stopped and disconnected
+    }, 2100);
+
+    bossAmbienceOsc = null;
+    bossAmbienceGain = null;
+}
+
+export function playShootDing() {
+    if (audioCtx.state === 'suspended') return;
+
+    const t = audioCtx.currentTime;
+
+    // "Cosmic Photon" - Sci-fi, laser-like, but smooth
+    // Lowered pitch variant (Octave down)
+
+    // 1. The Core Beam (Sine Sweep)
+    const osc1 = audioCtx.createOscillator();
+    const g1 = audioCtx.createGain();
+    osc1.type = 'sine';
+    // Start mid, drop low
+    osc1.frequency.setValueAtTime(750, t);
+    osc1.frequency.exponentialRampToValueAtTime(150, t + 0.15);
+
+    g1.gain.setValueAtTime(0, t);
+    g1.gain.linearRampToValueAtTime(sfxVolume * 0.25, t + 0.01);
+    g1.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+
+    osc1.connect(g1);
+    g1.connect(masterSfxGain!);
+    osc1.start(t);
+    osc1.stop(t + 0.15);
+
+    // 2. The Energy Trail (Triangle Detune)
+    const osc2 = audioCtx.createOscillator();
+    const g2 = audioCtx.createGain();
+    osc2.type = 'triangle';
+    osc2.frequency.setValueAtTime(760, t); // Slight detune start
+    osc2.frequency.exponentialRampToValueAtTime(300, t + 0.2); // Slower drop
+
+    g2.gain.setValueAtTime(0, t);
+    g2.gain.linearRampToValueAtTime(sfxVolume * 0.15, t + 0.02);
+    g2.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+
+    osc2.connect(g2);
+    g2.connect(masterSfxGain!);
+    osc2.start(t);
+    osc2.stop(t + 0.2);
 }
 
 export async function playUpgradeSfx(rarityId: string) {
@@ -293,7 +391,7 @@ export function playSfx(type: 'shoot' | 'hit' | 'level' | 'hurt' | 'boss-fire' |
     g.connect(masterSfxGain);
 
     if (type === 'shoot') {
-        // Procedural shoot handled by Loop system now
+        playShootDing();
         return;
     }
     else if (type === 'hit') {
@@ -336,7 +434,7 @@ export function playSfx(type: 'shoot' | 'hit' | 'level' | 'hurt' | 'boss-fire' |
         osc.frequency.setValueAtTime(600, t);
         osc.frequency.linearRampToValueAtTime(800, t + 0.1);
         osc.frequency.linearRampToValueAtTime(600, t + 0.2);
-        g.gain.setValueAtTime(0.1, t);
+        g.gain.setValueAtTime(0.15, t); // Increased by 50% from 0.1
         g.gain.linearRampToValueAtTime(0, t + 0.3);
         osc.start(t);
         osc.stop(t + 0.3);
@@ -362,15 +460,70 @@ export function playSfx(type: 'shoot' | 'hit' | 'level' | 'hurt' | 'boss-fire' |
         osc.stop(t + 0.5);
     }
     else if (type === 'spawn') {
-        // Player Start Sound
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(220, t);
-        osc.frequency.exponentialRampToValueAtTime(880, t + 1.0);
-        g.gain.setValueAtTime(0, t);
-        g.gain.linearRampToValueAtTime(0.2, t + 0.1);
-        g.gain.linearRampToValueAtTime(0, t + 1.0);
-        osc.start(t);
-        osc.stop(t + 1.0);
+        // VOID Cosmic Collapse - "The Connection"
+        // Deep, heavy impact with a metallic snap
+
+        // 1. Deep Sub-Bass Swell (The Void Opening = 30-60Hz)
+        const osc1 = audioCtx.createOscillator();
+        const g1 = audioCtx.createGain();
+        osc1.type = 'sawtooth';
+        osc1.frequency.setValueAtTime(40, t);
+        osc1.frequency.linearRampToValueAtTime(60, t + 0.8); // Rising tension
+
+        g1.gain.setValueAtTime(0, t);
+        g1.gain.linearRampToValueAtTime(0.4, t + 0.2);
+        g1.gain.linearRampToValueAtTime(0, t + 1.0); // Cut before snap
+
+        osc1.connect(g1);
+        g1.connect(masterSfxGain);
+        osc1.start(t);
+        osc1.stop(t + 1.0);
+
+        // 2. High Ethereal Sweep (The Energy Gathering)
+        const osc2 = audioCtx.createOscillator();
+        const g2 = audioCtx.createGain();
+        const filter2 = audioCtx.createBiquadFilter();
+
+        osc2.type = 'square';
+        osc2.frequency.setValueAtTime(200, t);
+
+        filter2.type = 'lowpass';
+        filter2.frequency.setValueAtTime(200, t);
+        filter2.frequency.exponentialRampToValueAtTime(2000, t + 0.9); // Open filter
+        filter2.Q.value = 10; // Resonant peak
+
+        g2.gain.setValueAtTime(0, t);
+        g2.gain.linearRampToValueAtTime(0.08, t + 0.5);
+        g2.gain.linearRampToValueAtTime(0, t + 0.9);
+
+        osc2.connect(filter2);
+        filter2.connect(g2);
+        g2.connect(masterSfxGain);
+        osc2.start(t);
+        osc2.stop(t + 1.0);
+
+        // 3. The "Snap" (Connection Made)
+        // Sharp metallic connect sound at t + 0.9
+        const snapOsc = audioCtx.createOscillator();
+        const snapGain = audioCtx.createGain();
+        const snapFilter = audioCtx.createBiquadFilter();
+
+        snapOsc.type = 'sawtooth';
+        snapOsc.frequency.setValueAtTime(1200, t + 0.9);
+        snapOsc.frequency.exponentialRampToValueAtTime(100, t + 1.0); // Rapid drop
+
+        snapFilter.type = 'highpass';
+        snapFilter.frequency.value = 500; // Remove mud
+
+        snapGain.gain.setValueAtTime(0, t + 0.9);
+        snapGain.gain.linearRampToValueAtTime(0.3, t + 0.92);
+        snapGain.gain.exponentialRampToValueAtTime(0.001, t + 1.1);
+
+        snapOsc.connect(snapFilter);
+        snapFilter.connect(snapGain);
+        snapGain.connect(masterSfxGain);
+        snapOsc.start(t + 0.9);
+        snapOsc.stop(t + 1.2);
     }
     else if (type === 'smoke-puff') {
         // White Noise Burst for Smoke Screen

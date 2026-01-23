@@ -268,7 +268,7 @@
 
         <h3>Evolution of Mechanics</h3>
         <ul>
-            <li><strong>Spawn Rate:</strong> Starts at <code>1.2</code> enemies/sec. Increases by <code>+0.1</code>
+            <li><strong>Spawn Rate:</strong> Starts at <code>1.4</code> enemies/sec. Increases by <code>+0.1</code>
                 every minute.</li>
             <li><strong>Enemy HP:</strong> <code>50 * (1.15 ^ Floor(Minutes))</code>. Scales at start of each minute.
             </li>
@@ -786,8 +786,8 @@
             <li><strong>First Level XP Requirement:</strong> 250</li>
             <li><strong>XP Gain:</strong>
                 <ul>
-                    <li>Normal Kill: <code>40 + (3 * Levels)</code></li>
-                    <li>Boss Kill: <code>666 + (50 * Levels)</code></li>
+                    <li>Normal Kill: <code>40 + (2 * Levels)</code></li>
+                    <li>Boss Kill: <strong>3 Special Upgrades</strong> (No XP)</li>
                 </ul>
             </li>
         </ul>
@@ -893,7 +893,7 @@
 
         <h3>Enemy Scaling Logic</h3>
         <ul>
-            <li><strong>Spawn Rate:</strong> <code>1.2 + (0.1 × Minutes)</code> per second.
+            <li><strong>Spawn Rate:</strong> <code>1.4 + (0.1 × Minutes)</code> per second.
                 <ul>
                     <li>Example @ 5 min: 1.7/sec</li>
                     <li>Example @ 10 min: 2.2/sec</li>
@@ -911,11 +911,65 @@
 
         <h3>Enemy Color Cycles (15-Minute Loop)</h3>
         <p>Enemies visual structure changes every 5 minutes in a repeating 15-minute loop.</p>
+        <h3>Enemy Color Mechanics</h3>
+        <p>The visual style evolves through a combination of <strong>15-Minute Era Palettes</strong> and a
+            <strong>5-Minute Opacity Cycle</strong>.
+        </p>
+
+        <h4>1. Era Palettes (Base Colors)</h4>
+        <p>Every 15 minutes, the entire color scheme shifts to a new "Era". Secondary/Medium colors are currently unused
+            in the shell logic.</p>
         <table>
             <thead>
                 <tr>
-                    <th>Time Phase</th>
-                    <th>Core</th>
+                    <th>Time Period</th>
+                    <th>Era Name</th>
+                    <th>Primary (Bright)</th>
+                    <th>Tertiary (Dark)</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>0-15 Min</td>
+                    <td style="color: #00FF00">Neon Green</td>
+                    <td>#00FF00</td>
+                    <td>#204020</td>
+                </tr>
+                <tr>
+                    <td>15-30 Min</td>
+                    <td style="color: #00FFFF">Cyber Blue</td>
+                    <td>#00FFFF</td>
+                    <td>#103040</td>
+                </tr>
+                <tr>
+                    <td>30-45 Min</td>
+                    <td style="color: #BF00FF">Void Purple</td>
+                    <td>#BF00FF</td>
+                    <td>#301040</td>
+                </tr>
+                <tr>
+                    <td>45-60 Min</td>
+                    <td style="color: #FF9900">Solar Orange</td>
+                    <td>#FF9900</td>
+                    <td>#402510</td>
+                </tr>
+                <tr>
+                    <td>60-75 Min</td>
+                    <td style="color: #FF0000">Crimson Red</td>
+                    <td>#FF0000</td>
+                    <td>#401010</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h4>2. Opacity Shift (5-Minute Cycles)</h4>
+        <p>Within each Era, the enemy's internal "shell" structure glows differently based on the minute (mod 5).</p>
+        <table>
+            <thead>
+                <tr>
+                    <th>Minutes (Mod 15)</th>
+                    <th>Cycle Phase</th>
+                    <th>Core Color</th>
                     <th>Inner Shell</th>
                     <th>Outer Shell</th>
                 </tr>
@@ -923,21 +977,24 @@
             <tbody>
                 <tr>
                     <td>0-5 Min</td>
-                    <td><strong style="color: #fff">Bright</strong></td>
-                    <td style="color: #64748b">Dim</td>
-                    <td style="color: #64748b">Dim</td>
+                    <td>Standard</td>
+                    <td><strong>Bright</strong> (100%)</td>
+                    <td>Dark (Tertiary)</td>
+                    <td>Dark (Tertiary)</td>
                 </tr>
                 <tr>
                     <td>5-10 Min</td>
-                    <td style="color: #64748b">Dim</td>
-                    <td><strong style="color: #fff">Bright</strong></td>
-                    <td style="color: #64748b">Dim</td>
+                    <td>Inverted</td>
+                    <td>Dark (Tertiary)</td>
+                    <td><strong>Bright</strong> (100%)</td>
+                    <td>Dark (Tertiary)</td>
                 </tr>
                 <tr>
                     <td>10-15 Min</td>
-                    <td><strong style="color: #fff">Bright</strong></td>
-                    <td style="color: #64748b">Dim</td>
-                    <td><strong style="color: #fff">Bright</strong></td>
+                    <td>Resonance</td>
+                    <td><strong>Bright</strong> (100%)</td>
+                    <td>Dark (Tertiary)</td>
+                    <td><strong>Bright</strong> (100%)</td>
                 </tr>
             </tbody>
         </table>
@@ -961,7 +1018,7 @@
             </tr>
             <tr>
                 <td><strong>Spawn Rate</strong></td>
-                <td>1.2% + (0.1% per min)</td>
+                <td>1.4% + (0.1% per min)</td>
                 <td>Chance per frame to spawn an enemy. Increases over time.</td>
             </tr>
             <tr>

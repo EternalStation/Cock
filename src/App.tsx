@@ -5,6 +5,7 @@ import { StatsMenu } from './components/StatsMenu';
 import { SettingsMenu } from './components/SettingsMenu';
 import { MainMenu } from './components/MainMenu';
 import { DeathScreen } from './components/DeathScreen';
+
 import { useGameLoop } from './hooks/useGame';
 import { startBGM } from './logic/AudioLogic';
 import './styles/menu_additions.css';
@@ -64,6 +65,8 @@ function App() {
 
           {/* Settings Menu */}
           {hook.showSettings && <SettingsMenu onClose={() => hook.setShowSettings(false)} onRestart={hook.restartGame} onQuit={handleQuit} />}
+
+
 
           {/* Death Screen */}
           {hook.gameOver && (

@@ -181,4 +181,5 @@ export interface GameState {
     rareRewardActive?: boolean; // Flag to show "Increased Rarity" text on next level up
     spawnTimer: number; // For start/restart animation
     hasPlayedSpawnSound?: boolean;
+    bossPresence: number; // 0 to 1 smooth transition for boss effects
 }

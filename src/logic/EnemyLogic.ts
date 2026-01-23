@@ -49,7 +49,9 @@ export function spawnEnemy(state: GameState, isBoss: boolean = false) {
     // Position: Random angle at distance
     const a = Math.random() * 6.28;
     // Spawn farther away (1150px - 1250px)
-    const d = 1150 + Math.random() * 100;
+    // User Request: Bosses spawn at 1500px
+    const baseDist = isBoss ? 1500 : 1150;
+    const d = baseDist + Math.random() * 100;
     const x = player.x + Math.cos(a) * d;
     const y = player.y + Math.sin(a) * d;
 
@@ -237,9 +239,9 @@ export function updateEnemies(state: GameState) {
     const { shapeDef, pulseDef } = getProgressionParams(gameTime);
 
     // Spawning Logic
-    // Base rate increases slowly over time: 1.2 + 0.1 per minute
+    // Base rate increases slowly over time: 1.4 + 0.1 per minute
     const minutes = gameTime / 60;
-    const baseSpawnRate = 1.2 + (minutes * 0.1);
+    const baseSpawnRate = 1.4 + (minutes * 0.1);
     // Apply Shape Modifier (Circle spawns more, Pentagon less)
     const actualRate = baseSpawnRate * shapeDef.spawnWeight;
 
@@ -694,7 +696,10 @@ export function updateEnemies(state: GameState) {
                     // 3. Normal Behavior
 
                     // Check Cooldown for Summon
-                    if (e.reachedRange && Date.now() - e.lastAttack > SUMMON_COOLDOWN) {
+                    // User Request: Only summon during spawn minutes (Min 4, 9, 14, etc - Cycle Index 4)
+                    const isPentagonMinute = Math.floor(gameTime / 60) % 5 === 4;
+
+                    if (isPentagonMinute && e.reachedRange && Date.now() - e.lastAttack > SUMMON_COOLDOWN) {
                         e.summonState = 2; // Enter Casting
                         e.timer = Date.now();
                         break; // Stop movement frame to start casting

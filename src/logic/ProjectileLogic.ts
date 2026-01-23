@@ -148,7 +148,12 @@ export function updateProjectiles(state: GameState, onEvent?: (type: string, dat
                                 player.xp.current += xpNeededForLevel; // Add full level worth of XP
 
                                 // Check level up immediately so overflow matches expectation
-                                // (Level logic handles it below but we need to ensure it triggers)
+                                while (player.xp.current >= player.xp.needed) {
+                                    player.xp.current -= player.xp.needed; // Keep overflow
+                                    player.level++;
+                                    player.xp.needed *= 1.10;
+                                    if (onEvent) onEvent('level_up');
+                                }
 
                                 // Kill ALL fakes
 
@@ -177,7 +182,7 @@ export function updateProjectiles(state: GameState, onEvent?: (type: string, dat
 
                     const baseXp = e.boss
                         ? 0
-                        : (40 + (3 * player.level) + player.xp_per_kill.flat);
+                        : (40 + (2 * player.level) + player.xp_per_kill.flat);
 
                     const xpMult = 1 + (player.xp_per_kill.mult / 100);
                     const totalXp = baseXp * xpMult;

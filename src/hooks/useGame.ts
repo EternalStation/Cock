@@ -7,7 +7,7 @@ import { updateProjectiles, spawnBullet } from '../logic/ProjectileLogic';
 import { updateBossBehavior } from '../logic/BossLogic';
 import { spawnUpgrades, applyUpgrade } from '../logic/UpgradeLogic';
 import { calcStat } from '../logic/MathUtils';
-import { playSfx, startBGM, updateBGMPhase, duckMusic, restoreMusic, pauseMusic, resumeMusic } from '../logic/AudioLogic';
+import { playSfx, startBGM, updateBGMPhase, duckMusic, restoreMusic, pauseMusic, resumeMusic, startBossAmbience, stopBossAmbience } from '../logic/AudioLogic';
 import { updateParticles } from '../logic/ParticleLogic';
 
 export function useGameLoop(gameStarted: boolean) {
@@ -220,6 +220,21 @@ export function useGameLoop(gameStarted: boolean) {
                     if (timeLeft <= 10 && timeLeft > 0) setBossWarning(timeLeft);
                     else setBossWarning(null);
 
+                    // Smooth Boss Presence Transition
+                    const activeBoss = state.enemies.some(e => e.boss);
+                    const targetPresence = activeBoss ? 1.0 : 0.0;
+                    // Lerp approx 0.01 per frame (60fps) -> ~2-3 seconds transition
+                    // Lerp approx 0.01 per frame (60fps) -> ~2-3 seconds transition
+                    state.bossPresence = state.bossPresence + (targetPresence - state.bossPresence) * 0.02;
+
+                    // Boss Ambience Trigger
+                    if (activeBoss) {
+                        startBossAmbience();
+                    } else {
+                        // Stop immediately when dead (AudioLogic handles fade out)
+                        stopBossAmbience();
+                    }
+
                     accRef.current -= FIXED_STEP;
                 }
             }
@@ -284,15 +299,21 @@ function renderGame(ctx: CanvasRenderingContext2D, state: GameState) {
     ctx.translate(-camera.x, -camera.y);
 
     // Screen Shake Logic (Spawn OR Boss)
-    const activeBoss = enemies.some(e => e.boss);
-
-    if (state.spawnTimer > 0 || activeBoss) {
+    // Use smoothed bossPresence for shake intensity
+    if (state.spawnTimer > 0 || state.bossPresence > 0.01) {
         let intensity = 0;
         if (state.spawnTimer > 0) intensity += state.spawnTimer * 5;
-        if (activeBoss) intensity += 3; // Constant low rumble for boss
 
-        // Random intense shake occasionally for boss
-        if (activeBoss && Math.random() < 0.05) intensity += 10;
+        // Boss Shake: Scale with presence
+        // "increased screen shake"
+        if (state.bossPresence > 0) {
+            intensity += 3 * state.bossPresence; // Constant rumble
+
+            // Random intense shake
+            if (Math.random() < 0.05 * state.bossPresence) {
+                intensity += 15 * state.bossPresence; // Harder hits
+            }
+        }
 
         const shakeX = (Math.random() - 0.5) * intensity;
         const shakeY = (Math.random() - 0.5) * intensity;
@@ -300,8 +321,9 @@ function renderGame(ctx: CanvasRenderingContext2D, state: GameState) {
     }
 
     // Global Darken for Boss (Background dim)
-    if (activeBoss) {
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)'; // Darker for boss
+    if (state.bossPresence > 0.01) {
+        // "slowly darken"
+        ctx.fillStyle = `rgba(0, 0, 0, ${state.bossPresence * 0.7})`; // Max 0.7 opacity
         // Draw centered on camera to cover the viewport
         const vW = width / 0.58; // Reverse scale
         const vH = height / 0.58;
@@ -423,8 +445,7 @@ function renderGame(ctx: CanvasRenderingContext2D, state: GameState) {
     ctx.setLineDash([]); // Ensure solid lines
     ctx.lineCap = 'round'; // Smooth corners
     ctx.lineJoin = 'round'; // Smooth joins to prevent "dots" at sharp corners
-    ctx.shadowColor = '#22d3ee';
-    ctx.shadowBlur = 15;
+    ctx.shadowBlur = 0; // Removed aura per user request
 
     // Draw 7 connected honeycomb cells
     if (state.spawnTimer > 0) {
@@ -739,7 +760,7 @@ function renderGame(ctx: CanvasRenderingContext2D, state: GameState) {
         // We draw the full size shape, but the Core will cover the inner 50%
         ctx.fillStyle = innerColor;
         // Adjust alpha manually since we only have hex codes
-        ctx.globalAlpha = 0.4;
+        ctx.globalAlpha = 1.0;
         ctx.shadowBlur = 0; // No blur on fill to save perf/clean look
         drawShape(e.size, true);
         ctx.fill();
@@ -828,18 +849,28 @@ function renderGame(ctx: CanvasRenderingContext2D, state: GameState) {
 
         ctx.restore(); // Undo scale/rotation/translate(jitter)
 
-        // Boss Marker Text (Separate restore to avoid rotation)
+        // Boss HP Bar
         if (e.boss) {
             ctx.save();
-            ctx.translate(e.x, e.y); // Re-translate to center
-            ctx.fillStyle = "#fff";
-            ctx.font = "bold 14px monospace";
-            ctx.textAlign = "center";
-            ctx.shadowColor = "#000";
-            ctx.shadowBlur = 3;
-            // Screen Shake/Darken effect applies to camera, but we can do local "Text Shake" too if we want
-            const shake = chaosLevel > 0.5 ? (Math.random() - 0.5) * 2 : 0;
-            ctx.fillText("BOSS", shake, -e.size - 25 + shake);
+            ctx.translate(e.x, e.y);
+            const barWidth = 80;
+            const barHeight = 8;
+            const yOffset = -e.size - 25;
+
+            // Background
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+            ctx.fillRect(-barWidth / 2, yOffset, barWidth, barHeight);
+
+            // Health
+            const hpPercent = Math.max(0, e.hp / e.maxHp);
+            ctx.fillStyle = '#ef4444'; // Red
+            ctx.fillRect(-barWidth / 2 + 1, yOffset + 1, (barWidth - 2) * hpPercent, barHeight - 2);
+
+            // Border
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(-barWidth / 2, yOffset, barWidth, barHeight);
+
             ctx.restore();
         }
     });
@@ -865,6 +896,10 @@ function renderGame(ctx: CanvasRenderingContext2D, state: GameState) {
     ctx.shadowColor = '#22d3ee';
     ctx.shadowBlur = 5;
     bullets.forEach(b => {
+        // Mask: Only draw if outside player radius to avoid cluttering the center
+        const dist = Math.hypot(b.x - player.x, b.y - player.y);
+        if (dist < 43) return; // Player radius is approx 43 (15.7 + 27.2)
+
         ctx.beginPath();
         ctx.arc(b.x, b.y, 4, 0, Math.PI * 2); // Increased size slightly to match new scale
         ctx.fill();
@@ -885,6 +920,98 @@ function renderGame(ctx: CanvasRenderingContext2D, state: GameState) {
     // "Dimmer screen edges (vignette: 50% darker tones at borders, gradient to clear center)"
 
     ctx.restore(); // Restore to Screen Space for UI/Overlay effects
+
+    // 5. OFF-SCREEN BOSS INDICATORS
+    enemies.forEach(e => {
+        if (!e.boss) return;
+
+        // Calculate Screen Coordinates
+        // Global Transform was: translate(w/2, h/2) -> scale(0.58) -> translate(-camX, -camY)
+        // ScreenX = (WorldX - CamX) * Scale + W/2
+        const scale = 0.58;
+        const screenX = (e.x - camera.x) * scale + width / 2;
+        const screenY = (e.y - camera.y) * scale + height / 2;
+
+        const margin = 50;
+        const isOffScreen = screenX < -margin || screenX > width + margin ||
+            screenY < -margin || screenY > height + margin;
+
+        if (isOffScreen) {
+            // Calculate angle properties
+            const angle = Math.atan2(screenY - height / 2, screenX - width / 2);
+
+            // Clamp to screen edges
+            const padding = 40;
+            let tx = width / 2 + Math.cos(angle) * (width); // Far out
+            let ty = height / 2 + Math.sin(angle) * (width); // Far out
+
+            // Liang-Barsky line clipping or simple edge clamping?
+            // Simple edge clamping for center-to-target ray:
+            // Find intersection with box (padding, padding, width-padding, height-padding)
+
+            // X-intersections
+            const x1 = padding;
+            const x2 = width - padding;
+            // Y-intersections
+            const y1 = padding;
+            const y2 = height - padding;
+
+            // Slope
+            const m = Math.tan(angle);
+
+            // Check X edges
+            if (screenX < width / 2) {
+                // Left
+                tx = x1;
+                ty = height / 2 + (x1 - width / 2) * m;
+            } else {
+                // Right
+                tx = x2;
+                ty = height / 2 + (x2 - width / 2) * m;
+            }
+
+            // Check if that Y is valid, if not clamp to Y
+            if (ty < y1) {
+                ty = y1;
+                tx = width / 2 + (y1 - height / 2) / m;
+            } else if (ty > y2) {
+                ty = y2;
+                tx = width / 2 + (y2 - height / 2) / m;
+            }
+
+            // Draw Skull Icon
+            ctx.save();
+            ctx.translate(tx, ty);
+            // No rotation for icon itself, it stays upright or rotates? 
+            // Often off-screen icons don't rotate with angle, but the position indicates direction.
+            // Let's keep it upright for readability.
+
+            ctx.fillStyle = '#ef4444';
+            ctx.shadowColor = '#ef4444';
+            ctx.shadowBlur = 10;
+
+            // Skull Cranium
+            ctx.beginPath();
+            ctx.arc(0, -2, 12, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Skull Jaw
+            ctx.fillRect(-6, 6, 12, 8);
+
+            // Eyes (Clear/Black)
+            ctx.globalCompositeOperation = 'destination-out';
+            ctx.fillStyle = '#000';
+            ctx.beginPath();
+            ctx.arc(-4, -2, 3, 0, Math.PI * 2);
+            ctx.arc(4, -2, 3, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.restore();
+
+            ctx.restore();
+        }
+    });
 
     // 4. STRONG VIGNETTE (Fog of War)
     // "remove fog... see vingier darker corners... enemies slowly appear"
@@ -907,8 +1034,12 @@ function renderGame(ctx: CanvasRenderingContext2D, state: GameState) {
         ctx.fillRect(0, 0, width, height);
 
         // Boss Fog Thickening
-        if (activeBoss) {
-            ctx.fillStyle = 'rgba(20, 0, 0, 0.2)'; // Red tint overlay
+        if (state.bossPresence > 0.01) {
+            ctx.fillStyle = `rgba(20, 0, 0, ${state.bossPresence * 0.2})`; // Red tint overlay scaling
+            ctx.fillRect(0, 0, width, height);
+
+            // Darken Screen (Dimmer)
+            ctx.fillStyle = `rgba(0, 0, 0, ${state.bossPresence * 0.5})`; // 50% Black overlay at max
             ctx.fillRect(0, 0, width, height);
         }
     };
