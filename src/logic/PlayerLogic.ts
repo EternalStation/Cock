@@ -4,6 +4,14 @@ import { calcStat } from './MathUtils';
 
 export function updatePlayer(state: GameState, keys: Record<string, boolean>) {
     const { player } = state;
+    // Debug Log
+    // console.log('updatePlayer', state.spawnTimer, keys);
+
+    // Spawn Animation Logic
+    if (state.spawnTimer > 0) {
+        state.spawnTimer -= 1 / 60;
+        return;
+    }
 
     // Movement
     let mx = 0, my = 0;
@@ -29,7 +37,7 @@ export function updatePlayer(state: GameState, keys: Record<string, boolean>) {
 
     // Auto-Aim Logic
     let nearest: Enemy | null = null;
-    let minDist = 600;
+    let minDist = 800; // Increased to 800px per user request
     state.enemies.forEach((e: Enemy) => {
         const d = Math.hypot(e.x - player.x, e.y - player.y);
         if (d < minDist) {

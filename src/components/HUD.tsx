@@ -1,26 +1,27 @@
 import React, { useEffect, useState } from 'react';
 import type { GameState, UpgradeChoice } from '../logic/types';
 import { calcStat } from '../logic/MathUtils';
-import { CANVAS_WIDTH, BONUSES } from '../logic/constants';
-import { getIcon } from './UpgradeIcons';
+import { CANVAS_WIDTH } from '../logic/constants';
 import { playUpgradeSfx } from '../logic/AudioLogic';
-
+import { StatRow, RadarChart } from './StatsMenu';
+import { UpgradeCard } from './UpgradeCard';
 
 interface HUDProps {
     gameState: GameState;
     upgradeChoices: UpgradeChoice[] | null;
     onUpgradeSelect: (c: UpgradeChoice) => void;
+    gameOver: boolean;
+    onRestart: () => void;
     bossWarning: number | null;
 }
 
-export const HUD: React.FC<HUDProps> = ({ gameState, upgradeChoices, onUpgradeSelect, bossWarning }) => {
+export const HUD: React.FC<HUDProps> = ({ gameState, upgradeChoices, onUpgradeSelect, gameOver, onRestart, bossWarning }) => {
     const { player, score, gameTime } = gameState;
     const { xp } = player;
     const maxHp = calcStat(player.hp);
 
     // Upgrade Nav
     const [selectedIndex, setSelectedIndex] = useState(0);
-    const [isSelecting, setIsSelecting] = useState(false);
 
     // HP Bar Animation Control
     const [prevHp, setPrevHp] = useState(player.curHp);
@@ -37,8 +38,8 @@ export const HUD: React.FC<HUDProps> = ({ gameState, upgradeChoices, onUpgradeSe
         setSelectedIndex(0);
 
         const handleKeys = (e: KeyboardEvent) => {
+            if (e.repeat) return;
             const key = e.key.toLowerCase();
-            // A/D for horizontal navigation
             if (key === 'a' || key === 'arrowleft') {
                 setSelectedIndex(prev => (prev > 0 ? prev - 1 : upgradeChoices.length - 1));
             }
@@ -54,21 +55,18 @@ export const HUD: React.FC<HUDProps> = ({ gameState, upgradeChoices, onUpgradeSe
     useEffect(() => {
         if (!upgradeChoices) return;
         const handleSelect = (e: KeyboardEvent) => {
+            if (e.repeat) return;
             const key = e.key.toLowerCase();
             if (key === ' ' || key === 'enter') {
-                if (isSelecting) return;
                 const choice = upgradeChoices[selectedIndex];
-                if (choice.rarity) playUpgradeSfx(choice.rarity.id);
-                setIsSelecting(true);
-                setTimeout(() => {
-                    onUpgradeSelect(choice);
-                    setIsSelecting(false);
-                }, 150);
+                playUpgradeSfx(choice.rarity?.id || 'common');
+                onUpgradeSelect(choice);
             }
         };
         window.addEventListener('keydown', handleSelect);
         return () => window.removeEventListener('keydown', handleSelect);
-    }, [upgradeChoices, selectedIndex, onUpgradeSelect, isSelecting]);
+    }, [upgradeChoices, selectedIndex, onUpgradeSelect]);
+
 
 
     return (
@@ -93,18 +91,6 @@ export const HUD: React.FC<HUDProps> = ({ gameState, upgradeChoices, onUpgradeSe
                     color: '#ef4444', fontWeight: 900, letterSpacing: 1, fontSize: 12
                 }}>
                     ANOMALY DETECTED: {Math.ceil(bossWarning)}s
-                </div>
-            )}
-
-            {/* RARE SIGNAL NOTIFICATION */}
-            {gameState.enemies.some(e => e.isRare && e.rarePhase === 0) && (
-                <div className="glitch-text" style={{
-                    position: 'absolute', top: 60, right: 15, textAlign: 'right',
-                    color: '#F59E0B', fontWeight: 900, letterSpacing: 3, fontSize: 14,
-                    textShadow: '0 0 10px #F59E0B', zIndex: 200
-                }}>
-                    UNKNOWN SIGNAL DETECTED<br />
-                    <span style={{ fontSize: 10, opacity: 0.8 }}>SEARCH THE PERIMETER</span>
                 </div>
             )}
 
@@ -135,109 +121,208 @@ export const HUD: React.FC<HUDProps> = ({ gameState, upgradeChoices, onUpgradeSe
                     position: 'absolute', width: '100%', textAlign: 'center', top: 0,
                     fontSize: 9, fontWeight: 900, lineHeight: '16px', color: '#fff'
                 }}>
-                    {Math.ceil(player.curHp)} / {Math.floor(maxHp)}
+                    {Math.ceil(player.curHp)} / {Math.ceil(maxHp)}
                 </div>
             </div>
 
-            {/* Upgrade Modal */}
             {upgradeChoices && (
-                <div className="modal-overlay">
-                    <h2 style={{ marginBottom: 15, color: '#22d3ee', fontSize: 22, textTransform: 'uppercase', letterSpacing: 4 }}>
-                        {upgradeChoices[0].isSpecial ? "VOID TECHNOLOGY ACQUIRED" : "SYSTEM EVOLUTION"}
+                <div className="upgrade-menu-overlay">
+                    {/* Background Layers */}
+                    <div className="fog-layer" />
+                    <div className="fog-pulse" />
+                    <div className="honeycomb-layer">
+                        <div className="honeycomb-cluster" style={{ top: '10%', left: '10%' }} />
+                        <div className="honeycomb-cluster" style={{ bottom: '20%', right: '15%' }} />
+                    </div>
+
+
+                    {/* Cards Container */}
+                    <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', zIndex: 20, perspective: '1000px', gap: '60px' }}>
+                        {upgradeChoices.map((c, i) => (
+                            <div key={i} className="upgrade-card-container">
+                                <UpgradeCard
+                                    choice={c}
+                                    index={i}
+                                    isSelected={i === selectedIndex}
+                                    onSelect={(choice) => {
+                                        playUpgradeSfx(choice.rarity?.id || 'common');
+                                        onUpgradeSelect(choice);
+                                    }}
+                                    onHover={setSelectedIndex}
+                                    isSelecting={false}
+                                />
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Title (Moved to Bottom) */}
+                    <h2 style={{
+                        marginTop: 40,
+                        color: '#FFFFFF',
+                        fontSize: 24,
+                        fontFamily: 'Orbitron, sans-serif',
+                        textTransform: 'uppercase',
+                        letterSpacing: 4,
+                        textShadow: '0 0 20px rgba(255, 255, 255, 0.5)',
+                        zIndex: 20,
+                        textAlign: 'center',
+                        width: '100%',
+                        marginBottom: 5
+                    }}>
+                        {upgradeChoices[0].isSpecial ? "VOID TECHNOLOGY DETECTED" : "SELECT AUGMENTATION"}
                     </h2>
 
+                    {/* Rarity Boost Notification */}
                     {gameState.rareRewardActive && (
                         <div className="glitch-text" style={{
-                            color: '#FFD700', fontSize: 14, fontWeight: 900, marginBottom: 20,
-                            letterSpacing: 2, textShadow: '0 0 10px #FFD700', animation: 'pulse 0.5s infinite'
+                            color: '#FACC15',
+                            fontSize: 12,
+                            fontFamily: 'Orbitron, sans-serif',
+                            textTransform: 'uppercase',
+                            letterSpacing: 2,
+                            textShadow: '0 0 10px #FACC15',
+                            zIndex: 20,
+                            textAlign: 'center',
+                            width: '100%',
+                            marginBottom: 20,
+                            animation: 'pulse 1s infinite'
                         }}>
-                            ⚡ INCREASED CHANCE OF GETTING RARE UPGRADE DROP ⚡
+                            ANOMALY TERMINATED: RARITY CHANCE INCREASED
                         </div>
                     )}
-
-                    <div className="upgrade-container">
-                        {upgradeChoices.map((c, i) => {
-                            const isSelected = i === selectedIndex;
-                            const rId = c.rarity?.id || 'common';
-                            const color = c.rarity?.color || '#94a3b8';
-                            // Simplify: 1-5 scale based on rarity list index roughly
-                            const rarities = ['junk', 'broken', 'common', 'uncommon', 'rare', 'epic', 'legendary', 'mythical', 'divine'];
-                            const rIndex = rarities.indexOf(rId);
-                            const filledDiamonds = Math.max(1, Math.min(5, Math.ceil((rIndex + 1) / 2)));
-
-                            // Calc Value
-                            let valStr = '';
-                            if (!c.isSpecial && c.type && c.rarity) {
-                                const id = c.type.id || '';
-                                const key = id.replace('_f', '').replace('_m', '');
-                                const b = BONUSES[rId];
-                                if (b) {
-                                    const val = b[key] ?? b[id] ?? 0;
-                                    valStr = id.endsWith('_m') ? `+${val}%` : `+${val}`;
-                                }
-                            }
-
-                            return (
-                                <div
-                                    key={i}
-                                    className={`upgrade-card ${isSelected ? 'selected' : ''}`}
-                                    onClick={() => {
-                                        if (isSelecting) return;
-                                        if (c.rarity) playUpgradeSfx(c.rarity.id);
-                                        setIsSelecting(true);
-                                        setTimeout(() => {
-                                            onUpgradeSelect(c);
-                                            setIsSelecting(false);
-                                        }, 150);
-                                    }}
-                                    onMouseEnter={() => setSelectedIndex(i)}
-                                    style={{ '--neon-cyan': color, borderColor: isSelected ? color : '#334155' } as React.CSSProperties}
-                                >
-                                    {/* Top: Icon & Value */}
-                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
-                                        <div className="card-icon" style={{ color: color }}>
-                                            {c.type ? getIcon(c.type.icon, color) : null}
-                                        </div>
-
-                                        <div className="card-title" style={{ color: isSelected ? '#fff' : '#cbd5e1' }}>
-                                            {c.type?.name || 'Unknown'}
-                                        </div>
-
-                                        {valStr && (
-                                            <div style={{
-                                                background: color, color: '#000', padding: '2px 12px',
-                                                borderRadius: 4, fontWeight: 900, fontSize: 16, marginTop: 8
-                                            }}>
-                                                {valStr} {c.type?.name.split(' ')[0]} {/* e.g. +10 DAMAGE */}
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {/* Middle: Description */}
-                                    <div className="card-description">
-                                        {c.type?.desc || 'No system details available.'}
-                                    </div>
-
-                                    {/* Bottom: Rarity Diamonds */}
-                                    <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                                        <div className="rarity-diamonds">
-                                            {Array.from({ length: 5 }).map((_, dIdx) => (
-                                                <div
-                                                    key={dIdx}
-                                                    className={`diamond ${dIdx < filledDiamonds ? 'filled' : ''}`}
-                                                    style={{ color: color }}
-                                                />
-                                            ))}
-                                        </div>
-                                        <div className="rarity-label" style={{ color }}>{c.rarity?.label}</div>
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
                 </div>
             )}
 
+            {/* Game Over Modal */}
+            {gameOver && (
+                <div className="modal-overlay">
+                    <h1 style={{ color: '#ef4444', margin: '0 0 10px 0', fontSize: 24, textAlign: 'center', letterSpacing: 4, textShadow: '0 0 20px #ef4444' }}>
+                        SIMULATION TERMINATED
+                    </h1>
+
+                    <div style={{ display: 'flex', gap: 20, width: '100%', maxWidth: 700, alignItems: 'flex-start' }}>
+
+                        {/* LEFT: Stats & Chart */}
+                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 15 }}>
+                            {/* Run Stats */}
+                            <div style={{
+                                display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10,
+                                background: 'rgba(15, 23, 42, 0.6)', padding: 15, borderRadius: 12, border: '1px solid #334155',
+                            }}>
+                                <div style={{ color: '#94a3b8', fontSize: 12 }}>TIME</div>
+                                <div style={{ textAlign: 'right', fontWeight: 900, fontSize: 14 }}>
+                                    {Math.floor(gameTime / 60)}m {Math.floor(gameTime % 60)}s
+                                </div>
+                                <div style={{ color: '#94a3b8', fontSize: 12 }}>KILLS</div>
+                                <div style={{ textAlign: 'right', fontWeight: 900, fontSize: 14, color: '#22d3ee' }}>
+                                    {score}
+                                </div>
+                            </div>
+
+                            {/* Radar Chart */}
+                            <div style={{ background: 'rgba(15, 23, 42, 0.4)', borderRadius: 12, padding: 10, border: '1px solid #334155' }}>
+                                <RadarChart player={player} />
+                            </div>
+
+                            {/* Combat Stats */}
+                            <div style={{
+                                display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8,
+                                background: 'rgba(15, 23, 42, 0.6)', padding: 15, borderRadius: 12, border: '1px solid #334155',
+                            }}>
+                                <div style={{ color: '#94a3b8', fontSize: 12 }}>DMG DEALT</div>
+                                <div style={{ textAlign: 'right', fontWeight: 900, fontSize: 14, color: '#facc15' }}>
+                                    {(player.damageDealt / 1000).toFixed(1)}k
+                                </div>
+                                <div style={{ color: '#94a3b8', fontSize: 12 }}>TAKEN / BLK</div>
+                                <div style={{ textAlign: 'right', fontWeight: 900, fontSize: 14, color: '#f87171' }}>
+                                    {Math.round(player.damageTaken)} / <span style={{ color: '#4ade80' }}>{Math.round(player.damageBlocked)}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* RIGHT: Detailed Stats & Upgrades */}
+                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 15 }}>
+                            <div style={{
+                                background: 'rgba(15, 23, 42, 0.6)', padding: 15, borderRadius: 12, border: '1px solid #334155',
+                                display: 'flex', flexDirection: 'column', gap: 2
+                            }}>
+                                <StatRow label="Hit Points" stat={player.hp} />
+                                <StatRow label="Damage" stat={player.dmg} />
+                                <StatRow label="Atk Speed" stat={player.atk} inverse />
+                                <StatRow label="Armor" stat={player.arm} extraInfo={`${(0.95 * (calcStat(player.arm) / (calcStat(player.arm) + 5263)) * 100).toFixed(0)}%`} />
+                            </div>
+
+                            <div style={{ flex: 1, background: 'rgba(15, 23, 42, 0.6)', padding: 10, borderRadius: 12, border: '1px solid #334155', display: 'flex', flexDirection: 'column' }}>
+                                <div style={{ fontSize: 10, color: '#64748b', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 }}>Acquired Tech</div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignContent: 'flex-start', maxHeight: 200, overflowY: 'auto' }}>
+                                    {(() => {
+                                        // Group by upgrade name and rarity
+                                        const upgradeData: Record<string, { count: number, rarityId: string }> = {};
+                                        player.upgradesCollected.forEach(upgrade => {
+                                            const name = upgrade.type.name;
+                                            if (!upgradeData[name]) {
+                                                upgradeData[name] = { count: 0, rarityId: upgrade.rarity.id };
+                                            }
+                                            upgradeData[name].count++;
+                                        });
+
+                                        // Get rarity order for sorting (we'll need to import RARITIES)
+                                        const rarityOrder = ['junk', 'broken', 'common', 'uncommon', 'rare', 'epic', 'legendary', 'mythical', 'ancient', 'divine'];
+                                        const rarityColors: Record<string, string> = {
+                                            'junk': '#475569',
+                                            'broken': '#78350f',
+                                            'common': '#94a3b8',
+                                            'uncommon': '#22c55e',
+                                            'rare': '#3b82f6',
+                                            'epic': '#ec4899',
+                                            'legendary': '#f59e0b',
+                                            'mythical': '#a855f7',
+                                            'ancient': '#facc15',
+                                            'divine': '#22d3ee'
+                                        };
+
+                                        // Sort entries by rarity (lowest to highest)
+                                        const sortedEntries = Object.entries(upgradeData).sort((a, b) => {
+                                            const rarityA = a[1].rarityId;
+                                            const rarityB = b[1].rarityId;
+                                            return rarityOrder.indexOf(rarityA) - rarityOrder.indexOf(rarityB);
+                                        });
+
+                                        return sortedEntries.map(([name, data], i) => {
+                                            const color = rarityColors[data.rarityId] || '#cbd5e1';
+                                            return (
+                                                <div key={i} style={{
+                                                    fontSize: 11, padding: '5px 10px', background: '#1e293b',
+                                                    borderRadius: 4, border: `1px solid ${color}40`,
+                                                    display: 'flex', gap: 8, alignItems: 'center',
+                                                    justifyContent: 'space-between'
+                                                }}>
+                                                    <span style={{ color, fontWeight: 600 }}>{name}</span>
+                                                    {data.count > 1 && <span style={{ fontWeight: 900, color: '#22d3ee', fontSize: 10 }}>x{data.count}</span>}
+                                                </div>
+                                            );
+                                        });
+                                    })()}
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+
+                    <button
+                        onClick={onRestart}
+                        style={{
+                            marginTop: 20, width: '100%', maxWidth: 450, padding: '16px 0', background: '#22d3ee', color: '#020617',
+                            border: 'none', fontWeight: 900, borderRadius: 8, cursor: 'pointer',
+                            fontSize: 14, letterSpacing: 2, textTransform: 'uppercase',
+                            boxShadow: '0 0 20px rgba(34, 211, 238, 0.4)',
+                            pointerEvents: 'auto'
+                        }}
+                    >
+                        RESTART
+                    </button>
+                </div>
+            )}
         </>
     );
 };

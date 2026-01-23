@@ -33,7 +33,7 @@ export interface Player {
     upgradesCollected: import('./types').UpgradeChoice[]; // Full objects for stat tracking
     reg: PlayerStats;
     arm: PlayerStats;
-    xp_per_kill: { base: number; flat: number };
+    xp_per_kill: { base: number; flat: number; mult: number };
     xp: { current: number; needed: number };
     level: number;
     lastShot: number;
@@ -109,6 +109,12 @@ export interface Enemy {
     seen?: boolean; // Has been seen by camera? (Pentagon)
     spiralAngle?: number; // For Minion Black hole movement
     spiralRadius?: number; // For Minion Black hole movement
+    reachedRange?: boolean; // For Pentagon AI (track if 700 range reached)
+
+    // Diamond Logic
+    preferredMinDist?: number;
+    preferredMaxDist?: number;
+    strafeInterval?: number;
 
     // Boss Visual Effects
     wobblePhase?: number; // For wobble animation
@@ -131,6 +137,7 @@ export interface Enemy {
     teleported?: boolean; // Flag for Phase 2 entry
     longTrail?: { x: number; y: number }[]; // Long paint trail
     untargetable?: boolean; // If true, player bullets won't home in on it
+    phase3AudioTriggered?: boolean; // Flag for Phase 3 Audio Trigger
 }
 
 export interface Upgrade {
@@ -150,8 +157,8 @@ export interface UpgradeChoice {
 export interface Rarity {
     id: string;
     label: string;
-    weight: number;
     color: string;
+    mult: number;
 }
 
 export interface GameState {
@@ -163,6 +170,7 @@ export interface GameState {
     particles: Particle[];
     camera: Vector;
     score: number;
+    killCount: number; // Dedicated kill counter
     gameTime: number;
     isPaused: boolean;
     gameOver: boolean;
@@ -171,4 +179,6 @@ export interface GameState {
     rareSpawnCycle: number; // Index of rare spawn cycle
     rareSpawnActive: boolean; // Is a rare enemy currently alive?
     rareRewardActive?: boolean; // Flag to show "Increased Rarity" text on next level up
+    spawnTimer: number; // For start/restart animation
+    hasPlayedSpawnSound?: boolean;
 }

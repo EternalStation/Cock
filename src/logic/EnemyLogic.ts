@@ -1,5 +1,5 @@
 import type { GameState, Enemy, ShapeType } from './types';
-import { CANVAS_WIDTH, CANVAS_HEIGHT, SHAPE_DEFS, PALETTES, PULSE_RATES, SHAPE_CYCLE_ORDER } from './constants';
+import { SHAPE_DEFS, PALETTES, PULSE_RATES, SHAPE_CYCLE_ORDER } from './constants';
 import { spawnEnemyBullet } from './ProjectileLogic';
 import { playSfx } from './AudioLogic';
 
@@ -21,17 +21,18 @@ function getProgressionParams(gameTime: number) {
     const baseColors = eraPalette.colors; // [Bright, Medium, Dark]
 
     // Determine Active Colors based on Cycle (0-5m, 5-10m, 10-15m)
+    // Determine Active Colors based on Cycle (0-5m, 5-10m, 10-15m)
     let activeColors: string[];
 
     if (cycleIndex === 0) {
-        // Cycle 1: Bright Core, Med Inside, Dark Outline
-        activeColors = [baseColors[0], baseColors[1], baseColors[2]];
+        // Cycle 1 (0-5m): Bright Core, Dim Inner, Dim Outer
+        activeColors = [baseColors[0], baseColors[2], baseColors[2]];
     } else if (cycleIndex === 1) {
-        // Cycle 2: Med Core, Bright Inside, Med Outline
-        activeColors = [baseColors[1], baseColors[0], baseColors[1]];
+        // Cycle 2 (5-10m): Dim Core, Bright Inner, Dim Outer
+        activeColors = [baseColors[2], baseColors[0], baseColors[2]];
     } else {
-        // Cycle 3: Bright Core, Med Inside, Bright Outline
-        activeColors = [baseColors[0], baseColors[1], baseColors[0]];
+        // Cycle 3 (10-15m): Bright Core, Dim Inner, Bright Outer
+        activeColors = [baseColors[0], baseColors[2], baseColors[0]];
     }
 
     // Pulse Speed
@@ -47,8 +48,8 @@ export function spawnEnemy(state: GameState, isBoss: boolean = false) {
 
     // Position: Random angle at distance
     const a = Math.random() * 6.28;
-    // Spawn farther away to avoid cheap hits
-    const d = Math.max(CANVAS_WIDTH, CANVAS_HEIGHT) * 0.8;
+    // Spawn farther away (1150px - 1250px)
+    const d = 1150 + Math.random() * 100;
     const x = player.x + Math.cos(a) * d;
     const y = player.y + Math.sin(a) * d;
 
@@ -58,7 +59,10 @@ export function spawnEnemy(state: GameState, isBoss: boolean = false) {
     const size = isBoss ? 60 : (20 * shapeDef.sizeMult);
 
     // HP
-    const baseHp = 40 + (gameTime * 0.5); // Linear time scaling base
+    // HP Calculation (Exponential Scaling)
+    // Base 50, +15% per FULL minute (Step scaling)
+    const minutes = gameTime / 60;
+    const baseHp = 50 * Math.pow(1.15, Math.floor(minutes));
     const hp = (isBoss ? baseHp * 15 : baseHp) * hpMult;
 
     // Colors based on Era and Stage
@@ -71,6 +75,25 @@ export function spawnEnemy(state: GameState, isBoss: boolean = false) {
     // Stage 2 (5-10m): Dimmer Core, Visible Inner Shell
     // Stage 3 (10-15m): Dim Core, Clear Inner, Brightest Outer Edge
 
+
+    // Diamond Specific Setup
+    let diamondProps = {};
+    if (shapeDef.type === 'diamond') {
+        const rangeRoll = Math.random();
+        let pMin = 500, pMax = 900;
+        if (rangeRoll < 0.33) { pMin = 500; pMax = 600; }
+        else if (rangeRoll < 0.66) { pMin = 600; pMax = 700; }
+        else { pMin = 700; pMax = 900; }
+
+        const intervalRoll = Math.floor(Math.random() * 3); // 0, 1, 2
+        const sInterval = (3000 + (intervalRoll * 1000)); // 3000, 4000, 5000
+
+        diamondProps = {
+            preferredMinDist: pMin,
+            preferredMaxDist: pMax,
+            strafeInterval: sInterval
+        };
+    }
 
     const newEnemy: Enemy = {
         id: Math.random(),
@@ -103,7 +126,9 @@ export function spawnEnemy(state: GameState, isBoss: boolean = false) {
         jitterY: isBoss ? 0 : 0,
         glitchPhase: isBoss ? Math.random() * Math.PI * 2 : 0,
         crackPhase: isBoss ? Math.random() * Math.PI * 2 : 0,
-        particleOrbit: isBoss ? Math.random() * Math.PI * 2 : 0
+        particleOrbit: isBoss ? Math.random() * Math.PI * 2 : 0,
+
+        ...diamondProps
     };
 
     state.enemies.push(newEnemy);
@@ -136,19 +161,19 @@ export function spawnRareEnemy(state: GameState) {
 
         shape: 'snitch',
         shellStage: 2,
-        palette: ['#FFD700', '#FF4500', '#00FFFF'], // Gold, Orange-Red, Cyan (Saturated)
+        palette: ['#FACC15', '#EAB308', '#CA8A04'], // Phase 1: Yellows (Passive)
         pulsePhase: 0,
         rotationPhase: 0,
         timer: Date.now(),
 
         // Rare Props
         isRare: true,
-        size: 15,
-        rarePhase: 0, // Phase 1: Passive
+        size: 25, // Slightly larger for new shape
+        rarePhase: 0, // Phase 1: Passive (Yellow)
         rareTimer: state.gameTime, // Phase start time (Seconds)
         rareIntent: 0,
         rareReal: true,
-        canBlock: true,
+        canBlock: false, // Only true in Phase 2
 
         // Visuals
         trails: [],
@@ -166,21 +191,17 @@ function manageRareSpawnCycles(state: GameState) {
     const { gameTime, rareSpawnCycle, rareSpawnActive } = state;
     if (rareSpawnActive) return;
 
-    // Cycle Logic: 3m total (2m active, 1m pause)
-    const effectiveTime = gameTime;
-    const cycleLength = 180;
-    const cycleIndex = Math.floor(effectiveTime / cycleLength);
-    const timeInCycle = effectiveTime % cycleLength;
-    const isWindowActive = timeInCycle < 120;
+    // Logic: Spawn every 2 minutes starting at 1:00 (60s)
+    // 0: 60s (1:00)
+    // 1: 180s (3:00)
+    // 2: 300s (5:00)
+    // Formula: Threshold = 60 + (Cycle * 120)
 
-    if (isWindowActive) {
-        if (cycleIndex >= rareSpawnCycle) {
-            // Forces spawn at 30s mark for testing
-            if (effectiveTime > 30) {
-                spawnRareEnemy(state);
-                state.rareSpawnCycle = cycleIndex + 1;
-            }
-        }
+    const nextSpawnTime = 60 + (rareSpawnCycle * 120);
+
+    if (gameTime >= nextSpawnTime) {
+        spawnRareEnemy(state);
+        state.rareSpawnCycle++;
     }
 }
 
@@ -216,8 +237,9 @@ export function updateEnemies(state: GameState) {
     const { shapeDef, pulseDef } = getProgressionParams(gameTime);
 
     // Spawning Logic
-    // Base rate increases slowly over time
-    const baseSpawnRate = 1.0 + (gameTime / 60) * 0.1;
+    // Base rate increases slowly over time: 1.2 + 0.1 per minute
+    const minutes = gameTime / 60;
+    const baseSpawnRate = 1.2 + (minutes * 0.1);
     // Apply Shape Modifier (Circle spawns more, Pentagon less)
     const actualRate = baseSpawnRate * shapeDef.spawnWeight;
 
@@ -305,8 +327,19 @@ export function updateEnemies(state: GameState) {
                         e.teleported = true;
                         e.longTrail = []; // Clear trail on activation
 
+                        // TELEPORT LOGIC: Mirrored direction behind player at 80% distance
+                        const dx = e.x - player.x;
+                        const dy = e.y - player.y;
+
+                        // New Position = Player - (VectorToSnitch * 0.8)
+                        e.x = player.x - (dx * 0.8);
+                        e.y = player.y - (dy * 0.8);
+
                         // Sfx
                         playSfx('rare-spawn'); // Alert sound
+
+                        // Change Color to Orange for Phase 2
+                        e.palette = ['#F97316', '#EF4444', '#F97316']; // Bright Orange Core, Red Inner, Orange Outer
                     }
                 }
 
@@ -362,24 +395,56 @@ export function updateEnemies(state: GameState) {
                 }
 
                 // Timeout (30s Reset)
+                // Timeout (30s Reset)
                 if (timeAlive > 30) {
                     e.dead = true;
                     playSfx('rare-despawn');
                     state.rareSpawnActive = false;
                 }
             }
-            // PHASE 3: PANIC / SPLIT (Activated by Hit)
+            // PHASE 3: AGGRESSIVE / ZIG-ZAG (Both Real and Fake) - 3-WAY FLEE
+            // PHASE 3: AGGRESSIVE / SPLIT (Red) - Both Real and Fake rely on this
             else if (e.rarePhase === 2) {
-                // Movement: Panic running away
-                e.spd = 6.0;
-                e.x -= Math.cos(angleToPlayer) * e.spd;
-                e.y -= Math.sin(angleToPlayer) * e.spd;
+                const timeInPhase3 = state.gameTime - (e.rareTimer || 0);
+
+                // MOVEMENT: Same as Phase 2 (Burst Flee)
+                // Cycle: 3s total. 2s Rush, 1s Chill.
+                const phaseTime = timeInPhase3 % 3.0;
+                const isRushing = phaseTime < 2.0;
+
+                if (isRushing) {
+                    const escapeAngle = angleToPlayer + Math.PI;
+                    const zagFreq = 8.0;
+                    const zagAmp = 1.5;
+                    // Mirror Zig-Zag: Real uses 0 offset, Fake uses PI (Inverse)
+                    const zagOffset = e.rareReal ? 0 : Math.PI;
+                    const zag = Math.sin(timeInPhase3 * zagFreq + zagOffset) * zagAmp;
+                    const moveAngle = escapeAngle + zag;
+                    const rushSpd = 7.2;
+
+                    e.x += Math.cos(moveAngle) * rushSpd;
+                    e.y += Math.sin(moveAngle) * rushSpd;
+                } else {
+                    const driftAngle = angleToPlayer + Math.PI;
+                    e.x += Math.cos(driftAngle) * 1.0;
+                    e.y += Math.sin(driftAngle) * 1.0;
+                }
+
+                if (!e.phase3AudioTriggered) {
+                    playSfx('smoke-puff');
+                    e.phase3AudioTriggered = true;
+                }
 
                 // Glitch Logic for FAKE
                 if (!e.rareReal) {
-                    const timeInPhase3 = state.gameTime - (e.rareTimer || 0);
-                    if (timeInPhase3 > 3.0) {
+                    // Start glitching after 2 seconds
+                    if (timeInPhase3 > 2.0) {
                         e.glitchPhase = (e.glitchPhase || 0) + 1.0;
+                        // Occasional flicker/teleport for visual confusion
+                        if (Math.random() > 0.9) {
+                            e.x += (Math.random() - 0.5) * 20;
+                            e.y += (Math.random() - 0.5) * 20;
+                        }
                     }
                 }
 
@@ -396,24 +461,40 @@ export function updateEnemies(state: GameState) {
 
         // Boss visual effects update
         if (e.boss) {
-            e.wobblePhase = (e.wobblePhase || 0) + 0.1;
-            e.glitchPhase = (e.glitchPhase || 0) + 0.5;
-            e.crackPhase = (e.crackPhase || 0) + 0.1;
-            e.particleOrbit = (e.particleOrbit || 0) + 0.1;
+            // Chaos Level Calculation: 0.0 at <2 min, 1.0 at >12 min
+            // user: Early (min 2/4/6/8/10), Late (min 12/14/16/18/20)
+            const minutes = gameTime / 60;
+            const chaosLevel = Math.min(1, Math.max(0, (minutes - 2) / 10)); // 0 at 2m, 1 at 12m
+
+            // Speed up phases based on chaos
+            e.wobblePhase = (e.wobblePhase || 0) + 0.1 + (chaosLevel * 0.2);
+            e.glitchPhase = (e.glitchPhase || 0) + 0.05 + (chaosLevel * 0.1); // flicker speed
+            e.crackPhase = (e.crackPhase || 0) + 0.02 + (chaosLevel * 0.05);
+            e.particleOrbit = (e.particleOrbit || 0) + 0.05 + (chaosLevel * 0.1);
 
             // Update trail data (glitchy after-images)
             if (!e.trails) e.trails = [];
-            // Add new trail segment every few frames
-            if (Math.random() > 0.7) {
-                e.trails.unshift({ x: e.x, y: e.y, alpha: 0.5, rotation: e.wobblePhase * 0.7 });
+
+            // Trail spawn rate increases with chaos
+            // Base: 10% chance per frame. Max Chaos: 50% chance.
+            if (Math.random() < 0.1 + (chaosLevel * 0.4)) {
+                e.trails.unshift({
+                    x: e.x + (Math.random() - 0.5) * (chaosLevel * 20), // Jittery trail pos
+                    y: e.y + (Math.random() - 0.5) * (chaosLevel * 20),
+                    alpha: 0.6 + (chaosLevel * 0.4), // Brighter trails at high chaos
+                    rotation: (e.rotationPhase || 0) + (Math.random() - 0.5) // Random rotation offset
+                });
             }
-            // Fade and remove old trails
-            e.trails.forEach(t => t.alpha -= 0.05);
-            e.trails = e.trails.filter(t => t.alpha > 0).slice(0, 5);
+
+            // Fade trails
+            // Early: Fade fast (0.1). Late: Fade slow (0.05) -> More trails on screen
+            const fadeRate = 0.1 - (chaosLevel * 0.05);
+            e.trails.forEach(t => t.alpha -= fadeRate);
+            e.trails = e.trails.filter(t => t.alpha > 0).slice(0, 10 + Math.floor(chaosLevel * 20)); // Limit count
 
             // Pentagon pulses faster
             if (e.shape === 'pentagon') {
-                e.pulsePhase += pulseSpeed * 0.3; // 30% faster pulse
+                e.pulsePhase += pulseSpeed * 0.3;
             }
 
             // Basic Boss Movement
@@ -437,11 +518,16 @@ export function updateEnemies(state: GameState) {
                     if (e.spiralRadius && e.spiralRadius > 10) {
                         // Move towards player in spiral
                         // Calculate angle to player
-                        const spiralSpeed = 1.5; // 70% Speed (~1.5)
-                        const rotationSpeed = 0.03; // Slow spin
+                        // Move towards player in spiral
+                        // Calculate angle to player
+                        const spiralSpeed = 1.125; // Lowered by 25% (was 1.5)
+                        const rotationSpeed = 0.0225; // Lowered by 25% (was 0.03)
 
                         e.spiralAngle = (e.spiralAngle || 0) + rotationSpeed;
                         e.spiralRadius -= spiralSpeed;
+
+                        // Force face player (Arrow Tip)
+                        e.rotationPhase = angleToPlayer;
 
                         // Use pure spiral angle for smooth orbit
                         e.x = player.x + Math.cos(e.spiralAngle) * e.spiralRadius;
@@ -485,25 +571,28 @@ export function updateEnemies(state: GameState) {
                 case 'diamond': // Sniper + Dodge
                     // Speed Boost (x1.2 from base)
                     const diamondSpd = currentSpd * 1.2;
+                    const pMax = e.preferredMaxDist || 900;
+                    const pMin = e.preferredMinDist || 500;
+                    const sInt = e.strafeInterval || 3000;
 
-                    // Dodge Mechanic: Every 5s -> Faster Dodge
-                    if (Date.now() - (e.timer || 0) > 3000) {
+                    // Dodge Mechanic
+                    if (Date.now() - (e.timer || 0) > sInt) {
                         // Dodge Phase (Strafing)
                         const strafeAngle = angleToPlayer + (Math.PI / 2 * (e.dodgeDir || 1));
                         e.x += Math.cos(strafeAngle) * diamondSpd * 3.0;
                         e.y += Math.sin(strafeAngle) * diamondSpd * 3.0;
 
-                        if (Date.now() - (e.timer || 0) > 3500) {
+                        if (Date.now() - (e.timer || 0) > (sInt + 500)) { // 0.5s duration
                             e.timer = Date.now();
                             e.dodgeDir = (e.dodgeDir || 1) * -1;
                         }
                     } else {
-                        // Kiting Logic: Keep distance 500-900px
-                        if (dist > 900) {
+                        // Kiting Logic: Keep distance
+                        if (dist > pMax) {
                             // Approach
                             e.x += Math.cos(angleToPlayer) * diamondSpd;
                             e.y += Math.sin(angleToPlayer) * diamondSpd;
-                        } else if (dist < 500) {
+                        } else if (dist < pMin) {
                             // Retreat (Backing up)
                             e.x -= Math.cos(angleToPlayer) * diamondSpd;
                             e.y -= Math.sin(angleToPlayer) * diamondSpd;
@@ -514,85 +603,124 @@ export function updateEnemies(state: GameState) {
                     }
 
                     // Shoot Logic
-                    if (Date.now() - e.lastAttack > 3000) {
-                        spawnEnemyBullet(state, e.x, e.y, angleToPlayer, 20, e.palette[0]);
+                    if (Date.now() - e.lastAttack > 6000) {
+                        // Projectile Dmg: Base 20, Grows 50% every 5 minutes (compound)
+                        // Cycle count = minutes / 5
+                        const cycles = Math.floor((gameTime / 60) / 5);
+                        const baseProjDmg = 20;
+                        // 1.5 multiplier (50% increase)
+                        const projDmg = baseProjDmg * Math.pow(1.5, cycles);
+
+                        spawnEnemyBullet(state, e.x, e.y, angleToPlayer, projDmg, e.palette[0]);
                         e.lastAttack = Date.now();
                     }
                     break;
 
-                case 'pentagon': // Swarm Leader
-                    // 1. Check if just spawned (not seen yet)
-                    if (!e.seen) {
-                        if (dist < 1000) {
-                            e.seen = true;
-                            e.timer = Date.now(); // Start 3s initial wait
-                            e.lastAttack = Date.now() + 3000; // First summon after 3s
-                        }
-                        // Normal move while unseen
-                        if (dist > 200) {
-                            e.x += Math.cos(angleToPlayer) * currentSpd;
-                            e.y += Math.sin(angleToPlayer) * currentSpd;
-                        }
-                        break;
+                case 'pentagon': // Swarm Leader (Summoner)
+                    const PENTAGON_ENGAGE_DIST = 700;
+                    const PENTAGON_MIN_DIST = 500;
+                    const SUMMON_COOLDOWN = 15000;
+                    const CAST_DURATION = 4000;
+
+                    // 1. Check Range Init
+                    if (!e.reachedRange && dist <= PENTAGON_ENGAGE_DIST) {
+                        e.reachedRange = true;
+                        // Can Summon immediately upon reaching range? 
+                        // User said: "After pentagon reaches ... 700 range ... he now is able to spawn minions."
+                        // It doesn't say "immediately", but usually cooldown starts or is ready.
+                        // Let's set lastAttack to allow immediate cast or wait?
+                        // "Cooldown: Every 15 seconds."
+                        // Let's assume he starts fresh, so he can cast soon.
+                        e.lastAttack = Date.now() - SUMMON_COOLDOWN; // Ready to cast
                     }
 
-                    // 2. Summon Logic (15s cooldown)
-                    if (Date.now() - e.lastAttack > 15000) {
-                        // Start Summon (go straight to casting, no pause)
-                        e.summonState = 2;
-                        e.timer = Date.now();
-                        e.lastAttack = Date.now(); // Reset CD
-                    }
-
+                    // 2. Summon State Logic (Casting)
                     if (e.summonState === 2) {
-                        // Casting (1 minute duration)
-                        if (Date.now() - (e.timer || 0) > 1000) {
-                            // SPAWN 5 CIRCLES!
-                            const dx = e.x - player.x;
-                            const dy = e.y - player.y;
-                            const startDist = Math.hypot(dx, dy);
-                            const startAngle = Math.atan2(dy, dx);
+                        const castTime = Date.now() - (e.timer || 0);
 
+                        // Pulsate Effect (Fast Pulse during cast)
+                        e.pulsePhase += 0.2;
+
+                        // Finish Casting?
+                        if (castTime > CAST_DURATION) {
+                            // SPAWN 5 MINIONS
                             for (let k = 0; k < 5; k++) {
                                 // Spawn from 5 corners
-                                const cornerAngle = (Math.PI * 2 / 5) * k;
-                                const spawnX = e.x + Math.cos(cornerAngle) * (e.size + 15);
-                                const spawnY = e.y + Math.sin(cornerAngle) * (e.size + 15);
+                                const cornerAngle = (Math.PI * 2 / 5) * k - (Math.PI / 2); // Align with point up
+                                // Add rotation to corner position based on enemy rotation?
+                                // Simplified: Just use static relative to center
+                                const spawnX = e.x + Math.cos(cornerAngle) * (e.size * 1.5);
+                                const spawnY = e.y + Math.sin(cornerAngle) * (e.size * 1.5);
+
+                                // Calc spiral start props
+                                const spawnDx = spawnX - player.x;
+                                const spawnDy = spawnY - player.y;
+                                const startDist = Math.hypot(spawnDx, spawnDy);
+                                const startAngle = Math.atan2(spawnDy, spawnDx);
 
                                 const mini: Enemy = {
                                     ...e,
                                     id: Math.random(),
-                                    type: 'minion',
-                                    shape: 'minion', // Fully distinct shape type
-                                    size: 13, // 1.04x size (0.8 * 1.3 base, scaled to ~13)
-                                    hp: e.hp * 0.3,
+                                    type: 'minion', // Generic type
+                                    shape: 'minion', // New Unique Shape
+                                    size: 15, // Small
+                                    hp: e.maxHp * 0.1, // 10% of Pentagon HP
+                                    maxHp: e.maxHp * 0.1,
                                     x: spawnX,
                                     y: spawnY,
                                     boss: false,
                                     summonState: 0,
-                                    spd: 2.4 * 1.3, // Match global speed * circle mult
+                                    spd: 2.4 * 1.3, // Fast
                                     dead: false,
 
-                                    // Sequential activation: 0.4s intervals
-                                    timer: Date.now() + (k * 400),
-
-                                    // Spiral Props
+                                    // Minion Logic Props
+                                    timer: Date.now() + (k * 200), // Stagger activation slightly
                                     spiralRadius: startDist,
-                                    spiralAngle: startAngle
+                                    spiralAngle: startAngle,
+                                    palette: ['#FFD700', '#FFA500', '#FF4500'] // Gold/Orange Fire look for Minions
                                 };
                                 state.enemies.push(mini);
                             }
 
-                            e.summonState = 0; // Resume normal behavior
+                            e.summonState = 0;
+                            e.lastAttack = Date.now(); // Reset Cooldown
                         }
+
+                        // Don't move while casting (User: "cant be enterupted by his goal to keep 500-700pxl distance")
+                        // Implies he stays put or ignores movement rules.
+                        break;
+                    }
+
+                    // 3. Normal Behavior
+
+                    // Check Cooldown for Summon
+                    if (e.reachedRange && Date.now() - e.lastAttack > SUMMON_COOLDOWN) {
+                        e.summonState = 2; // Enter Casting
+                        e.timer = Date.now();
+                        break; // Stop movement frame to start casting
+                    }
+
+                    // Movement Logic
+                    if (!e.reachedRange) {
+                        // Move directly to player
+                        e.x += Math.cos(angleToPlayer) * currentSpd;
+                        e.y += Math.sin(angleToPlayer) * currentSpd;
                     } else {
-                        // Chase Behavior (maintain distance)
-                        if (dist > 400) {
+                        // Maintain 500-700
+                        if (dist > PENTAGON_ENGAGE_DIST) {
+                            // Too far -> Approach
                             e.x += Math.cos(angleToPlayer) * currentSpd;
                             e.y += Math.sin(angleToPlayer) * currentSpd;
-                        } else if (dist < 300) {
+                        } else if (dist < PENTAGON_MIN_DIST) {
+                            // Too close -> Retreat
                             e.x -= Math.cos(angleToPlayer) * currentSpd;
                             e.y -= Math.sin(angleToPlayer) * currentSpd;
+                        } else {
+                            // Inside Goldilocks zone (500-700) -> Hold or Strafe?
+                            // User said "keep distance", holding is fine.
+                            // Maybe slow drift to keep it dynamic
+                            e.x += Math.cos(angleToPlayer + Math.PI / 2) * (currentSpd * 0.2);
+                            e.y += Math.sin(angleToPlayer + Math.PI / 2) * (currentSpd * 0.2);
                         }
                     }
                     break;

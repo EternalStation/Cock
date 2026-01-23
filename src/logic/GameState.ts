@@ -9,11 +9,11 @@ export const createInitialPlayer = (): Player => ({
     hp: { base: 150, flat: 0, mult: 0 },
     curHp: 150,
     dmg: { base: 50, flat: 0, mult: 0 },
-    atk: { base: 200, flat: 0, mult: 0 },
+    atk: { base: 330, flat: 0, mult: 0 },
     reg: { base: 1, flat: 0, mult: 0 },
     arm: { base: 0, flat: 0, mult: 0 },
-    xp_per_kill: { base: 25, flat: 0 },
-    xp: { current: 0, needed: 100 },
+    xp_per_kill: { base: 25, flat: 0, mult: 0 },
+    xp: { current: 0, needed: 250 },
     level: 1,
     damageDealt: 0,
     damageTaken: 0,
@@ -37,11 +37,13 @@ export const createInitialGameState = (): GameState => ({
     particles: [],
     camera: { x: 0, y: 0 },
     score: 0,
+    killCount: 0,
     gameTime: 0,
     isPaused: false,
     gameOver: false,
     nextBossSpawnTime: 120, // 2 minutes
     nextBossId: 0,
     rareSpawnCycle: 0,
-    rareSpawnActive: false
+    rareSpawnActive: false,
+    spawnTimer: 1.0 // 1 Second animation
 });

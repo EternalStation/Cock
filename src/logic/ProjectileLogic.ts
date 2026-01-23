@@ -57,47 +57,79 @@ export function updateProjectiles(state: GameState, onEvent?: (type: string, dat
                 if (onEvent) onEvent('hit');
 
                 if (e.isRare) {
-                    // PHASE 0 & 1: TRANSITION TO PHASE 2 (SPLIT) ON HIT
-                    if (e.rarePhase === 0 || e.rarePhase === 1) {
-                        b.hits.add(e.id);
-                        b.pierce--; // Bullet consumed
-
-                        // Trigger Split
-                        e.rarePhase = 2; // Real one becomes Phase 2 (Panic)
+                    // PHASE 0 (Passive) -> PHASE 1 (Alert/Teleport) ON HIT
+                    if (e.rarePhase === 0) {
+                        // Trigger Phase 1 (Alert/Defensive) - ORANGE
+                        e.rarePhase = 1;
                         e.rareTimer = state.gameTime;
-                        e.spd = 9; // Fast Panic Speed
-                        e.invincibleUntil = Date.now() + 2000; // Invincible for 2s
+                        e.spd = 8;
                         e.teleported = true;
-                        e.longTrail = []; // Clear trail
+                        e.longTrail = [];
+                        e.palette = ['#F97316', '#EA580C', '#C2410C']; // Orange Palette (Phase 2 Visuals)
 
-                        // Spawn Decoy
-                        const decoy: any = { ...e }; // Shallow copy
-                        decoy.id = Math.random();
-                        decoy.rareReal = false; // It's a fake
-                        decoy.hp = e.maxHp; // Match HP so player can't tell instantly by health bar
-                        decoy.maxHp = e.maxHp;
-                        decoy.parentId = e.id; // Link to master
-                        decoy.x += 80; decoy.y += 80; // Split offset
-                        e.x -= 80; e.y -= 80;
+                        // Heal to full to ensure he can be hit again (Fixing 'no damage in phase 2' bug)
+                        e.hp = e.maxHp;
 
-                        state.enemies.push(decoy);
-                        return; // Don't deal damage yet
+                        // Teleport behind player (Reuse logic basically)
+                        const dx = e.x - player.x;
+                        const dy = e.y - player.y;
+                        e.x = player.x - (dx * 0.8);
+                        e.y = player.y - (dy * 0.8);
+
+                        playSfx('rare-spawn');
+                        return;
                     }
 
-                    // PHASE 2: CHECK REAL VS FAKE
+                    // PHASE 1 (Alert) -> PHASE 2 (Split/Aggressive) ON HIT
+                    if (e.rarePhase === 1) {
+                        // Trigger Phase 2 (Aggressive Split) - RED
+                        e.rarePhase = 2;
+                        e.rareTimer = state.gameTime;
+                        e.spd = 5.2; // Reduced by 20% (6.5 -> 5.2)
+                        e.invincibleUntil = Date.now() + 2500; // 2.5s Invincibility (Smoke Cover)
+                        e.teleported = true;
+                        e.longTrail = [];
+
+                        // SMOKE EFFECT (Octopus Ink Style) - Updated
+                        // "3D Grey" Gradient (White -> Black mix)
+                        const greyGradient = ['#FFFFFF', '#E0E0E0', '#C0C0C0', '#A0A0A0', '#808080', '#606060', '#404040', '#202020', '#000000'];
+                        spawnParticles(state, e.x, e.y, greyGradient, 60, 300, 90);
+
+                        // SET HP TO 1 for BOTH (After damage calculation, force it)
+                        e.hp = 1;
+                        e.maxHp = 1;
+
+                        // CHANGE COLOR TO RED (Aggressive)
+                        const redPalette = ['#EF4444', '#DC2626', '#B91C1C'];
+                        e.palette = redPalette;
+
+                        // Spawn Decoy
+                        const decoy: any = { ...e }; // Copy properties including new Red palette
+                        decoy.id = Math.random();
+                        decoy.rareReal = false; // It's a fake
+                        decoy.hp = 1;
+                        decoy.maxHp = 1;
+                        decoy.parentId = e.id;
+                        // Split Offset - Reduced by 2x (60 -> 30)
+                        decoy.x += 30; decoy.y += 30;
+                        e.x -= 30; e.y -= 30;
+
+                        state.enemies.push(decoy);
+                        return;
+                    }
+
+                    // PHASE 2 (Aggressive Split) - CHECK REAL VS FAKE
                     if (e.rarePhase === 2) {
                         // Check Invincibility
                         if (e.invincibleUntil && Date.now() < e.invincibleUntil) {
-                            return; // Invincible! Ignore hit.
+                            // If invincible, we shouldn't have taken damage. Revert damage.
+                            e.hp += b.dmg;
+                            return;
                         }
 
-                        // DEAL DAMAGE (Both take damage)
-                        if (!b.hits.has(e.id)) {
-                            e.hp -= b.dmg;
-                            state.player.damageDealt += b.dmg;
-                            b.hits.add(e.id);
-                            b.pierce--;
-                        }
+                        // DEAL DAMAGE (1 HP logic means death)
+                        // Note: Damage was already applied by line 53 e.hp -= b.dmg
+
 
                         // DEATH LOGIC
                         if (e.hp <= 0 && !e.dead) {
@@ -105,17 +137,21 @@ export function updateProjectiles(state: GameState, onEvent?: (type: string, dat
 
                             // IF REAL ONE DIES
                             if (e.rareReal) {
-                                spawnParticles(state, e.x, e.y, '#F59E0B', 40); // Massive Gold explosion
-                                playSfx('rare-kill'); // Jackpot Sound!
+                                spawnParticles(state, e.x, e.y, '#F59E0B', 40);
+                                playSfx('rare-kill');
                                 state.score += 5000;
+                                state.killCount++;
                                 state.rareRewardActive = true;
 
-                                // XP Reward: FULL LEVEL
-                                // Add exactly what is needed for current level, ensuring a level up occurs
-                                // The loop below handles the actual leveling
-                                player.xp.current += player.xp.needed;
+                                // REWARD: Full Level Up (Keep overflow)
+                                const xpNeededForLevel = player.xp.needed;
+                                player.xp.current += xpNeededForLevel; // Add full level worth of XP
+
+                                // Check level up immediately so overflow matches expectation
+                                // (Level logic handles it below but we need to ensure it triggers)
 
                                 // Kill ALL fakes
+
                                 state.enemies.forEach(other => {
                                     if (other.parentId === e.id || (!other.rareReal && other.isRare && other.id !== e.id)) {
                                         other.dead = true;
@@ -124,7 +160,7 @@ export function updateProjectiles(state: GameState, onEvent?: (type: string, dat
                                 });
                             } else {
                                 // FAKE DIES
-                                spawnParticles(state, e.x, e.y, '#ef4444', 15); // Glitch/Red/Fake explosion
+                                spawnParticles(state, e.x, e.y, '#ef4444', 15);
                                 // Real one continues...
                             }
                             return;
@@ -137,9 +173,16 @@ export function updateProjectiles(state: GameState, onEvent?: (type: string, dat
                     e.dead = true;
                     spawnParticles(state, e.x, e.y, e.palette[0], 8);
                     state.score++;
+                    state.killCount++;
 
-                    const xpGain = e.boss ? 500 : (player.xp_per_kill.base + player.level + player.xp_per_kill.flat);
-                    player.xp.current += xpGain;
+                    const baseXp = e.boss
+                        ? 0
+                        : (40 + (3 * player.level) + player.xp_per_kill.flat);
+
+                    const xpMult = 1 + (player.xp_per_kill.mult / 100);
+                    const totalXp = baseXp * xpMult;
+
+                    player.xp.current += totalXp;
 
                     if (e.boss) {
                         if (onEvent) onEvent('boss_kill');
@@ -149,7 +192,7 @@ export function updateProjectiles(state: GameState, onEvent?: (type: string, dat
                     while (player.xp.current >= player.xp.needed) {
                         player.xp.current -= player.xp.needed; // Keep overflow
                         player.level++;
-                        player.xp.needed *= 1.22;
+                        player.xp.needed *= 1.10;
                         if (onEvent) onEvent('level_up');
                     }
                 }
@@ -209,10 +252,10 @@ export function updateProjectiles(state: GameState, onEvent?: (type: string, dat
                 e.dead = true; // Enemy dies on contact
 
                 // Percentage Based Damage Logic
-                const percentDmg = e.maxHp * 0.30;
+                const percentDmg = e.maxHp * 0.10;
                 // Add flat base damage to ensure early game enemies still hurt if 30% is too low (e.g. 50hp * 0.3 = 15)
                 // But user asked for "link dmg to % of total enemiy health... if at start enemies have 50 hp... lose 30% of enemies hp"
-                // So purely 30% of enemy max HP.
+                // So purely 10% of enemy max HP.
                 const rawDmg = Math.max(10, percentDmg); // Safety floor of 10 damage
 
                 const reduction = getDefenseReduction(calcStat(player.arm));

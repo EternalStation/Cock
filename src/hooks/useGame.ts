@@ -42,6 +42,7 @@ export function useGameLoop(gameStarted: boolean) {
         if (!gameStarted) return; // Ignore inputs if game hasn't started
 
         const handleDown = (e: KeyboardEvent) => {
+            console.log('Key down:', e.key);
             startBGM();
             if (e.key === 'Escape') {
                 setShowSettings(p => !p);
@@ -56,11 +57,29 @@ export function useGameLoop(gameStarted: boolean) {
         };
         const handleUp = (e: KeyboardEvent) => keys.current[e.key.toLowerCase()] = false;
 
+        // Cheat Code Buffer
+        let cheatBuffer = '';
+        const handleCheat = (e: KeyboardEvent) => {
+            const key = e.key.toLowerCase();
+            cheatBuffer += key;
+            if (cheatBuffer.length > 10) cheatBuffer = cheatBuffer.slice(-10);
+
+            if (cheatBuffer.endsWith('die')) {
+                setGameOver(true);
+                playSfx('hurt');
+                cheatBuffer = ''; // Reset
+            }
+
+
+        };
+
         window.addEventListener('keydown', handleDown);
         window.addEventListener('keyup', handleUp);
+        window.addEventListener('keydown', handleCheat);
         return () => {
             window.removeEventListener('keydown', handleDown);
             window.removeEventListener('keyup', handleUp);
+            window.removeEventListener('keydown', handleCheat);
         };
     }, [showSettings, showStats, gameStarted]); // Re-bind if blocking state changes
 
@@ -136,6 +155,15 @@ export function useGameLoop(gameStarted: boolean) {
                     // Update Logic
                     updatePlayer(state, keys.current);
 
+                    // Trigger Spawn Sound if just starting (approx check)
+                    // We need a better flag for "sound played", but since timer counts down...
+                    // Let's add a "hasPlayedSpawnSound" to state or just check if timer is > 0.9 and we haven't played it?
+                    // Simpler: Just rely on the fact that restartGame resets state
+                    if (state.spawnTimer > 0.95 && !state.hasPlayedSpawnSound) {
+                        playSfx('spawn');
+                        state.hasPlayedSpawnSound = true;
+                    }
+
                     state.camera.x = state.player.x;
                     state.camera.y = state.player.y;
 
@@ -163,7 +191,7 @@ export function useGameLoop(gameStarted: boolean) {
                     const atkScore = Math.min(9999, calcStat(player.atk));
                     const fireDelay = 200000 / atkScore;
 
-                    if (Date.now() - player.lastShot > fireDelay) {
+                    if (Date.now() - player.lastShot > fireDelay && state.spawnTimer <= 0) {
                         const d = calcStat(player.dmg);
                         for (let i = 0; i < player.multi; i++) {
                             const offset = (i - (player.multi - 1) / 2) * 0.15;
@@ -239,7 +267,7 @@ function renderGame(ctx: CanvasRenderingContext2D, state: GameState) {
     const { width, height } = ctx.canvas;
     const { camera, player, enemies, bullets, enemyBullets, drones, particles } = state;
 
-    // Clear
+    // Clear - Reverted to Deep Slate per feedback, but kept dark
     ctx.fillStyle = '#020617';
     ctx.fillRect(0, 0, width, height);
 
@@ -255,42 +283,118 @@ function renderGame(ctx: CanvasRenderingContext2D, state: GameState) {
     // 3. Move origin to camera position (which follows player)
     ctx.translate(-camera.x, -camera.y);
 
-    // Draw Grid
-    ctx.strokeStyle = '#1e293b';
-    ctx.lineWidth = 1;
-    const gridSize = 100;
+    // Screen Shake Logic (Spawn OR Boss)
+    const activeBoss = enemies.some(e => e.boss);
 
-    // Extend grid bounds significantly to account for zoom (0.8x)
-    // Visible area is larger than canvas size, so we buffer by +/- width/height
-    const startX = Math.floor((camera.x - width) / gridSize) * gridSize;
-    const endX = camera.x + width * 2;
-    const startY = Math.floor((camera.y - height) / gridSize) * gridSize;
-    const endY = camera.y + height * 2;
+    if (state.spawnTimer > 0 || activeBoss) {
+        let intensity = 0;
+        if (state.spawnTimer > 0) intensity += state.spawnTimer * 5;
+        if (activeBoss) intensity += 3; // Constant low rumble for boss
 
-    for (let x = startX; x < endX; x += gridSize) {
-        ctx.beginPath();
-        // Draw full height grid lines
-        ctx.moveTo(x, startY);
-        ctx.lineTo(x, endY);
-        ctx.stroke();
-    }
-    for (let y = startY; y < endY; y += gridSize) {
-        ctx.beginPath();
-        // Draw full width grid lines
-        ctx.moveTo(startX, y);
-        ctx.lineTo(endX, y);
-        ctx.stroke();
+        // Random intense shake occasionally for boss
+        if (activeBoss && Math.random() < 0.05) intensity += 10;
+
+        const shakeX = (Math.random() - 0.5) * intensity;
+        const shakeY = (Math.random() - 0.5) * intensity;
+        ctx.translate(shakeX, shakeY);
     }
 
-    // Particles
-    particles.forEach(p => {
-        ctx.globalAlpha = p.life;
-        ctx.fillStyle = p.color;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.globalAlpha = 1;
-    });
+    // Global Darken for Boss (Background dim)
+    if (activeBoss) {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)'; // Darker for boss
+        // Draw centered on camera to cover the viewport
+        const vW = width / 0.58; // Reverse scale
+        const vH = height / 0.58;
+        ctx.fillRect(camera.x - vW, camera.y - vH, vW * 2, vH * 2);
+    }
+
+    // --- VOID HEX VORTEX BACKGROUND ---
+
+    // Constants
+    const deepHexSize = 300;
+
+    // Helper: Draw Hex Grid
+    const drawHexGrid = (
+        gridSize: number,
+        color: string,
+        alpha: number,
+        lineWidth: number = 1
+    ) => {
+        ctx.save();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = lineWidth;
+        ctx.globalAlpha = alpha;
+
+        // Calculate visible bounds
+        // (Parallax offset logic removed)
+
+        // Viewport correction (we are currently centered and scaled)
+        // We need to determine the world coordinates covered by the screen
+        const scale = 0.58;
+        const vW = width / scale;
+        const vH = height / scale;
+
+        const cX = camera.x; // Always center grid generation on camera to ensure infinite coverage
+        const cY = camera.y;
+
+        // Hex Grid Math
+        const r = gridSize;
+        const w = Math.sqrt(3) * r;
+        const vDist = 1.5 * r;
+
+        const startCol = Math.floor((cX - vW / 2) / w) - 1;
+        const endCol = Math.floor((cX + vW / 2) / w) + 2;
+        const startRow = Math.floor((cY - vH / 2) / vDist) - 1;
+        const endRow = Math.floor((cY + vH / 2) / vDist) + 2;
+
+        for (let row = startRow; row <= endRow; row++) {
+            const rowOffset = (row % 2) !== 0 ? w / 2 : 0;
+            const y = row * vDist;
+            for (let col = startCol; col <= endCol; col++) {
+                const x = col * w + rowOffset;
+
+                ctx.beginPath();
+                for (let i = 0; i < 6; i++) {
+                    const ang = Math.PI / 3 * i + Math.PI / 6;
+                    const hx = x + r * Math.cos(ang);
+                    const hy = y + r * Math.sin(ang);
+                    if (i === 0) ctx.moveTo(hx, hy);
+                    else ctx.lineTo(hx, hy);
+                }
+                ctx.closePath();
+                ctx.stroke();
+            }
+        }
+
+        ctx.restore();
+    };
+
+    // Boss Intensity (0.0 to 1.0)
+    // bossIntensity logic removed as unused
+
+    // 1. STABLE DEEP LAYER (Background)
+    // "Faint, static honeycomb grid... fades to pure black at edges"
+    ctx.shadowBlur = 0;
+    drawHexGrid(deepHexSize, '#1e293b', 0.1, 2); // Darker slate, lower alpha
+
+    // Void Rifts (Deep Layer) - REMOVED
+    // "No remove those balck holes"
+
+    // 2. MOVING MID LAYER (Parallax) - REMOVED
+    // "remove that second hexogon grid"
+
+    // 3. MID-GROUND FOG (Atmosphere)
+    // Draw some "cloud" particles that swirl
+    // 3. MID-GROUND FOG (Atmosphere) - REMOVED per user request ("remove 5 big circles")
+    /*
+    ctx.save();
+    // ... fog code removed ...
+    ctx.restore();
+    */
+    // (Keeping placeholder comment or just removing)
+
+
+    // Particles moved to post-enemy render for smoke occlusion
 
     // Player - Honeycomb Hexagon
     ctx.save();
@@ -322,18 +426,47 @@ function renderGame(ctx: CanvasRenderingContext2D, state: GameState) {
     ctx.shadowColor = '#22d3ee';
     ctx.shadowBlur = 15;
 
-    // Draw 7 connected honeycomb cells (no gaps, like real bees)
-    // Center cell
-    drawHexagon(0, 0, cellSize);
+    // Draw 7 connected honeycomb cells
+    if (state.spawnTimer > 0) {
+        // Animation Logic
+        const progress = Math.max(0, 1.0 - state.spawnTimer);
+        const ease = 1 - Math.pow(1 - progress, 3); // Cubic Out Easing
 
-    // 6 surrounding cells - positioned to share edges with center
-    const cellDistance = cellSize * Math.sqrt(3); // Perfect honeycomb spacing (no gaps)
-    for (let i = 0; i < 6; i++) {
-        // Neighbors at 30, 90, 150... (Edges of flat-topped hex)
-        const angle = (Math.PI / 3) * i + Math.PI / 6;
-        const cx = cellDistance * Math.cos(angle);
-        const cy = cellDistance * Math.sin(angle);
-        drawHexagon(cx, cy, cellSize);
+        // Center Cell - Scales up
+        const scale = Math.min(1, ease * 1.5);
+        if (scale > 0) {
+            ctx.save();
+            ctx.scale(scale, scale);
+            drawHexagon(0, 0, cellSize);
+            ctx.restore();
+        }
+
+        // Surrounding Cells - Fly in
+        const finalDist = cellSize * Math.sqrt(3);
+        const startDist = finalDist * 5; // Start further away
+        const currentDist = startDist - (startDist - finalDist) * ease;
+
+        ctx.globalAlpha = Math.min(1, ease * 2);
+        for (let i = 0; i < 6; i++) {
+            const angle = (Math.PI / 3) * i + Math.PI / 6;
+            const cx = currentDist * Math.cos(angle);
+            const cy = currentDist * Math.sin(angle);
+            drawHexagon(cx, cy, cellSize);
+        }
+        ctx.globalAlpha = 1;
+    } else {
+        // Normal Static Draw
+        // Center cell
+        drawHexagon(0, 0, cellSize);
+
+        // 6 surrounding cells
+        const cellDistance = cellSize * Math.sqrt(3);
+        for (let i = 0; i < 6; i++) {
+            const angle = (Math.PI / 3) * i + Math.PI / 6;
+            const cx = cellDistance * Math.cos(angle);
+            const cy = cellDistance * Math.sin(angle);
+            drawHexagon(cx, cy, cellSize);
+        }
     }
 
     ctx.restore();
@@ -383,73 +516,213 @@ function renderGame(ctx: CanvasRenderingContext2D, state: GameState) {
         ctx.scale(pulse, pulse);
 
         // Colors from Palette
-        const coreColor = e.palette[0];
-        const innerColor = e.palette[1];
-        const outerColor = e.palette[2];
+        let coreColor = e.palette[0];
+        let innerColor = e.palette[1];
+        let outerColor = e.palette[2];
 
-        // GLITCH EFFECT (Fake Snitch)
-        if (e.glitchPhase && e.glitchPhase > 0) {
-            const jitter = (Math.random() - 0.5) * 10;
-            ctx.translate(jitter, -jitter);
-            if (Math.random() > 0.8) {
-                ctx.globalAlpha = 0.5; // Flicker
+        // Pentagon Pink Pulse
+        if (e.shape === 'pentagon') {
+            const pVal = (Math.sin(e.pulsePhase || 0) + 1) / 2; // 0 to 1
+            // Pulse Pink at peak
+            if (pVal > 0.6) {
+                outerColor = '#FF60E6'; // Neon Pink
+                innerColor = '#FF90EE'; // Lighter Pink
+            }
+        }
+
+        // --- BOSS CHAOS CALCS ---
+        let chaosLevel = 0;
+        if (e.boss) {
+            const minutes = state.gameTime / 60;
+            chaosLevel = Math.min(1, Math.max(0, (minutes - 2) / 10)); // 0.0 - 1.0
+        }
+
+        // GLITCH EFFECT (Fake Snitch OR Boss)
+        if ((e.glitchPhase && e.glitchPhase > 0) || e.boss) {
+            const intensity = e.boss ? chaosLevel * 15 : 10;
+            const flickerChance = e.boss ? 0.8 - (chaosLevel * 0.2) : 0.8; // Boss flickers more at high chaos
+
+            // Random Jitter
+            if (e.boss && Math.random() < chaosLevel * 0.3) {
+                const jitter = (Math.random() - 0.5) * intensity;
+                ctx.translate(jitter, -jitter);
+            } else if (e.glitchPhase && !e.boss) {
+                // Snitch glitch
+                const jitter = (Math.random() - 0.5) * 10;
+                ctx.translate(jitter, -jitter);
+            }
+
+            if (Math.random() > flickerChance) {
+                ctx.globalAlpha = 0.6; // Flicker opacity
             }
         }
 
         // Shapes Helper
-        const drawShape = (size: number) => {
+        const drawShape = (size: number, isWarpedLimit: boolean = false) => {
             ctx.beginPath();
-            if (e.shape === 'circle' || e.shape === 'minion') {
-                ctx.arc(0, 0, size, 0, Math.PI * 2);
+
+            // BOSS WARP/WOBBLE (Hologram instability)
+            // We'll use a custom vertex transformer if it's a boss
+            const warpAmp = isWarpedLimit && e.boss ? (0.1 + chaosLevel * 0.2) * size : 0;
+            // Helper to warp a point
+            const wp = (px: number, py: number) => {
+                if (warpAmp === 0) return { x: px, y: py };
+                // Sin wave distort based on Y + Time
+                const offset = Math.sin((py / size) * 4 + (state.gameTime * 10)) * warpAmp;
+                return { x: px + offset, y: py };
+            };
+
+            if (e.shape === 'circle') {
+                if (warpAmp > 0) {
+                    // Manual circle for warp
+                    for (let i = 0; i <= 20; i++) {
+                        const theta = (i / 20) * Math.PI * 2;
+                        const px = Math.cos(theta) * size;
+                        const py = Math.sin(theta) * size;
+                        const p = wp(px, py);
+                        if (i === 0) ctx.moveTo(p.x, p.y);
+                        else ctx.lineTo(p.x, p.y);
+                    }
+                } else {
+                    ctx.arc(0, 0, size, 0, Math.PI * 2);
+                }
+            } else if (e.shape === 'minion') {
+                // Chevron / Dart Shape (Stealth Bomber look)
+                // "Unique, not a star"
+                // Vertices relative to center (0,0)
+                // 1. Tip
+                const p1 = wp(size, 0);
+                // 2. Bottom Wing
+                const p2 = wp(-size, size * 0.7);
+                // 3. Rear Indent
+                const p3 = wp(-size * 0.3, 0);
+                // 4. Top Wing
+                const p4 = wp(-size, -size * 0.7);
+
+                ctx.moveTo(p1.x, p1.y);
+                ctx.lineTo(p2.x, p2.y);
+                ctx.lineTo(p3.x, p3.y);
+                ctx.lineTo(p4.x, p4.y);
+                ctx.closePath();
             } else if (e.shape === 'triangle') {
-                // Equilateral Triangle
-                // const h = size * Math.sqrt(3) / 2;
-                ctx.moveTo(0, -size);
-                ctx.lineTo(size * 0.866, size * 0.5);
-                ctx.lineTo(-size * 0.866, size * 0.5);
+                const p1 = wp(0, -size);
+                const p2 = wp(size * 0.866, size * 0.5);
+                const p3 = wp(-size * 0.866, size * 0.5);
+                ctx.moveTo(p1.x, p1.y);
+                ctx.lineTo(p2.x, p2.y);
+                ctx.lineTo(p3.x, p3.y);
                 ctx.closePath();
             } else if (e.shape === 'square') {
-                ctx.rect(-size, -size, size * 2, size * 2);
+                const p1 = wp(-size, -size);
+                const p2 = wp(size, -size);
+                const p3 = wp(size, size);
+                const p4 = wp(-size, size);
+                ctx.moveTo(p1.x, p1.y);
+                ctx.lineTo(p2.x, p2.y);
+                ctx.lineTo(p3.x, p3.y);
+                ctx.lineTo(p4.x, p4.y);
+                ctx.closePath();
             } else if (e.shape === 'diamond') {
-                ctx.moveTo(0, -size * 1.3);
-                ctx.lineTo(size, 0);
-                ctx.lineTo(0, size * 1.3);
-                ctx.lineTo(-size, 0);
+                const p1 = wp(0, -size * 1.3);
+                const p2 = wp(size, 0);
+                const p3 = wp(0, size * 1.3);
+                const p4 = wp(-size, 0);
+                ctx.moveTo(p1.x, p1.y);
+                ctx.lineTo(p2.x, p2.y);
+                ctx.lineTo(p3.x, p3.y);
+                ctx.lineTo(p4.x, p4.y);
                 ctx.closePath();
             } else if (e.shape === 'pentagon') {
                 for (let i = 0; i < 5; i++) {
                     const angle = (i * 2 * Math.PI / 5) - Math.PI / 2;
                     const px = Math.cos(angle) * size;
                     const py = Math.sin(angle) * size;
-                    if (i === 0) ctx.moveTo(px, py);
-                    else ctx.lineTo(px, py);
+                    const p = wp(px, py);
+                    if (i === 0) ctx.moveTo(p.x, p.y);
+                    else ctx.lineTo(p.x, p.y);
                 }
                 ctx.closePath();
             } else if (e.shape === 'snitch') {
-                // Golden Snitch: Diamond-ish Body + Wings
-                // Body
-                ctx.moveTo(0, -size);
-                ctx.lineTo(size, 0);
-                ctx.lineTo(0, size);
-                ctx.lineTo(-size, 0);
+                // "North Star" / Spiked Star Shape
+
+                // 8 Points total: 4 Long (Cardinal), 4 Short (Diagonal)
+                // We'll construct it as a single polygon for clean stroking/filling
+
+                const longR = size * 1.5;
+                const shortR = size * 0.5;
+                const innerR = size * 0.2; // Indent between points
+
+                // 16 vertices (8 tips + 8 valleys)
+                const step = (Math.PI * 2) / 16;
+                // Rotate -PI/2 to align first Long point to Top (North)
+                const startAngle = -Math.PI / 2;
+
+                for (let i = 0; i < 16; i++) {
+                    const angle = startAngle + (i * step);
+
+                    // i=0 (Tip Long), i=1 (Valley), i=2 (Tip Short), i=3 (Valley)...
+                    const isTip = i % 2 === 0;
+                    let r = innerR; // Default to valley
+
+                    if (isTip) {
+                        const tipIndex = i / 2; // 0..7
+                        // Evens (0,2,4,6) are Cardinal -> Long
+                        // Odds (1,3,5,7) are Diagonal -> Short
+                        r = (tipIndex % 2 === 0) ? longR : shortR;
+                    }
+
+                    // Warp support
+                    const px = Math.cos(angle) * r;
+                    const py = Math.sin(angle) * r;
+                    const p = wp(px, py);
+
+                    if (i === 0) ctx.moveTo(p.x, p.y);
+                    else ctx.lineTo(p.x, p.y);
+                }
                 ctx.closePath();
-
-                // Add wings to the path so they get filled/stroked
-                // Right Wing
-                ctx.moveTo(size, 0);
-                ctx.lineTo(size * 2.5, -size * 0.5);
-                ctx.lineTo(size * 1.5, size * 0.5);
-                ctx.lineTo(size, 0);
-
-                // Left Wing
-                ctx.moveTo(-size, 0);
-                ctx.lineTo(-size * 2.5, -size * 0.5);
-                ctx.lineTo(-size * 1.5, size * 0.5);
-                ctx.lineTo(-size, 0);
             }
         };
 
         // --- VISUAL LAYER SYSTEM ---
+
+        // BOSS: TRAOLS (Glitchy After-images) rendered BEFORE main body
+        if (e.boss && e.trails) {
+            e.trails.forEach(t => {
+                ctx.save();
+                // Trails are static in world space, but we are inside ctx.translate(e.x, e.y)
+                // So we need to undo that or just calculate relative
+                // Easier: Just draw them relative to current 0,0 if we stored relative? 
+                // Logic in EnemyLogic stored absolute X/Y. 
+                // So we need to undo the translate:
+                ctx.translate(-e.x, -e.y); // Back to world 0,0
+                ctx.translate(t.x, t.y); // To trail pos
+
+                ctx.scale(pulse, pulse); // Match scale
+                ctx.rotate(t.rotation); // Match rotation
+
+                ctx.strokeStyle = outerColor;
+                ctx.lineWidth = 1;
+                ctx.globalAlpha = t.alpha * 0.5;
+                drawShape(e.size, false); // No warp on trails for perf/readability
+                ctx.stroke();
+                ctx.restore();
+            });
+        }
+
+        // 0. BOSS ONLY: PULSING RED SECONDARY OUTLINE (#FF0000)
+        // "ALWAYS pulsing red secondary outline (#FF0000, thick, 1px flicker)"
+        if (e.boss) {
+            const flicker = Math.random() > 0.5 ? 1 : 0.8;
+            const redAlpha = (0.6 + Math.sin(state.gameTime * 10) * 0.4) * flicker;
+            ctx.strokeStyle = '#FF0000';
+            ctx.lineWidth = 3; // Thick
+            ctx.shadowColor = '#FF0000';
+            ctx.shadowBlur = 20; // Big red glow
+            ctx.globalAlpha = redAlpha;
+            drawShape(e.size * 1.25, true); // Larger than outer (1.1)
+            ctx.stroke();
+            ctx.globalAlpha = 1.0; // Reset
+        }
 
         // 1. OUTLINE (Thin glowing ring)
         // Offset 5-10% outward -> size * 1.1
@@ -458,7 +731,7 @@ function renderGame(ctx: CanvasRenderingContext2D, state: GameState) {
         // Subtle glow bloom
         ctx.shadowBlur = 8;
         ctx.shadowColor = outerColor;
-        drawShape(e.size * 1.1);
+        drawShape(e.size * 1.1, true); // Warp active for boss
         ctx.stroke();
 
         // 2. INSIDE LAYER (Remaining 50%)
@@ -468,8 +741,44 @@ function renderGame(ctx: CanvasRenderingContext2D, state: GameState) {
         // Adjust alpha manually since we only have hex codes
         ctx.globalAlpha = 0.4;
         ctx.shadowBlur = 0; // No blur on fill to save perf/clean look
-        drawShape(e.size);
+        drawShape(e.size, true);
         ctx.fill();
+
+        // BOSS: BLACK VOIDS (Cracks in Inside Layer)
+        if (e.boss) {
+            ctx.save();
+            ctx.clip(); // Clip to the shape just drawn
+
+            ctx.fillStyle = '#000000';
+            ctx.globalAlpha = 0.8;
+            // Random cracks/voids
+            // We use seeded random based on ID + crackPhase to make them "flicker"
+            const seed = Math.floor(state.gameTime * 10); // 10Hz flicker
+            // Draw 2-3 random polygons
+            const crackCount = 2 + Math.floor(chaosLevel * 4);
+            const r = (n: number) => {
+                const sin = Math.sin(n + e.id);
+                return sin - Math.floor(sin);
+            };
+
+            for (let k = 0; k < crackCount; k++) {
+                ctx.beginPath();
+                // Random center inside
+                const cx = (r(seed + k) - 0.5) * e.size * 1.2;
+                const cy = (r(seed + k + 100) - 0.5) * e.size * 1.2;
+                // Draw jagged shard
+                for (let v = 0; v < 4; v++) {
+                    const ang = v * (Math.PI / 2) + r(k + v);
+                    const dist = 5 + r(k * v) * 15;
+                    const px = cx + Math.cos(ang) * dist;
+                    const py = cy + Math.sin(ang) * dist;
+                    if (v === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+                }
+                ctx.fill();
+            }
+            ctx.restore();
+            ctx.globalAlpha = 0.4; // Restore for next fills if any
+        }
 
         // 3. CORE (Innermost 50%)
         // Solid bright fill
@@ -477,23 +786,78 @@ function renderGame(ctx: CanvasRenderingContext2D, state: GameState) {
         ctx.globalAlpha = 1.0;
         ctx.shadowBlur = 15; // Bright bloom for core
         ctx.shadowColor = coreColor;
-        drawShape(e.size * 0.5);
+        drawShape(e.size * 0.5, true);
         ctx.fill();
 
-        // Boss Marker
+        // BOSS ONLY: CHAOS PARTICLES (Orbiting Shards)
         if (e.boss) {
-            ctx.restore(); // Undo rotation/scale for text
+            const particleCount = 5 + Math.floor(chaosLevel * 95); // 5 to 100
+            const orbitSpeed = state.gameTime * (2 + chaosLevel * 4); // Fast orbit
+
+            ctx.shadowBlur = 0;
+            ctx.fillStyle = '#880000'; // Dark Red
+
+            for (let i = 0; i < particleCount; i++) {
+                const angle = (i / particleCount) * Math.PI * 2 + orbitSpeed;
+                // Variable radius
+                const dist = (e.size * 1.5) + Math.sin(i + orbitSpeed) * 10 + (Math.random() * chaosLevel * 20);
+
+                const px = Math.cos(angle) * dist;
+                const py = Math.sin(angle) * dist;
+
+                ctx.beginPath();
+                // Tiny shard
+                ctx.rect(px, py, 2 + chaosLevel * 2, 2 + chaosLevel * 2);
+                ctx.fill();
+            }
+        }
+
+        // BOSS SCANLINES (Overlay)
+        if (e.boss) {
+            ctx.fillStyle = '#000000';
+            ctx.globalAlpha = 0.1 + (chaosLevel * 0.2);
+            // Draw horizontal lines across the shape
+            const lines = 10;
+            for (let i = 0; i < lines; i++) {
+                const yPos = -e.size + (i / lines) * (e.size * 2);
+                if (Math.sin(yPos + state.gameTime * 20) > 0) { // Moving scanbar
+                    ctx.fillRect(-e.size, yPos, e.size * 2, 2);
+                }
+            }
+        }
+
+        ctx.restore(); // Undo scale/rotation/translate(jitter)
+
+        // Boss Marker Text (Separate restore to avoid rotation)
+        if (e.boss) {
             ctx.save();
-            ctx.translate(e.x, e.y); // Re-translate
+            ctx.translate(e.x, e.y); // Re-translate to center
             ctx.fillStyle = "#fff";
             ctx.font = "bold 14px monospace";
             ctx.textAlign = "center";
             ctx.shadowColor = "#000";
             ctx.shadowBlur = 3;
-            ctx.fillText("BOSS", 0, -e.size - 20);
+            // Screen Shake/Darken effect applies to camera, but we can do local "Text Shake" too if we want
+            const shake = chaosLevel > 0.5 ? (Math.random() - 0.5) * 2 : 0;
+            ctx.fillText("BOSS", shake, -e.size - 25 + shake);
+            ctx.restore();
         }
+    });
 
-        ctx.restore();
+    // Particles (Rendered AFTER enemies to allow smoke to hide them)
+    particles.forEach(p => {
+        // Opacity logic: Keep fully opaque until life is low?
+        // User requested "100% opacity nothing though it should be seen"
+        // Standard fade: ctx.globalAlpha = p.life; (life is > 1 usually?)
+        // Wait, p.life in logic is 30-90. globalAlpha expects 0-1.
+        // If p.life > 1, globalAlpha = 1 (clamped usually? No canvas acts weird with >1? No it clamps).
+        // Let's ensure it stays 1.0 mostly.
+        ctx.globalAlpha = Math.min(1, p.life / 20);
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
     });
 
     // Bullets
@@ -517,5 +881,37 @@ function renderGame(ctx: CanvasRenderingContext2D, state: GameState) {
         ctx.fill();
     });
 
-    ctx.restore();
+    // 4. FOREGROUND VIGNETTE (Screen Space Overlay)
+    // "Dimmer screen edges (vignette: 50% darker tones at borders, gradient to clear center)"
+
+    ctx.restore(); // Restore to Screen Space for UI/Overlay effects
+
+    // 4. STRONG VIGNETTE (Fog of War)
+    // "remove fog... see vingier darker corners... enemies slowly appear"
+    // We achieve this by a strong radial gradient to black.
+    const drawVignette = () => {
+        const cx = width / 2;
+        const cy = height / 2;
+        // Radius: Cover most of screen but ensure corners are black
+        const radius = Math.max(width, height) * 0.75;
+
+        const grad = ctx.createRadialGradient(cx, cy, radius * 0.5, cx, cy, radius);
+        // Clear center (Visibility Circle)
+        grad.addColorStop(0, 'rgba(0, 0, 0, 0)');
+        // Soft edge start
+        grad.addColorStop(0.6, 'rgba(0, 0, 0, 0.2)');
+        // SOLID BLACK EDGES - Hides enemies
+        grad.addColorStop(1, 'rgba(0, 0, 0, 1.0)');
+
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, width, height);
+
+        // Boss Fog Thickening
+        if (activeBoss) {
+            ctx.fillStyle = 'rgba(20, 0, 0, 0.2)'; // Red tint overlay
+            ctx.fillRect(0, 0, width, height);
+        }
+    };
+
+    drawVignette();
 }

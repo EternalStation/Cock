@@ -1,5 +1,3 @@
-
-
 import { useState } from 'react';
 import { GameCanvas } from './components/GameCanvas';
 import { HUD } from './components/HUD';
@@ -70,7 +68,7 @@ function App() {
             <DeathScreen
               stats={{
                 time: hook.gameState.gameTime,
-                kills: hook.gameState.score,
+                kills: hook.gameState.killCount,
                 bosses: 0, // Need to track bosses
                 level: hook.gameState.player.level,
               }}

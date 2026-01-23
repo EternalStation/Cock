@@ -2,7 +2,6 @@ export const audioCtx = new (window.AudioContext || (window as any).webkitAudioC
 
 // Audio State
 let isBgmPlaying = false;
-let isMenuBgmPlaying = false;
 
 // Master Gains
 let masterMusicGain: GainNode | null = null;
@@ -11,15 +10,13 @@ let musicVolume = 0.5;
 let sfxVolume = 0.5;
 let savedMusicVolume = 0.5; // For restoring after ducking
 
+export const getMusicVolume = () => musicVolume;
+export const getSfxVolume = () => sfxVolume;
+
 // Simple BGM System - Single looping track
 let bgmBuffer: AudioBuffer | null = null;
 let bgmSource: AudioBufferSourceNode | null = null;
 let bgmGain: GainNode | null = null;
-
-// Menu BGM System
-let menuBgmBuffer: AudioBuffer | null = null;
-let menuBgmSource: AudioBufferSourceNode | null = null;
-let menuBgmGain: GainNode | null = null;
 
 // Shoot System
 let shootBuffer: AudioBuffer | null = null;
@@ -72,17 +69,7 @@ export function setSfxVolume(vol: number) {
     }
 }
 
-export function getMusicVolume(): number {
-    return musicVolume;
-}
-
-export function getSfxVolume(): number {
-    return sfxVolume;
-}
-
-
 export async function startBGM() {
-    stopMenuMusic();
     if (isBgmPlaying) return;
     if (audioCtx.state === 'suspended') {
         await audioCtx.resume().catch(() => { });
@@ -121,7 +108,7 @@ export async function startBGM() {
     // Load Shoot Ding
     if (!shootBuffer) {
         try {
-            const response = await fetch('/audio/neon_laser_shoot.wav');
+            const response = await fetch('/audio/pleasant_neon_ding.wav');
             const arrayBuffer = await response.arrayBuffer();
             shootBuffer = await audioCtx.decodeAudioData(arrayBuffer);
         } catch (e) {
@@ -160,73 +147,6 @@ export function stopBGM() {
     if (bgmSource) {
         try { bgmSource.stop(); } catch (e) { }
         bgmSource = null;
-    }
-}
-
-export async function startMenuMusic() {
-    if (isMenuBgmPlaying) return;
-
-    // Try to resume if suspended (might need interaction)
-    if (audioCtx.state === 'suspended') {
-        audioCtx.resume().catch(() => { });
-    }
-
-    // Init Master Gains if needed
-    if (!masterMusicGain) {
-        masterMusicGain = audioCtx.createGain();
-        masterMusicGain.gain.value = musicVolume;
-        masterMusicGain.connect(audioCtx.destination);
-    }
-
-    if (!masterSfxGain) {
-        masterSfxGain = audioCtx.createGain();
-        masterSfxGain.gain.value = sfxVolume;
-        masterSfxGain.connect(audioCtx.destination);
-    }
-
-    isMenuBgmPlaying = true;
-
-    // Load menu music
-    if (!menuBgmBuffer) {
-        try {
-            const response = await fetch('/MenuTheme.mp3');
-            const arrayBuffer = await response.arrayBuffer();
-            menuBgmBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-        } catch (e) {
-            console.error("Failed to load Menu BGM:", e);
-        }
-    }
-
-    if (menuBgmBuffer) {
-        playMenuBgmLoop();
-    }
-}
-
-function playMenuBgmLoop() {
-    if (!menuBgmBuffer || !isMenuBgmPlaying) return;
-
-    if (menuBgmSource) {
-        try { menuBgmSource.stop(); } catch (e) { }
-    }
-
-    menuBgmSource = audioCtx.createBufferSource();
-    menuBgmSource.buffer = menuBgmBuffer;
-    menuBgmSource.loop = true;
-
-    menuBgmGain = audioCtx.createGain();
-    menuBgmGain.gain.value = savedMusicVolume;
-
-    menuBgmSource.connect(menuBgmGain);
-    menuBgmGain.connect(masterMusicGain!);
-
-    menuBgmSource.start(0);
-}
-
-export function stopMenuMusic() {
-    isMenuBgmPlaying = false;
-    if (menuBgmSource) {
-        try { menuBgmSource.stop(); } catch (e) { }
-        menuBgmSource = null;
     }
 }
 
@@ -354,7 +274,7 @@ export async function playUpgradeSfx(rarityId: string) {
     }
 }
 
-export function playSfx(type: 'shoot' | 'hit' | 'level' | 'hurt' | 'boss-fire' | 'rare-spawn' | 'rare-despawn' | 'rare-kill') {
+export function playSfx(type: 'shoot' | 'hit' | 'level' | 'hurt' | 'boss-fire' | 'rare-spawn' | 'rare-kill' | 'rare-despawn' | 'spawn' | 'smoke-puff') {
     if (audioCtx.state === 'suspended') {
         audioCtx.resume().catch(() => { });
         return;
@@ -373,14 +293,8 @@ export function playSfx(type: 'shoot' | 'hit' | 'level' | 'hurt' | 'boss-fire' |
     g.connect(masterSfxGain);
 
     if (type === 'shoot') {
-        // More pleasant shoot: lighter square or triangle with fast decay
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(600, t);
-        osc.frequency.exponentialRampToValueAtTime(150, t + 0.15);
-        g.gain.setValueAtTime(0.25, t); // BOOSTED from 0.08
-        g.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
-        osc.start(t);
-        osc.stop(t + 0.15);
+        // Procedural shoot handled by Loop system now
+        return;
     }
     else if (type === 'hit') {
         osc.type = 'sawtooth';
@@ -417,91 +331,72 @@ export function playSfx(type: 'shoot' | 'hit' | 'level' | 'hurt' | 'boss-fire' |
         osc.stop(t + 0.5);
     }
     else if (type === 'rare-spawn') {
-        // Mystery "Radar" Pulse
-        osc.type = 'triangle';
+        // Alert Sound
+        osc.type = 'sawtooth';
         osc.frequency.setValueAtTime(600, t);
-        osc.frequency.exponentialRampToValueAtTime(1200, t + 0.1); // Up-chirp
-        osc.frequency.exponentialRampToValueAtTime(800, t + 0.5); // Down-settle
-
-        g.gain.setValueAtTime(0, t);
-        g.gain.linearRampToValueAtTime(0.15, t + 0.05); // Attack
-        g.gain.exponentialRampToValueAtTime(0.001, t + 1.0); // Long decay
-
-        // Add a second harmonic for "chorus" feel
-        const osc2 = audioCtx.createOscillator();
-        const g2 = audioCtx.createGain();
-        osc2.type = 'sine';
-        osc2.frequency.setValueAtTime(605, t); // Slightly detuned
-        osc2.connect(g2);
-        g2.connect(masterSfxGain);
-        g2.gain.setValueAtTime(0, t);
-        g2.gain.linearRampToValueAtTime(0.1, t + 0.05);
-        g2.gain.exponentialRampToValueAtTime(0.001, t + 1.0);
-        osc2.start(t);
-        osc2.stop(t + 1.0);
-
+        osc.frequency.linearRampToValueAtTime(800, t + 0.1);
+        osc.frequency.linearRampToValueAtTime(600, t + 0.2);
+        g.gain.setValueAtTime(0.1, t);
+        g.gain.linearRampToValueAtTime(0, t + 0.3);
         osc.start(t);
-        osc.stop(t + 1.0);
+        osc.stop(t + 0.3);
+    }
+    else if (type === 'rare-kill') {
+        // Jackpot Sound
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(880, t);
+        osc.frequency.setValueAtTime(1100, t + 0.1);
+        osc.frequency.setValueAtTime(1320, t + 0.2);
+        g.gain.setValueAtTime(0.1, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.6);
+        osc.start(t);
+        osc.stop(t + 0.6);
     }
     else if (type === 'rare-despawn') {
-        // Disappointing "Inverse" Pulse
         osc.type = 'triangle';
-        osc.frequency.setValueAtTime(800, t);
-        osc.frequency.exponentialRampToValueAtTime(400, t + 0.3); // Down-slide
-
+        osc.frequency.setValueAtTime(300, t);
+        osc.frequency.linearRampToValueAtTime(100, t + 0.5);
         g.gain.setValueAtTime(0.1, t);
         g.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
-
-        const osc2 = audioCtx.createOscillator();
-        const g2 = audioCtx.createGain();
-        osc2.type = 'sawtooth'; // Harsher
-        osc2.frequency.setValueAtTime(805, t);
-        osc2.connect(g2);
-        g2.connect(masterSfxGain);
-        g2.gain.setValueAtTime(0.05, t);
-        g2.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
-        osc2.start(t);
-        osc2.stop(t + 0.5);
-
         osc.start(t);
         osc.stop(t + 0.5);
     }
-    else if (type === 'rare-kill') {
-        // "Jackpot" Major Arpeggio (C-E-G-C)
-        const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+    else if (type === 'spawn') {
+        // Player Start Sound
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(220, t);
+        osc.frequency.exponentialRampToValueAtTime(880, t + 1.0);
+        g.gain.setValueAtTime(0, t);
+        g.gain.linearRampToValueAtTime(0.2, t + 0.1);
+        g.gain.linearRampToValueAtTime(0, t + 1.0);
+        osc.start(t);
+        osc.stop(t + 1.0);
+    }
+    else if (type === 'smoke-puff') {
+        // White Noise Burst for Smoke Screen
+        // Using a buffer with random noise for simplicity if we want detailed texture
+        // But for quick synthesis, many short oscillators or just a filtered noise buffer
+        // Let's use a low pitched noise burst if possible, or a cluster of low Saws
 
-        notes.forEach((freq, i) => {
-            const toneOsc = audioCtx.createOscillator();
-            const toneGain = audioCtx.createGain();
+        // Simulating noise with rapid frequency modulation or just a cluster
+        const count = 5;
+        for (let i = 0; i < count; i++) {
+            const noiseOsc = audioCtx.createOscillator();
+            const noiseGain = audioCtx.createGain();
+            noiseOsc.type = 'sawtooth';
+            // Random low frequencies
+            noiseOsc.frequency.setValueAtTime(50 + Math.random() * 100, t);
+            noiseOsc.frequency.exponentialRampToValueAtTime(10, t + 0.5); // Pitch Drop
 
-            toneOsc.type = i === 3 ? 'sine' : 'triangle'; // Top note pure, others bright
-            toneOsc.frequency.setValueAtTime(freq, t + i * 0.08); // Arpeggiated
+            noiseGain.gain.setValueAtTime(0.05, t);
+            noiseGain.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
 
-            toneGain.gain.setValueAtTime(0, t + i * 0.08);
-            toneGain.gain.linearRampToValueAtTime(0.1, t + i * 0.08 + 0.05);
-            toneGain.gain.exponentialRampToValueAtTime(0.001, t + i * 0.08 + 0.6); // Ring out
-
-            toneOsc.connect(toneGain);
-            toneGain.connect(masterSfxGain!);
-
-            toneOsc.start(t + i * 0.08);
-            toneOsc.stop(t + i * 0.08 + 0.8);
-        });
-
-        // Bed of "Sparkles" (High pitch randoms)
-        for (let k = 0; k < 5; k++) {
-            const sparkOsc = audioCtx.createOscillator();
-            const sparkGain = audioCtx.createGain();
-            sparkOsc.type = 'sine';
-            sparkOsc.frequency.setValueAtTime(1200 + Math.random() * 800, t + (k * 0.1));
-
-            sparkGain.gain.setValueAtTime(0.05, t + (k * 0.1));
-            sparkGain.gain.exponentialRampToValueAtTime(0.001, t + (k * 0.1) + 0.3);
-
-            sparkOsc.connect(sparkGain);
-            sparkGain.connect(masterSfxGain!);
-            sparkOsc.start(t + (k * 0.1));
-            sparkOsc.stop(t + (k * 0.1) + 0.3);
+            noiseOsc.connect(noiseGain);
+            noiseGain.connect(masterSfxGain);
+            noiseOsc.start(t);
+            noiseOsc.stop(t + 0.5);
         }
     }
 }
+
+export const startMenuMusic = startBGM;
