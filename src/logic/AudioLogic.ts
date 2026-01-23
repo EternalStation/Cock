@@ -215,7 +215,7 @@ export function stopBossAmbience() {
     bossAmbienceGain.gain.linearRampToValueAtTime(0, t + 2.0);
 
     const oldOsc = bossAmbienceOsc;
-    const oldGain = bossAmbienceGain; // capture closure
+
 
     setTimeout(() => {
         if (oldOsc) {
