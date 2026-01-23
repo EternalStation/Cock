@@ -1,4 +1,3 @@
-import React from 'react';
 
 // Common wide heart path (normalized 100x100)
 // Designed to be 'wider' than the classic hex-heart

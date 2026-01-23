@@ -183,7 +183,7 @@ export function useGameLoop(gameStarted: boolean) {
                     });
 
                     state.enemies.forEach(e => {
-                        updateBossBehavior(e, state);
+                        updateBossBehavior(e);
                     });
 
                     // Shooting Logic

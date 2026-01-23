@@ -53,6 +53,8 @@ function App() {
               gameState={hook.gameState}
               upgradeChoices={hook.upgradeChoices}
               onUpgradeSelect={hook.handleUpgradeSelect}
+              gameOver={hook.gameOver}
+              onRestart={hook.restartGame}
               bossWarning={hook.bossWarning}
             />
           </div>

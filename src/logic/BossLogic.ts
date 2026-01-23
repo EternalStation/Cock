@@ -1,7 +1,6 @@
-import type { Enemy, GameState } from './types';
-import { spawnEnemyBullet } from './ProjectileLogic.ts';
+import type { Enemy } from './types';
 
-export function updateBossBehavior(enemy: Enemy, state: GameState) {
+export function updateBossBehavior(enemy: Enemy) {
     if (!enemy.boss) return;
 
     // Movement is handled in updateEnemies.
