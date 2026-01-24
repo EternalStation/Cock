@@ -2,13 +2,14 @@ import { useRef, useEffect, useState } from 'react';
 import type { GameState, UpgradeChoice } from '../logic/types';
 import { createInitialGameState } from '../logic/GameState';
 import { updatePlayer } from '../logic/PlayerLogic';
-import { updateEnemies } from '../logic/EnemyLogic';
+import { updateEnemies, spawnRareEnemy } from '../logic/EnemyLogic';
 import { updateProjectiles, spawnBullet } from '../logic/ProjectileLogic';
 import { updateBossBehavior } from '../logic/BossLogic';
 import { spawnUpgrades, applyUpgrade } from '../logic/UpgradeLogic';
 import { calcStat } from '../logic/MathUtils';
 import { playSfx, startBGM, updateBGMPhase, duckMusic, restoreMusic, pauseMusic, resumeMusic, startBossAmbience, stopBossAmbience } from '../logic/AudioLogic';
 import { updateParticles } from '../logic/ParticleLogic';
+import { ARENA_CENTERS, ARENA_RADIUS } from '../logic/MapLogic';
 
 export function useGameLoop(gameStarted: boolean) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -68,6 +69,11 @@ export function useGameLoop(gameStarted: boolean) {
                 setGameOver(true);
                 playSfx('hurt');
                 cheatBuffer = ''; // Reset
+            }
+
+            if (cheatBuffer.endsWith('sni')) {
+                spawnRareEnemy(gameState.current);
+                cheatBuffer = '';
             }
 
 
@@ -153,23 +159,7 @@ export function useGameLoop(gameStarted: boolean) {
                 // Fixed Update Step
                 while (accRef.current >= FIXED_STEP) {
                     // Update Logic
-                    updatePlayer(state, keys.current);
-
-                    // Trigger Spawn Sound if just starting (approx check)
-                    // We need a better flag for "sound played", but since timer counts down...
-                    // Let's add a "hasPlayedSpawnSound" to state or just check if timer is > 0.9 and we haven't played it?
-                    // Simpler: Just rely on the fact that restartGame resets state
-                    if (state.spawnTimer > 0.95 && !state.hasPlayedSpawnSound) {
-                        playSfx('spawn');
-                        state.hasPlayedSpawnSound = true;
-                    }
-
-                    state.camera.x = state.player.x;
-                    state.camera.y = state.player.y;
-
-                    updateEnemies(state);
-
-                    updateProjectiles(state, (event) => {
+                    const eventHandler = (event: string) => {
                         if (event === 'level_up') {
                             const choices = spawnUpgrades(state, false);
                             setUpgradeChoices(choices);
@@ -185,7 +175,32 @@ export function useGameLoop(gameStarted: boolean) {
                             setGameOver(true);
                             playSfx('hurt');
                         }
-                    });
+                        if (event === 'player_hit') {
+                            // Already handled by component side flashing, but we can play sound here if needed.
+                            // Currently useGame relies on direct state mutation for HUD flags.
+                        }
+                    };
+
+                    updatePlayer(state, keys.current, eventHandler);
+
+                    // Trigger Spawn Sound if just starting (approx check)
+                    // We need a better flag for "sound played", but since timer counts down...
+                    // Let's add a "hasPlayedSpawnSound" to state or just check if timer is > 0.9 and we haven't played it?
+                    // Simpler: Just rely on the fact that restartGame resets state
+                    if (state.spawnTimer > 0.95 && !state.hasPlayedSpawnSound) {
+                        playSfx('spawn');
+                        state.hasPlayedSpawnSound = true;
+                    }
+
+                    state.camera.x = state.player.x;
+                    state.camera.y = state.player.y;
+
+                    updateEnemies(state);
+
+                    updateProjectiles(state, eventHandler);
+
+                    // --- COMBAT CLEANUP ---
+                    state.enemies = state.enemies.filter(e => !e.dead);
 
                     state.enemies.forEach(e => {
                         updateBossBehavior(e);
@@ -337,9 +352,6 @@ function renderGame(ctx: CanvasRenderingContext2D, state: GameState) {
 
     // --- VOID HEX VORTEX BACKGROUND ---
 
-    // Constants
-    const deepHexSize = 300;
-
     // Helper: Draw Hex Grid
     const drawHexGrid = (
         gridSize: number,
@@ -347,62 +359,89 @@ function renderGame(ctx: CanvasRenderingContext2D, state: GameState) {
         alpha: number,
         lineWidth: number = 1
     ) => {
-        ctx.save();
-        ctx.strokeStyle = color;
-        ctx.lineWidth = lineWidth;
-        ctx.globalAlpha = alpha;
+        const r = gridSize;
+        const h = Math.sqrt(3) * r;
+        const hDist = 1.5 * r;
 
-        // Calculate visible bounds
-        // (Parallax offset logic removed)
-
-        // Viewport correction (we are currently centered and scaled)
-        // We need to determine the world coordinates covered by the screen
         const scale = 0.58;
         const vW = width / scale;
         const vH = height / scale;
-
-        const cX = camera.x; // Always center grid generation on camera to ensure infinite coverage
+        const cX = camera.x;
         const cY = camera.y;
 
-        // Hex Grid Math
-        const r = gridSize;
-        const w = Math.sqrt(3) * r;
-        const vDist = 1.5 * r;
+        const startCol = Math.floor((cX - vW / 2) / hDist) - 1;
+        const endCol = Math.floor((cX + vW / 2) / hDist) + 2;
+        const startRow = Math.floor((cY - vH / 2) / h) - 1;
+        const endRow = Math.floor((cY + vH / 2) / h) + 2;
 
-        const startCol = Math.floor((cX - vW / 2) / w) - 1;
-        const endCol = Math.floor((cX + vW / 2) / w) + 2;
-        const startRow = Math.floor((cY - vH / 2) / vDist) - 1;
-        const endRow = Math.floor((cY + vH / 2) / vDist) + 2;
+        // 1. Draw Grid Layer with Clipping
+        ctx.save();
 
-        for (let row = startRow; row <= endRow; row++) {
-            const rowOffset = (row % 2) !== 0 ? w / 2 : 0;
-            const y = row * vDist;
-            for (let col = startCol; col <= endCol; col++) {
-                const x = col * w + rowOffset;
+        // Define Clipping Mask for Arenas
+        ctx.beginPath();
+        ARENA_CENTERS.forEach(c => {
+            for (let i = 0; i < 6; i++) {
+                const ang = Math.PI / 3 * i;
+                const hx = c.x + ARENA_RADIUS * Math.cos(ang);
+                const hy = c.y + ARENA_RADIUS * Math.sin(ang);
+                if (i === 0) ctx.moveTo(hx, hy);
+                else ctx.lineTo(hx, hy);
+            }
+            ctx.closePath();
+        });
+        ctx.clip();
 
-                ctx.beginPath();
+        // Style for connected grid
+        ctx.strokeStyle = color;
+        ctx.lineWidth = lineWidth;
+        ctx.globalAlpha = alpha;
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
+
+        ctx.beginPath();
+        for (let col = startCol; col <= endCol; col++) {
+            const colOffset = (col % 2) !== 0 ? h / 2 : 0;
+            const x = col * hDist;
+            for (let row = startRow; row <= endRow; row++) {
+                const y = row * h + colOffset;
                 for (let i = 0; i < 6; i++) {
-                    const ang = Math.PI / 3 * i + Math.PI / 6;
+                    const ang = Math.PI / 3 * i;
                     const hx = x + r * Math.cos(ang);
                     const hy = y + r * Math.sin(ang);
                     if (i === 0) ctx.moveTo(hx, hy);
                     else ctx.lineTo(hx, hy);
                 }
                 ctx.closePath();
-                ctx.stroke();
             }
         }
+        ctx.stroke();
+        ctx.restore();
 
+        // 2. Draw Arena Boarders (Thick Lines) - Drawn on top
+        ctx.save();
+        ctx.strokeStyle = '#3b82f6';
+        ctx.lineWidth = 30;
+        ctx.globalAlpha = 0.3;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        ARENA_CENTERS.forEach(c => {
+            ctx.beginPath();
+            for (let i = 0; i < 6; i++) {
+                const ang = Math.PI / 3 * i;
+                const hx = c.x + ARENA_RADIUS * Math.cos(ang);
+                const hy = c.y + ARENA_RADIUS * Math.sin(ang);
+                if (i === 0) ctx.moveTo(hx, hy);
+                else ctx.lineTo(hx, hy);
+            }
+            ctx.closePath();
+            ctx.stroke();
+        });
         ctx.restore();
     };
 
-    // Boss Intensity (0.0 to 1.0)
-    // bossIntensity logic removed as unused
-
-    // 1. STABLE DEEP LAYER (Background)
-    // "Faint, static honeycomb grid... fades to pure black at edges"
-    ctx.shadowBlur = 0;
-    drawHexGrid(deepHexSize, '#1e293b', 0.1, 2); // Darker slate, lower alpha
+    // 1. STABLE LAYER (Background)
+    drawHexGrid(200, '#1e293b', 0.25, 2);
 
     // Void Rifts (Deep Layer) - REMOVED
     // "No remove those balck holes"
@@ -423,6 +462,15 @@ function renderGame(ctx: CanvasRenderingContext2D, state: GameState) {
 
     // Particles moved to post-enemy render for smoke occlusion
 
+
+    // Player Bullets (Drawn Under Player)
+    bullets.forEach(b => {
+        ctx.fillStyle = '#22d3ee'; // Cyan (Match Player)
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, b.size, 0, Math.PI * 2);
+        ctx.fill();
+    });
+
     // Player - Honeycomb Hexagon
     ctx.save();
     ctx.translate(player.x, player.y);
@@ -441,11 +489,13 @@ function renderGame(ctx: CanvasRenderingContext2D, state: GameState) {
             else ctx.lineTo(px, py);
         }
         ctx.closePath();
+        ctx.fill(); // Opaque mask to hide projectiles underneath
         ctx.stroke();
     };
 
     // Setup style for honeycomb cells
     ctx.strokeStyle = '#22d3ee';
+    ctx.fillStyle = '#020617'; // Match Background (Opaque)
     ctx.lineWidth = 2.5; // Slightly thicker for visibility
     ctx.setLineDash([]); // Ensure solid lines
     ctx.lineCap = 'round'; // Smooth corners
@@ -504,6 +554,7 @@ function renderGame(ctx: CanvasRenderingContext2D, state: GameState) {
         ctx.arc(d.x, d.y, 5, 0, Math.PI * 2);
         ctx.fill();
     });
+
 
     // Snitch Trails (Breadcrumbs) - Draw BEHIND enemies
     enemies.forEach(e => {
@@ -798,256 +849,99 @@ function renderGame(ctx: CanvasRenderingContext2D, state: GameState) {
                     const dist = 5 + r(k * v) * 15;
                     const px = cx + Math.cos(ang) * dist;
                     const py = cy + Math.sin(ang) * dist;
-                    if (v === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+                    if (v === 0) ctx.moveTo(px, py);
+                    else ctx.lineTo(px, py);
                 }
+                ctx.closePath();
                 ctx.fill();
             }
             ctx.restore();
-            ctx.globalAlpha = 0.4; // Restore for next fills if any
         }
 
-        // 3. CORE (Innermost 50%)
-        // Solid bright fill
+        // 3. CORE (Darker Center, 50% size)
         ctx.fillStyle = coreColor;
+        ctx.shadowBlur = 0;
         ctx.globalAlpha = 1.0;
-        ctx.shadowBlur = 15; // Bright bloom for core
-        ctx.shadowColor = coreColor;
         drawShape(e.size * 0.5, true);
         ctx.fill();
 
-        // BOSS ONLY: CHAOS PARTICLES (Orbiting Shards)
-        if (e.boss) {
-            const particleCount = 5 + Math.floor(chaosLevel * 95); // 5 to 100
-            const orbitSpeed = state.gameTime * (2 + chaosLevel * 4); // Fast orbit
-
-            ctx.shadowBlur = 0;
-            ctx.fillStyle = '#880000'; // Dark Red
-
-            for (let i = 0; i < particleCount; i++) {
-                const angle = (i / particleCount) * Math.PI * 2 + orbitSpeed;
-                // Variable radius
-                const dist = (e.size * 1.5) + Math.sin(i + orbitSpeed) * 10 + (Math.random() * chaosLevel * 20);
-
-                const px = Math.cos(angle) * dist;
-                const py = Math.sin(angle) * dist;
-
-                ctx.beginPath();
-                // Tiny shard
-                ctx.rect(px, py, 2 + chaosLevel * 2, 2 + chaosLevel * 2);
-                ctx.fill();
-            }
-        }
-
-        // BOSS SCANLINES (Overlay)
-        if (e.boss) {
-            ctx.fillStyle = '#000000';
-            ctx.globalAlpha = 0.1 + (chaosLevel * 0.2);
-            // Draw horizontal lines across the shape
-            const lines = 10;
-            for (let i = 0; i < lines; i++) {
-                const yPos = -e.size + (i / lines) * (e.size * 2);
-                if (Math.sin(yPos + state.gameTime * 20) > 0) { // Moving scanbar
-                    ctx.fillRect(-e.size, yPos, e.size * 2, 2);
-                }
-            }
-        }
-
-        ctx.restore(); // Undo scale/rotation/translate(jitter)
-
-        // Boss HP Bar
-        if (e.boss) {
-            ctx.save();
-            ctx.translate(e.x, e.y);
-            const barWidth = 80;
-            const barHeight = 8;
-            const yOffset = -e.size - 25;
-
-            // Background
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-            ctx.fillRect(-barWidth / 2, yOffset, barWidth, barHeight);
-
-            // Health
-            const hpPercent = Math.max(0, e.hp / e.maxHp);
-            ctx.fillStyle = '#ef4444'; // Red
-            ctx.fillRect(-barWidth / 2 + 1, yOffset + 1, (barWidth - 2) * hpPercent, barHeight - 2);
-
-            // Border
-            ctx.strokeStyle = '#ffffff';
-            ctx.lineWidth = 1;
-            ctx.strokeRect(-barWidth / 2, yOffset, barWidth, barHeight);
-
-            ctx.restore();
-        }
+        ctx.restore();
     });
 
-    // Particles (Rendered AFTER enemies to allow smoke to hide them)
+
+    // Enemy Bullets
+    enemyBullets.forEach(b => {
+        ctx.fillStyle = '#ef4444';
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, b.size, 0, Math.PI * 2);
+        ctx.fill();
+    });
+
+    // Particles
     particles.forEach(p => {
-        // Opacity logic: Keep fully opaque until life is low?
-        // User requested "100% opacity nothing though it should be seen"
-        // Standard fade: ctx.globalAlpha = p.life; (life is > 1 usually?)
-        // Wait, p.life in logic is 30-90. globalAlpha expects 0-1.
-        // If p.life > 1, globalAlpha = 1 (clamped usually? No canvas acts weird with >1? No it clamps).
-        // Let's ensure it stays 1.0 mostly.
-        ctx.globalAlpha = Math.min(1, p.life / 20);
         ctx.fillStyle = p.color;
+        ctx.globalAlpha = p.life < 0.2 ? p.life * 5 : 1; // Fade out
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
         ctx.fill();
         ctx.globalAlpha = 1;
     });
 
-    // Bullets
-    ctx.fillStyle = '#22d3ee'; // Player Color (Cyan)
-    ctx.shadowColor = '#22d3ee';
-    ctx.shadowBlur = 5;
-    bullets.forEach(b => {
-        // Mask: Only draw if outside player radius to avoid cluttering the center
-        const dist = Math.hypot(b.x - player.x, b.y - player.y);
-        if (dist < 43) return; // Player radius is approx 43 (15.7 + 27.2)
+    ctx.restore(); // Restore to screen space for UI indicators
 
-        ctx.beginPath();
-        ctx.arc(b.x, b.y, 4, 0, Math.PI * 2); // Increased size slightly to match new scale
-        ctx.fill();
-    });
-
-    // Enemy Bullets
-    // Enemy Bullets
-    enemyBullets.forEach(b => {
-        const bulletColor = b.color || '#f87171';
-        ctx.fillStyle = bulletColor;
-        ctx.shadowColor = bulletColor;
-        ctx.beginPath();
-        ctx.arc(b.x, b.y, 4, 0, Math.PI * 2);
-        ctx.fill();
-    });
-
-    // 4. FOREGROUND VIGNETTE (Screen Space Overlay)
-    // "Dimmer screen edges (vignette: 50% darker tones at borders, gradient to clear center)"
-
-    ctx.restore(); // Restore to Screen Space for UI/Overlay effects
-
-    // 5. OFF-SCREEN BOSS INDICATORS
-    enemies.forEach(e => {
-        if (!e.boss) return;
-
-        // Calculate Screen Coordinates
-        // Global Transform was: translate(w/2, h/2) -> scale(0.58) -> translate(-camX, -camY)
-        // ScreenX = (WorldX - CamX) * Scale + W/2
+    // --- BOSS OFF-SCREEN INDICATOR (Skull Icon) ---
+    enemies.filter(e => e.boss && !e.dead).forEach(e => {
         const scale = 0.58;
         const screenX = (e.x - camera.x) * scale + width / 2;
         const screenY = (e.y - camera.y) * scale + height / 2;
 
-        const margin = 50;
-        const isOffScreen = screenX < -margin || screenX > width + margin ||
-            screenY < -margin || screenY > height + margin;
+        const pad = 40;
+        const isOffscreen = screenX < pad || screenX > width - pad || screenY < pad || screenY > height - pad;
 
-        if (isOffScreen) {
-            // Calculate angle properties
-            const angle = Math.atan2(screenY - height / 2, screenX - width / 2);
-
+        if (isOffscreen) {
             // Clamp to screen edges
-            const padding = 40;
-            let tx = width / 2 + Math.cos(angle) * (width); // Far out
-            let ty = height / 2 + Math.sin(angle) * (width); // Far out
+            const ix = Math.max(pad, Math.min(width - pad, screenX));
+            const iy = Math.max(pad, Math.min(height - pad, screenY));
 
-            // Liang-Barsky line clipping or simple edge clamping?
-            // Simple edge clamping for center-to-target ray:
-            // Find intersection with box (padding, padding, width-padding, height-padding)
-
-            // X-intersections
-            const x1 = padding;
-            const x2 = width - padding;
-            // Y-intersections
-            const y1 = padding;
-            const y2 = height - padding;
-
-            // Slope
-            const m = Math.tan(angle);
-
-            // Check X edges
-            if (screenX < width / 2) {
-                // Left
-                tx = x1;
-                ty = height / 2 + (x1 - width / 2) * m;
-            } else {
-                // Right
-                tx = x2;
-                ty = height / 2 + (x2 - width / 2) * m;
-            }
-
-            // Check if that Y is valid, if not clamp to Y
-            if (ty < y1) {
-                ty = y1;
-                tx = width / 2 + (y1 - height / 2) / m;
-            } else if (ty > y2) {
-                ty = y2;
-                tx = width / 2 + (y2 - height / 2) / m;
-            }
-
-            // Draw Skull Icon
             ctx.save();
-            ctx.translate(tx, ty);
-            // No rotation for icon itself, it stays upright or rotates? 
-            // Often off-screen icons don't rotate with angle, but the position indicates direction.
-            // Let's keep it upright for readability.
+            ctx.translate(ix, iy);
+
+            // Pulsing Logic
+            const pulse = 1 + Math.sin(Date.now() / 150) * 0.15;
+            ctx.scale(pulse, pulse);
+
+            // Draw Skull Shape
+            const drawSkull = (size: number) => {
+                ctx.beginPath();
+                // Face Circle
+                ctx.arc(0, -size * 0.2, size * 0.8, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Small Jaw Shape below
+                ctx.fillRect(-size * 0.4, size * 0.3, size * 0.8, size * 0.4);
+
+                // Eyes
+                ctx.fillStyle = '#000000';
+                ctx.beginPath();
+                ctx.arc(-size * 0.3, 0, size * 0.2, 0, Math.PI * 2);
+                ctx.arc(size * 0.3, 0, size * 0.2, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Nose
+                ctx.beginPath();
+                ctx.moveTo(0, size * 0.2);
+                ctx.lineTo(-size * 0.1, size * 0.4);
+                ctx.lineTo(size * 0.1, size * 0.4);
+                ctx.closePath();
+                ctx.fill();
+            };
 
             ctx.fillStyle = '#ef4444';
-            ctx.shadowColor = '#ef4444';
             ctx.shadowBlur = 10;
-
-            // Skull Cranium
-            ctx.beginPath();
-            ctx.arc(0, -2, 12, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Skull Jaw
-            ctx.fillRect(-6, 6, 12, 8);
-
-            // Eyes (Clear/Black)
-            ctx.globalCompositeOperation = 'destination-out';
-            ctx.fillStyle = '#000';
-            ctx.beginPath();
-            ctx.arc(-4, -2, 3, 0, Math.PI * 2);
-            ctx.arc(4, -2, 3, 0, Math.PI * 2);
-            ctx.fill();
-
-            ctx.globalCompositeOperation = 'source-over';
-            ctx.restore();
+            ctx.shadowColor = '#ef4444';
+            drawSkull(15);
 
             ctx.restore();
         }
     });
-
-    // 4. STRONG VIGNETTE (Fog of War)
-    // "remove fog... see vingier darker corners... enemies slowly appear"
-    // We achieve this by a strong radial gradient to black.
-    const drawVignette = () => {
-        const cx = width / 2;
-        const cy = height / 2;
-        // Radius: Cover most of screen but ensure corners are black
-        const radius = Math.max(width, height) * 0.75;
-
-        const grad = ctx.createRadialGradient(cx, cy, radius * 0.5, cx, cy, radius);
-        // Clear center (Visibility Circle)
-        grad.addColorStop(0, 'rgba(0, 0, 0, 0)');
-        // Soft edge start
-        grad.addColorStop(0.6, 'rgba(0, 0, 0, 0.2)');
-        // SOLID BLACK EDGES - Hides enemies
-        grad.addColorStop(1, 'rgba(0, 0, 0, 1.0)');
-
-        ctx.fillStyle = grad;
-        ctx.fillRect(0, 0, width, height);
-
-        // Boss Fog Thickening
-        if (state.bossPresence > 0.01) {
-            ctx.fillStyle = `rgba(20, 0, 0, ${state.bossPresence * 0.2})`; // Red tint overlay scaling
-            ctx.fillRect(0, 0, width, height);
-
-            // Darken Screen (Dimmer)
-            ctx.fillStyle = `rgba(0, 0, 0, ${state.bossPresence * 0.5})`; // 50% Black overlay at max
-            ctx.fillRect(0, 0, width, height);
-        }
-    };
-
-    drawVignette();
 }

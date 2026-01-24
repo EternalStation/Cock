@@ -86,6 +86,13 @@ DAMAGE APPLICATION:
   Spawn Rate:     0.25× current base rate
   Visual:         Commanding, high-priority target
 
+★ SNITCH — RARE STALKER (FSM)
+  Role:           Legendary High-Tier Reward
+  Spawn:          Periodic (Every 120s cycle after 1m)
+  Phases:         3-Phase Finite State Machine
+  Reward:         Full Level Up + Permanent Rarity Boost
+  Visual:         Yellow (P1) -> Orange (P2) -> Red (P3)
+
 ═══════════════════════════════════════════════════════════════════════════════
   4. SHAPE ROTATION SYSTEM (1-MINUTE CYCLES)
 ═══════════════════════════════════════════════════════════════════════════════
@@ -335,5 +342,44 @@ DRONES:
   Damage Scaling:   2^(droneCount - 3) if droneCount > 3
 
 ═══════════════════════════════════════════════════════════════════════════════
-  END OF BLUEPRINT
+  15. MAP LOGIC & ARENA SECTORS
 ═══════════════════════════════════════════════════════════════════════════════
+
+ARENA DESIGNATIONS:
+  Sector 01: ECONOMIC HEX (Spawn Zone)
+             Special: +15% XP Gain while active.
+  Sector 02: COMBAT HEX (Arena 1)
+             Special: High-density spawn rates.
+  Sector 03: RESEARCH HEX (Arena 2)
+             Special: Slower progression, higher rarity drops.
+
+AI NAVIGATION:
+  Global Wall Buffer: 500 pixels.
+  Wall Interaction:   AI "slides" along map boundaries to find escape routes.
+  Corner Awareness:   AI detects blind alleys and steers parallel to boundaries.
+
+═══════════════════════════════════════════════════════════════════════════════
+  16. RARE ENEMY: THE SNITCH (FSM)
+═══════════════════════════════════════════════════════════════════════════════
+
+PHASE 1: STEALTH STALKER (YELLOW)
+  Movement:    0.8x Player Speed, 1100px orbit around player.
+  Visuals:     1000px persistent Golden Trail.
+  Condition:   Revealed if distance < 400px AND Player looks at it (~23 deg).
+  Timeout:     Vanishes if not revealed within 30 seconds.
+
+PHASE 2: BAIT & ESCAPE (ORANGE)
+  Movement:    1.5x Player Speed, Zig-Zag dodging logic.
+  Hiding:      Seeks "shadow" cover behind other enemies (100px gap, 5s CD).
+  Defense:     Drops 5 stationary Bullet Stopper shields (barrels) when targeted.
+  Teleport:    Instantly jumps behind player upon reveal stage.
+
+PHASE 3: OCTOPUS SPLIT (RED)
+  Trigger:     Triggered on first hit while in Phase 2.
+  Mechanical:  Smoke Screen (60+ grey particles) + Split into REAL vs FAKE.
+  Safety:      3.0s invincibility state for both units after split.
+  Status:      Both units have 1 HP (Critical State).
+
+REWARD MECHANICS:
+  On Real Kill:  Instant Level Up (Overflow preserved) 
+                 + Permanent Rarity Boost for next upgrade pool.

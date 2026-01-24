@@ -884,6 +884,23 @@
                 </div>
             </div>
 
+            <!-- SNITCH -->
+            <div class="enemy-card" style="border-color: #facc15; background: rgba(250, 204, 21, 0.05);">
+                <canvas id="canvas-snitch" width="100" height="100" class="enemy-canvas"></canvas>
+                <div class="enemy-name" style="color: #facc15;">The Quantum Snitch</div>
+                <div class="enemy-role">Legendary Reward</div>
+                <div class="enemy-desc">
+                    <strong>P1 (Yellow):</strong> Stealth Orbit (0.8x Spd).<br>
+                    <strong>P2 (Orange):</strong> Bait (1.5x Spd) + Shield Barrels.<br>
+                    <strong>P3 (Red):</strong> Octopus Split + Invincibility.
+                </div>
+                <div class="enemy-stats">
+                    <div class="stat-badge"><span class="stat-label">HP</span><span>1 / 1</span></div>
+                    <div class="stat-badge"><span class="stat-label">SPEED</span><span>Dynamic</span></div>
+                    <div class="stat-badge"><span class="stat-label">VALUE</span><span>LEGENDARY</span></div>
+                </div>
+            </div>
+
         </div>
     </div>
 
@@ -1042,6 +1059,41 @@
             <li><strong>Bullet Reach:</strong> ~1650px. You can manually aim and hit enemies immediately upon spawn.
             </li>
         </ul>
+
+        <h3>3. Sector Designations (Arena Map)</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Sector ID</th>
+                    <th>Name</th>
+                    <th>Special Property</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>Sector 01</strong></td>
+                    <td style="color: #22d3ee">Economic Hex (Spawn)</td>
+                    <td><strong>+15% XP</strong> gain for kills while inside.</td>
+                </tr>
+                <tr>
+                    <td><strong>Sector 02</strong></td>
+                    <td style="color: #f87171">Combat Hex (Top Right)</td>
+                    <td>Enhanced Spawn Density (High Intensity).</td>
+                </tr>
+                <tr>
+                    <td><strong>Sector 03</strong></td>
+                    <td style="color: #a855f7">Research Hex (Bottom Right)</td>
+                    <td>Shifted Loot Tables (Higher Rarity Chance).</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h3>4. AI Navigation Rules</h3>
+        <ul>
+            <li><strong>Global Wall Buffer:</strong> 500 pixels. AI will steer away from boundaries to prevent clipping.</li>
+            <li><strong>Wall Sliding:</strong> Enemies will transition to parallel movement when hitting map constraints.</li>
+            <li><strong>Corner Awareness:</strong> AI identifies 90-degree traps and steers early to maintain mobility.</li>
+        </ul>
     </div>
 
     <script>
@@ -1123,6 +1175,24 @@
                 ctx.lineTo(p4x, p4y);
                 ctx.closePath();
             }
+            else if (type === 'snitch') {
+                // Star shape for the Golden Snitch
+                const spikes = 5;
+                const outerRadius = size;
+                const innerRadius = size / 2;
+                let rot = Math.PI / 2 * 3;
+                let step = Math.PI / spikes;
+
+                ctx.moveTo(cx, cy - outerRadius);
+                for (let i = 0; i < spikes; i++) {
+                    ctx.lineTo(cx + Math.cos(rot) * outerRadius, cy + Math.sin(rot) * outerRadius);
+                    rot += step;
+                    ctx.lineTo(cx + Math.cos(rot) * innerRadius, cy + Math.sin(rot) * innerRadius);
+                    rot += step;
+                }
+                ctx.lineTo(cx, cy - outerRadius);
+                ctx.closePath();
+            }
 
             // Fill & Stroke
             ctx.globalAlpha = 0.2;
@@ -1139,6 +1209,7 @@
             drawShape('canvas-diamond', 'diamond', '#FF9900');
             drawShape('canvas-pentagon', 'pentagon', '#FF0000');
             drawShape('canvas-minion', 'minion', '#FFD700');
+            drawShape('canvas-snitch', 'snitch', '#FACC15');
         };
 
     </script>

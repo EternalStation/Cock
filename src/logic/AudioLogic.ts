@@ -372,7 +372,7 @@ export async function playUpgradeSfx(rarityId: string) {
     }
 }
 
-export function playSfx(type: 'shoot' | 'hit' | 'level' | 'hurt' | 'boss-fire' | 'rare-spawn' | 'rare-kill' | 'rare-despawn' | 'spawn' | 'smoke-puff') {
+export function playSfx(type: 'shoot' | 'hit' | 'level' | 'hurt' | 'boss-fire' | 'rare-spawn' | 'rare-kill' | 'rare-despawn' | 'spawn' | 'smoke-puff' | 'wall-shock') {
     if (audioCtx.state === 'suspended') {
         audioCtx.resume().catch(() => { });
         return;
@@ -549,6 +549,50 @@ export function playSfx(type: 'shoot' | 'hit' | 'level' | 'hurt' | 'boss-fire' |
             noiseOsc.start(t);
             noiseOsc.stop(t + 0.5);
         }
+    }
+    else if (type === 'wall-shock') {
+        const t = audioCtx.currentTime;
+
+        // 1. Harsh Core (Dissonant Square Waves)
+        const osc1 = audioCtx.createOscillator();
+        const osc2 = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+
+        osc1.type = 'square';
+        osc1.frequency.setValueAtTime(150, t); // Low base
+        osc1.frequency.exponentialRampToValueAtTime(40, t + 0.2);
+
+        osc2.type = 'sawtooth';
+        osc2.frequency.setValueAtTime(158, t); // Dissonant minor second
+        osc2.frequency.exponentialRampToValueAtTime(45, t + 0.2);
+
+        // 2. High Frequency "Frying" (Noise Burst)
+        const noiseCount = 10;
+        for (let i = 0; i < noiseCount; i++) {
+            const noise = audioCtx.createOscillator();
+            const ng = audioCtx.createGain();
+            noise.type = 'square';
+            noise.frequency.setValueAtTime(2000 + Math.random() * 3000, t);
+            ng.gain.setValueAtTime(0.08 * sfxVolume, t);
+            ng.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+            noise.connect(ng);
+            ng.connect(masterSfxGain!);
+            noise.start(t);
+            noise.stop(t + 0.05);
+        }
+
+        g.gain.setValueAtTime(0, t);
+        g.gain.linearRampToValueAtTime(0.4 * sfxVolume, t + 0.01);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+
+        osc1.connect(g);
+        osc2.connect(g);
+        g.connect(masterSfxGain!);
+
+        osc1.start(t);
+        osc2.start(t);
+        osc1.stop(t + 0.3);
+        osc2.stop(t + 0.3);
     }
 }
 

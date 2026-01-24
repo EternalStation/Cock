@@ -1,9 +1,8 @@
 import type { GameState, Player } from './types';
-import { CANVAS_WIDTH, CANVAS_HEIGHT } from './constants';
 
 export const createInitialPlayer = (): Player => ({
-    x: CANVAS_WIDTH / 2,
-    y: CANVAS_HEIGHT / 2,
+    x: 0,
+    y: 0,
     size: 10,
     speed: 5.3,
     hp: { base: 150, flat: 0, mult: 0 },
@@ -25,7 +24,8 @@ export const createInitialPlayer = (): Player => ({
     droneCount: 0,
     lastAngle: 0,
     targetAngle: 0,
-    faceAngle: 0
+    faceAngle: 0,
+    knockback: { x: 0, y: 0 }
 });
 
 export const createInitialGameState = (): GameState => ({

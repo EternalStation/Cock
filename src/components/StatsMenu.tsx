@@ -3,6 +3,7 @@ import { RadarChart } from './RadarChart';
 export { RadarChart };
 import type { GameState, PlayerStats } from '../logic/types';
 import { calcStat } from '../logic/MathUtils';
+import { getArenaIndex } from '../logic/MapLogic';
 
 
 interface StatsMenuProps {
@@ -225,9 +226,10 @@ export const StatsMenu: React.FC<StatsMenuProps> = ({ gameState }) => {
                                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                                     <span style={{ color: '#64748b', fontSize: 10 }}>
                                         ({40 + (player.level * 3)} + {player.xp_per_kill.flat}) x {100 + player.xp_per_kill.mult}%
+                                        {getArenaIndex(player.x, player.y) === 0 && <span style={{ color: '#22d3ee', marginLeft: 4 }}>(+15% Econ Hex)</span>}
                                     </span>
                                     <span style={{ color: '#4ade80', fontSize: 12, fontWeight: 900, minWidth: 40, textAlign: 'right' }}>
-                                        {Math.round((40 + (player.level * 3) + player.xp_per_kill.flat) * (1 + player.xp_per_kill.mult / 100))}
+                                        {Math.round((40 + (player.level * 3) + player.xp_per_kill.flat) * (1 + player.xp_per_kill.mult / 100) * (getArenaIndex(player.x, player.y) === 0 ? 1.15 : 1))}
                                     </span>
                                 </div>
                             </div>

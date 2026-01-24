@@ -43,6 +43,7 @@ export interface Player {
     lastAngle: number;
     targetAngle: number;
     faceAngle: number;
+    knockback: Vector;
 }
 
 export interface Bullet {
@@ -57,6 +58,7 @@ export interface Bullet {
     isEnemy: boolean;
     hits: Set<number>; // Enemy IDs hit
     color?: string;
+    size: number;
 }
 
 export type ShapeType = 'circle' | 'triangle' | 'square' | 'diamond' | 'pentagon' | 'minion' | 'snitch';
@@ -138,6 +140,17 @@ export interface Enemy {
     longTrail?: { x: number; y: number }[]; // Long paint trail
     untargetable?: boolean; // If true, player bullets won't home in on it
     phase3AudioTriggered?: boolean; // Flag for Phase 3 Audio Trigger
+    spawnedAt?: number; // GameTime when spawned
+
+    // Physics / Status
+    frozen?: number; // Timer for frozen state
+    knockback: { x: number; y: number }; // Knockback vector
+    shieldCd?: number; // For Snitch bullet stoppers (barrels)
+    hideCd?: number; // Cooldown for hiding behind enemies
+    hideTarget?: Vector | null; // Persist target for CD alignment
+    hideCoverId?: number; // ID of the enemy we are currently hiding behind
+    tacticalMode?: number; // 0 = Hide, 1 = Avoid
+    tacticalTimer?: number; // Timestamp for mode switching
 }
 
 export interface Upgrade {

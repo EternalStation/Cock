@@ -78,14 +78,14 @@ export function spawnUpgrades(state: GameState, isBoss: boolean = false): Upgrad
             { type: { id: 'd', name: 'Orbit Sentry', desc: state.player.droneCount < 3 ? 'Deploy Automated Drone' : '2x Damage for all Drones', icon: 'special' }, rarity: { id: 'boss', label: 'Anomaly Tech', color: '#ef4444', mult: 0 }, isSpecial: true }
         );
     } else {
-        // Guarantee Uniqueness: Track IDs
+        // Guarantee Uniqueness: Track IDs and Names
         const selectedIds = new Set<string>();
+        const selectedNames = new Set<string>();
         const potentialTypes = [...UPGRADE_TYPES];
 
         for (let i = 0; i < 3; i++) {
-            // Filter out already selected IDs from the pool candidates
-            // (Efficient enough for small N=11)
-            const available = potentialTypes.filter(t => !selectedIds.has(t.id));
+            // Filter out already selected IDs or Names from the pool candidates
+            const available = potentialTypes.filter(t => !selectedIds.has(t.id) && !selectedNames.has(t.name));
 
             if (available.length === 0) break;
 
@@ -94,6 +94,7 @@ export function spawnUpgrades(state: GameState, isBoss: boolean = false): Upgrad
             const type = available[idx];
 
             selectedIds.add(type.id);
+            selectedNames.add(type.name);
 
             // Pick Rarity based on Time
             // Note: We might want slightly different rarities for each card?

@@ -1,285 +1,202 @@
-import type { GameState, Bullet } from './types';
-import { calcStat, getDefenseReduction } from './MathUtils';
-import { spawnParticles } from './ParticleLogic';
+import { isInMap } from './MapLogic';
 import { playSfx } from './AudioLogic';
+import type { GameState } from './types';
+import { spawnParticles } from './ParticleLogic';
 
-
-export function spawnBullet(state: GameState, x: number, y: number, angle: number, dmg: number, pierce: number, offset: number = 0) {
-    const speed = 13.8; // +15% from 12
-    const newBullet: Bullet = {
+export function spawnBullet(state: GameState, x: number, y: number, angle: number, dmg: number, pierce: number, offsetAngle: number = 0) {
+    const spd = 12;
+    state.bullets.push({
         id: Math.random(),
         x, y,
-        vx: Math.cos(angle + offset) * speed,
-        vy: Math.sin(angle + offset) * speed,
+        vx: Math.cos(angle + offsetAngle) * spd,
+        vy: Math.sin(angle + offsetAngle) * spd,
         dmg,
         pierce,
+        life: 140, // Frames
         isEnemy: false,
-        life: 120,
-        hits: new Set()
-    };
-    state.bullets.push(newBullet);
+        hits: new Set(),
+        size: 4
+    });
 }
 
-export function spawnEnemyBullet(state: GameState, x: number, y: number, angle: number, dmg: number, color?: string, offset: number = 0) {
-    const speed = 5.2; // +15% from 4.5
-    const newBullet: Bullet = {
+export function spawnEnemyBullet(state: GameState, x: number, y: number, angle: number, dmg: number, color: string = '#FF0000') {
+    const spd = 6;
+    state.enemyBullets.push({
         id: Math.random(),
         x, y,
-        vx: Math.cos(angle + offset) * speed,
-        vy: Math.sin(angle + offset) * speed,
+        vx: Math.cos(angle) * spd,
+        vy: Math.sin(angle) * spd,
         dmg,
         pierce: 1,
-        isEnemy: true,
         life: 300,
+        isEnemy: true,
         hits: new Set(),
-        color
-    };
-    state.enemyBullets.push(newBullet);
+        color,
+        size: 6
+    });
 }
 
-export function updateProjectiles(state: GameState, onEvent?: (type: string, data?: any) => void) {
-    const { player, enemies } = state;
+export function updateProjectiles(state: GameState, onEvent?: (event: string, data?: any) => void) {
+    const { bullets, enemyBullets, enemies, player } = state;
 
-    // Player Bullets
-    state.bullets = state.bullets.filter(b => {
+    // --- PLAYER BULLETS ---
+    for (let i = bullets.length - 1; i >= 0; i--) {
+        const b = bullets[i];
         b.x += b.vx;
         b.y += b.vy;
         b.life--;
 
+        // Collision with Map Boundary (Walls)
+        if (!isInMap(b.x, b.y)) {
+            spawnParticles(state, b.x, b.y, '#22d3ee', 10);
+            bullets.splice(i, 1);
+            continue;
+        }
+
+        let bulletRemoved = false;
+
         // Collision with Enemies
-        enemies.forEach(e => {
-            // Only hit if enemy is still alive and bullet hasn't hit this enemy yet
-            if (!e.dead && e.hp > 0 && !b.hits.has(e.id) && Math.hypot(e.x - b.x, e.y - b.y) < e.size + 10) {
+        for (let j = 0; j < enemies.length; j++) {
+            const e = enemies[j];
+
+            // Critical: Only hit active, alive enemies that haven't been hit by THIS bullet
+            if (e.dead || e.hp <= 0 || b.hits.has(e.id)) continue;
+
+            const dist = Math.hypot(e.x - b.x, e.y - b.y);
+            const hitRadius = e.size + 10;
+
+            if (dist < hitRadius) {
+                // 1. Apply Damage
                 e.hp -= b.dmg;
-                state.player.damageDealt += b.dmg; // Track Dealt
+                player.damageDealt += b.dmg;
                 b.hits.add(e.id);
                 b.pierce--;
                 if (onEvent) onEvent('hit');
 
+                // 2. Handle Rare Transitions (These may consume bullet or shift phase)
                 if (e.isRare) {
-                    // PHASE 0 (Passive) -> PHASE 1 (Alert/Teleport) ON HIT
                     if (e.rarePhase === 0) {
-                        // Trigger Phase 1 (Alert/Defensive) - ORANGE
                         e.rarePhase = 1;
-                        e.rareTimer = state.gameTime;
-                        e.spd = 8;
-                        e.teleported = true;
+                        e.palette = ['#f97316', '#ea580c', '#c2410c'];
                         e.longTrail = [];
-                        e.palette = ['#F97316', '#EA580C', '#C2410C']; // Orange Palette (Phase 2 Visuals)
-
-                        // Heal to full to ensure he can be hit again (Fixing 'no damage in phase 2' bug)
-                        e.hp = e.maxHp;
-
-                        // Teleport behind player (Reuse logic basically)
-                        const dx = e.x - player.x;
-                        const dy = e.y - player.y;
-                        e.x = player.x - (dx * 0.8);
-                        e.y = player.y - (dy * 0.8);
-
+                        const backAngle = player.faceAngle + Math.PI;
+                        e.x = player.x + Math.cos(backAngle) * 400;
+                        e.y = player.y + Math.sin(backAngle) * 400;
+                        e.rareTimer = state.gameTime;
                         playSfx('rare-spawn');
-                        return;
-                    }
-
-                    // PHASE 1 (Alert) -> PHASE 2 (Split/Aggressive) ON HIT
-                    if (e.rarePhase === 1) {
-                        // Trigger Phase 2 (Aggressive Split) - RED
+                        b.life = 0;
+                        // Note: We don't break yet, we let b.pierce handle removal
+                    } else if (e.rarePhase === 1) {
+                        // Phase 2 -> 3 Split
                         e.rarePhase = 2;
                         e.rareTimer = state.gameTime;
-                        e.spd = 5.2; // Reduced by 20% (6.5 -> 5.2)
-                        e.invincibleUntil = Date.now() + 2500; // 2.5s Invincibility (Smoke Cover)
-                        e.teleported = true;
-                        e.longTrail = [];
+                        e.invincibleUntil = Date.now() + 3000;
+                        e.palette = ['#EF4444', '#DC2626', '#B91C1C'];
 
-                        // SMOKE EFFECT (Octopus Ink Style) - Updated
-                        // "3D Grey" Gradient (White -> Black mix)
-                        const greyGradient = ['#FFFFFF', '#E0E0E0', '#C0C0C0', '#A0A0A0', '#808080', '#606060', '#404040', '#202020', '#000000'];
-                        spawnParticles(state, e.x, e.y, greyGradient, 60, 300, 90);
+                        // Dense Smoke Screen
+                        spawnParticles(state, e.x, e.y, ['#FFFFFF', '#808080'], 150, 400, 100);
 
-                        // SET HP TO 1 for BOTH (After damage calculation, force it)
-                        e.hp = 1;
-                        e.maxHp = 1;
+                        e.hp = 1; e.maxHp = 1;
+                        e.rareReal = true;
 
-                        // CHANGE COLOR TO RED (Aggressive)
-                        const redPalette = ['#EF4444', '#DC2626', '#B91C1C'];
-                        e.palette = redPalette;
+                        // Randomize Decoy Spawn
+                        const splitAngle = Math.random() * Math.PI * 2;
+                        const splitDist = 60 + Math.random() * 40; // 60-100px
+                        const dx = Math.cos(splitAngle) * splitDist;
+                        const dy = Math.sin(splitAngle) * splitDist;
 
-                        // Spawn Decoy
-                        const decoy: any = { ...e }; // Copy properties including new Red palette
-                        decoy.id = Math.random();
-                        decoy.rareReal = false; // It's a fake
-                        decoy.hp = 1;
-                        decoy.maxHp = 1;
-                        decoy.parentId = e.id;
-                        // Split Offset - Reduced by 2x (60 -> 30)
-                        decoy.x += 30; decoy.y += 30;
-                        e.x -= 30; e.y -= 30;
+                        // Decoy Setup
+                        const decoy: any = {
+                            ...e,
+                            id: Math.random(),
+                            rareReal: false,
+                            parentId: e.id,
+                            x: e.x + dx,
+                            y: e.y + dy,
+                            knockback: { x: Math.cos(splitAngle) * 25, y: Math.sin(splitAngle) * 25 }
+                        };
+
+                        // Real Snitch Knockback (Opposite)
+                        e.knockback = { x: Math.cos(splitAngle + Math.PI) * 25, y: Math.sin(splitAngle + Math.PI) * 25 };
 
                         state.enemies.push(decoy);
-                        return;
-                    }
-
-                    // PHASE 2 (Aggressive Split) - CHECK REAL VS FAKE
-                    if (e.rarePhase === 2) {
-                        // Check Invincibility
+                        b.life = 0;
+                    } else if (e.rarePhase === 2) {
+                        // Standard Phase 3 death handling
                         if (e.invincibleUntil && Date.now() < e.invincibleUntil) {
-                            // If invincible, we shouldn't have taken damage. Revert damage.
-                            e.hp += b.dmg;
-                            return;
+                            e.hp += b.dmg; // Negate
+                        } else if (e.hp <= 0 && !e.dead) {
+                            // Handled by common death check below
                         }
-
-                        // DEAL DAMAGE (1 HP logic means death)
-                        // Note: Damage was already applied by line 53 e.hp -= b.dmg
-
-
-                        // DEATH LOGIC
-                        if (e.hp <= 0 && !e.dead) {
-                            e.dead = true;
-
-                            // IF REAL ONE DIES
-                            if (e.rareReal) {
-                                spawnParticles(state, e.x, e.y, '#F59E0B', 40);
-                                playSfx('rare-kill');
-                                state.score += 5000;
-                                state.killCount++;
-                                state.rareRewardActive = true;
-
-                                // REWARD: Full Level Up (Keep overflow)
-                                const xpNeededForLevel = player.xp.needed;
-                                player.xp.current += xpNeededForLevel; // Add full level worth of XP
-
-                                // Check level up immediately so overflow matches expectation
-                                while (player.xp.current >= player.xp.needed) {
-                                    player.xp.current -= player.xp.needed; // Keep overflow
-                                    player.level++;
-                                    player.xp.needed *= 1.10;
-                                    if (onEvent) onEvent('level_up');
-                                }
-
-                                // Kill ALL fakes
-
-                                state.enemies.forEach(other => {
-                                    if (other.parentId === e.id || (!other.rareReal && other.isRare && other.id !== e.id)) {
-                                        other.dead = true;
-                                        spawnParticles(state, other.x, other.y, '#ffffff', 10);
-                                    }
-                                });
-                            } else {
-                                // FAKE DIES
-                                spawnParticles(state, e.x, e.y, '#ef4444', 15);
-                                // Real one continues...
-                            }
-                            return;
-                        }
-                        return;
                     }
                 }
 
+                // 3. Common Death Check
                 if (e.hp <= 0 && !e.dead) {
                     e.dead = true;
-                    spawnParticles(state, e.x, e.y, e.palette[0], 8);
-                    state.score++;
                     state.killCount++;
+                    state.score += 1;
+                    spawnParticles(state, e.x, e.y, e.palette[0], 12);
 
-                    const baseXp = e.boss
-                        ? 0
-                        : (40 + (2 * player.level) + player.xp_per_kill.flat);
-
-                    const xpMult = 1 + (player.xp_per_kill.mult / 100);
-                    const totalXp = baseXp * xpMult;
-
-                    player.xp.current += totalXp;
-
-                    if (e.boss) {
-                        if (onEvent) onEvent('boss_kill');
+                    if (e.isRare && e.rareReal) {
+                        playSfx('rare-kill');
+                        state.rareRewardActive = true;
+                        state.rareSpawnActive = false;
+                        // Massive XP Reward for Legend
+                        player.xp.current += player.xp.needed;
+                    } else {
+                        // Standard XP Reward
+                        const xpGain = player.xp_per_kill.base;
+                        player.xp.current += xpGain;
                     }
 
-                    // Level Up Logic with Rollover
+                    // Level Up Loop
                     while (player.xp.current >= player.xp.needed) {
-                        player.xp.current -= player.xp.needed; // Keep overflow
+                        player.xp.current -= player.xp.needed;
                         player.level++;
                         player.xp.needed *= 1.10;
                         if (onEvent) onEvent('level_up');
                     }
                 }
+
+                // 4. Bullet Removal
+                if (b.pierce <= 0 || b.life <= 0) {
+                    bullets.splice(i, 1);
+                    bulletRemoved = true;
+                    break;
+                }
             }
-        });
+        }
 
-        return b.pierce > 0 && b.life > 0;
-    });
+        if (!bulletRemoved && b.life <= 0) {
+            bullets.splice(i, 1);
+        }
+    }
 
-    // Enemy Bullets
-    state.enemyBullets = state.enemyBullets.filter(eb => {
+    // --- ENEMY BULLETS ---
+    for (let i = enemyBullets.length - 1; i >= 0; i--) {
+        const eb = enemyBullets[i];
         eb.x += eb.vx;
         eb.y += eb.vy;
         eb.life--;
 
-        // Hexagon collision for player (honeycomb hitbox)
-        const honeycombRadius = 8 * Math.sqrt(3) * 1.15; // Match player honeycomb size (cellSize = 8)
-        if (Math.hypot(eb.x - player.x, eb.y - player.y) < honeycombRadius + 4) {
-            const reduction = getDefenseReduction(calcStat(player.arm));
-            const actualDmg = eb.dmg * (1 - reduction);
-            player.damageTaken += actualDmg; // Track Taken
-            player.damageBlocked += (eb.dmg - actualDmg); // Track Blocked
-            player.curHp -= actualDmg;
-            if (onEvent) onEvent('player_hit', { dmg: eb.dmg });
-
-            if (player.curHp <= 0) {
-                state.gameOver = true;
-                if (onEvent) onEvent('game_over');
-            }
-            return false; // Bullet destroyed
+        if (!isInMap(eb.x, eb.y)) {
+            enemyBullets.splice(i, 1);
+            continue;
         }
-        return eb.life > 0;
-    });
 
-    // Enemy Collision (Body Damage) - Hexagon-based collision
-    enemies.forEach(e => {
-        if (!e.dead) {
-            // Calculate distance from enemy center to player center
-            const dx = e.x - player.x;
-            const dy = e.y - player.y;
-            const dist = Math.hypot(dx, dy);
-
-            // Hexagon collision: approximate as circle with radius = honeycomb outer edge
-            // Honeycomb spans ~3 cells wide (cellSize * sqrt(3) * 2)
-            const honeycombRadius = 8 * Math.sqrt(3) * 1.15; // cellSize = 8
-
-            // Check if enemy is touching the honeycomb edge - ENEMY DIES on contact
-            if (dist < e.size + honeycombRadius) {
-                if (e.isRare) {
-                    // Startle / Teleport Logic
-                    const escapeA = Math.random() * 6.28;
-                    e.x += Math.cos(escapeA) * 200;
-                    e.y += Math.sin(escapeA) * 200;
-                    return; // Skip death and damage
-                }
-
-                e.dead = true; // Enemy dies on contact
-
-                // Percentage Based Damage Logic
-                const percentDmg = e.maxHp * 0.10;
-                // Add flat base damage to ensure early game enemies still hurt if 30% is too low (e.g. 50hp * 0.3 = 15)
-                // But user asked for "link dmg to % of total enemiy health... if at start enemies have 50 hp... lose 30% of enemies hp"
-                // So purely 10% of enemy max HP.
-                const rawDmg = Math.max(10, percentDmg); // Safety floor of 10 damage
-
-                const reduction = getDefenseReduction(calcStat(player.arm));
-                const actualDmg = rawDmg * (1 - reduction);
-
-                player.damageTaken += actualDmg; // Track Taken
-                player.damageBlocked += (rawDmg - actualDmg); // Track Blocked
-                player.curHp -= actualDmg;
-
-                if (onEvent) onEvent('player_hit', { dmg: rawDmg });
-
-                if (player.curHp <= 0) {
-                    state.gameOver = true;
-                    if (onEvent) onEvent('game_over');
-                }
-            }
+        const distP = Math.hypot(player.x - eb.x, player.y - eb.y);
+        if (distP < player.size + 10) {
+            const armor = player.arm.base + player.arm.flat; // Simplified for robustness
+            const dmg = Math.max(1, eb.dmg - armor);
+            player.curHp -= dmg;
+            if (onEvent) onEvent('player_hit');
+            enemyBullets.splice(i, 1);
+            continue;
         }
-    });
 
-    // Remove dead enemies
-    state.enemies = state.enemies.filter(e => !e.dead);
+        if (eb.life <= 0) {
+            enemyBullets.splice(i, 1);
+        }
+    }
 }

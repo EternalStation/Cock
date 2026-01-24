@@ -53,17 +53,21 @@ export const getIcon = (type: string, color: string) => {
                 </svg>
             );
 
-        case 'hp_f': // Flat Max Health: Red Outline Heart (Wider)
+        case 'hp_f': // Flat Max Health: Red Outline Heart (Wider) + Growing Animation
             return (
                 <svg viewBox="0 0 100 100" width="100%" height="100%" style={{ filter: `drop-shadow(0 0 3px #EF4444)` }}>
-                    <path d={WIDE_HEART_PATH} fill="none" stroke="#EF4444" strokeWidth="4" />
+                    <path d={WIDE_HEART_PATH} fill="none" stroke="#EF4444" strokeWidth="4" transform-origin="50 50">
+                        <animateTransform attributeName="transform" type="scale" values="1;1.2;1" dur="0.8s" repeatCount="indefinite" />
+                    </path>
                 </svg>
             );
 
-        case 'hp_m': // Health Multiplier: Red Outline Heart + X
+        case 'hp_m': // Health Multiplier: Red Outline Heart + X + Growing Animation
             return (
                 <svg viewBox="0 0 100 100" width="100%" height="100%" style={{ filter: `drop-shadow(0 0 3px #EF4444)` }}>
-                    <path d={WIDE_HEART_PATH} fill="none" stroke="#EF4444" strokeWidth="4" />
+                    <path d={WIDE_HEART_PATH} fill="none" stroke="#EF4444" strokeWidth="4" transform-origin="50 50">
+                        <animateTransform attributeName="transform" type="scale" values="1;1.2;1" dur="0.8s" repeatCount="indefinite" />
+                    </path>
                     <text x="50" y="65" textAnchor="middle" fill="#EF4444" fontSize="36" fontFamily="Orbitron, sans-serif" fontWeight="900">%</text>
                 </svg>
             );
@@ -74,7 +78,7 @@ export const getIcon = (type: string, color: string) => {
                     <defs>
                         <mask id="regenMask">
                             <rect x="0" y="100" width="100" height="100" fill="white">
-                                <animate attributeName="y" values="100;0;100" dur="3s" repeatCount="indefinite" />
+                                <animate attributeName="y" values="100;0;100" dur="1.5s" repeatCount="indefinite" />
                             </rect>
                         </mask>
                         <clipPath id="regenClip">
@@ -85,7 +89,7 @@ export const getIcon = (type: string, color: string) => {
                     <path d={WIDE_HEART_PATH} fill="none" stroke="#3B82F6" strokeWidth="4" />
                     {/* Filling Effect */}
                     <rect x="0" y="0" width="100" height="100" fill="#3B82F6" opacity="0.6" clipPath="url(#regenClip)">
-                        <animate attributeName="y" values="100;0;100" dur="3s" repeatCount="indefinite" />
+                        <animate attributeName="y" values="100;0;100" dur="1.5s" repeatCount="indefinite" />
                     </rect>
                 </svg>
             );
@@ -100,7 +104,7 @@ export const getIcon = (type: string, color: string) => {
                     </defs>
                     <path d={WIDE_HEART_PATH} fill="none" stroke="#3B82F6" strokeWidth="4" />
                     <rect x="0" y="0" width="100" height="100" fill="#3B82F6" opacity="0.6" clipPath="url(#regenClipM)">
-                        <animate attributeName="y" values="100;0;100" dur="3s" repeatCount="indefinite" />
+                        <animate attributeName="y" values="100;0;100" dur="1.5s" repeatCount="indefinite" />
                     </rect>
                     <text x="50" y="65" textAnchor="middle" fill="#fff" fontSize="36" fontFamily="Orbitron, sans-serif" fontWeight="900" stroke="#3B82F6" strokeWidth="1">%</text>
                 </svg>
@@ -118,8 +122,8 @@ export const getIcon = (type: string, color: string) => {
                         fill="none" stroke="#708090" strokeWidth="4" />
                     {/* Glint Animation - Centered and Non-tilted */}
                     <g clipPath="url(#shieldClip)">
-                        <rect x="-100" y="-20" width="50" height="200" fill="white" opacity="0.4" transform="rotate(25 50 50)">
-                            <animate attributeName="x" values="-100;200" dur="2s" repeatCount="indefinite" />
+                        <rect x="-20" y="-20" width="50" height="200" fill="white" opacity="0.4" transform="rotate(25 50 50)">
+                            <animate attributeName="x" values="-20;150" dur="1.2s" repeatCount="indefinite" />
                         </rect>
                     </g>
                 </svg>
@@ -137,8 +141,8 @@ export const getIcon = (type: string, color: string) => {
                         fill="none" stroke="#708090" strokeWidth="4" />
                     {/* Glint Animation - Centered and Non-tilted */}
                     <g clipPath="url(#shieldClipM)">
-                        <rect x="-100" y="-20" width="50" height="200" fill="white" opacity="0.4" transform="rotate(25 50 50)">
-                            <animate attributeName="x" values="-100;200" dur="2s" repeatCount="indefinite" />
+                        <rect x="-20" y="-20" width="50" height="200" fill="white" opacity="0.4" transform="rotate(25 50 50)">
+                            <animate attributeName="x" values="-20;150" dur="1.2s" repeatCount="indefinite" />
                         </rect>
                     </g>
                     {/* X Symbol - Centered Vertically */}
