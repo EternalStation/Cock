@@ -40,7 +40,11 @@ function App() {
   };
 
   return (
-    <div style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden' }}>
+    <div
+      style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden', outline: 'none' }}
+      tabIndex={0}
+      onClick={(e) => e.currentTarget.focus()}
+    >
 
       {!gameStarted && <MainMenu onStart={handleStart} />}
 

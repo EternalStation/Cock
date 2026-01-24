@@ -8,6 +8,7 @@ export interface Particle {
     life: number;
     color: string;
     size: number;
+    type?: 'shard' | 'spark';
 }
 
 
@@ -44,6 +45,8 @@ export interface Player {
     targetAngle: number;
     faceAngle: number;
     knockback: Vector;
+    stunnedUntil?: number; // Timestamp when stun ends
+    invincibleUntil?: number; // Timestamp for invincibility (e.g. Ninja Smoke)
 }
 
 export interface Bullet {
@@ -141,6 +144,25 @@ export interface Enemy {
     untargetable?: boolean; // If true, player bullets won't home in on it
     phase3AudioTriggered?: boolean; // Flag for Phase 3 Audio Trigger
     spawnedAt?: number; // GameTime when spawned
+    // Custom Collision Props
+    customCollisionDmg?: number; // If set, overrides standard 15% damage
+    stunOnHit?: boolean; // If true, stuns player on collision
+
+    // XP Reward
+    xpRewardMult?: number; // Multiplier for XP gain (overrides isElite check if present)
+    mergeState?: 'none' | 'warming_up' | 'merging';
+    mergeId?: string; // Group ID for merging cluster
+    mergeTimer?: number; // Timestamp when merge completes
+    mergeHost?: boolean; // Is this the "host" that becomes elite?
+    mergeCooldown?: number; // Cooldown timestamp before can merge again (after failed merge)
+
+    // Elite Properties
+    isElite?: boolean;
+    eliteState?: number; // For elite skills (0=Ready, 1=Active...)
+    originalPalette?: string[]; // Store original palette before ability color changes
+    lockedTargetX?: number; // For Circle Elite bull charge - locked player X position
+    lockedTargetY?: number; // For Circle Elite bull charge - locked player Y position
+
 
     // Physics / Status
     frozen?: number; // Timer for frozen state
@@ -151,6 +173,30 @@ export interface Enemy {
     hideCoverId?: number; // ID of the enemy we are currently hiding behind
     tacticalMode?: number; // 0 = Hide, 1 = Avoid
     tacticalTimer?: number; // Timestamp for mode switching
+    laserTick?: number; // Timestamp for last laser damage tick (Diamond Elite)
+    dodgeCooldown?: number; // Escape dash timer for diamonds
+    lastDodge?: number; // Last escape dash timestamp (cooldown tracking)
+    lastBarrierTime?: number; // Timestamp when Barrels (Shields) were last used
+    lastCollisionDamage?: number; // Timestamp for last collision damage dealt to player
+    smokeRushEndTime?: number; // Timestamp when smoke rush ends
+    hidingStateEndTime?: number; // Timestamp when hiding behavior ends
+    isNeutral?: boolean; // If true, ignored by auto-aim (e.g. Barrels)
+    baseColor?: string; // Immutable spawn color for projectiles
+    spiralDelay?: number; // Delay in seconds before starting spiral motion (Minions)
+
+
+    // Minion / Pentagon Guard Props
+    minionState?: number; // 0=Orbit, 1=Attack
+    orbitAngle?: number;
+    orbitDistance?: number;
+    lastLaunchTime?: number; // Mother's launch throttle
+    suicideTimer?: number; // Mother's delayed explosion
+    triggeredLaunchTime?: number; // Timestamp of proximity trigger
+    angryUntil?: number; // End time for "Angry" red visual
+    panicTimer?: number; // Speed boost duration for Real Snitch escape
+    panicCooldown?: number; // Cooldown for panic escape
+    trollTimer?: number; // Stop duration for Fake Snitch
+    trollRush?: boolean; // If true, Fake Snitch is suicide rushing wall
 }
 
 export interface Upgrade {
@@ -189,6 +235,7 @@ export interface GameState {
     isPaused: boolean;
     gameOver: boolean;
     nextBossSpawnTime: number;
+    playerPosHistory?: { x: number; y: number; timestamp: number }[]; // Last 60 positions for laser prediction
     nextBossId: number; // To track waves
     rareSpawnCycle: number; // Index of rare spawn cycle
     rareSpawnActive: boolean; // Is a rare enemy currently alive?
@@ -196,4 +243,6 @@ export interface GameState {
     spawnTimer: number; // For start/restart animation
     hasPlayedSpawnSound?: boolean;
     bossPresence: number; // 0 to 1 smooth transition for boss effects
+    smokeBlindTime?: number; // Timestamp for full-screen white fog effect
+    spatialGrid: import('./SpatialGrid').SpatialGrid;
 }

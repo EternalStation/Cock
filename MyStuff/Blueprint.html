@@ -258,8 +258,9 @@
     <div class="tab-container">
         <button class="tab-button active" onclick="openTab('progression')">Game Mechanics</button>
         <button class="tab-button" onclick="openTab('enemies')">Enemy Intel</button>
+        <button class="tab-button" onclick="openTab('elites')">Elite Database</button>
         <button class="tab-button" onclick="openTab('scaling')">Scaling & Colors</button>
-        <button class="tab-button" onclick="openTab('map')">Map & Spawn</button>
+        <button class="tab-button" onclick="openTab('map')">Map & Systems</button>
     </div>
 
     <!-- TAB 1: PROGRESSION -->
@@ -859,28 +860,34 @@
             <!-- PENTAGON -->
             <div class="enemy-card">
                 <canvas id="canvas-pentagon" width="100" height="100" class="enemy-canvas"></canvas>
-                <div class="enemy-name">Hive Overlord</div>
-                <div class="enemy-role">Summoner</div>
-                <div class="enemy-desc">Maintains 500-700px command distance. Enters stationary casting state to spawn.
-                    (5s Cast Time).</div>
+                <div class="enemy-name">Hive Mother</div>
+                <div class="enemy-role">Tactical Carrier</div>
+                <div class="enemy-desc">
+                    <strong>Guard:</strong> Deploys minions in a protective <strong>Pig's Head</strong> wedge.<br>
+                    <strong>Trigger:</strong> Launches missiles if player is < 400px.<br>
+                        <strong>Enrage:</strong> At 60s, turns Red, launches all, and self-destructs.
+                </div>
                 <div class="enemy-stats">
-                    <div class="stat-badge"><span class="stat-label">HP</span><span>2.0x</span></div>
-                    <div class="stat-badge"><span class="stat-label">SPEED</span><span>Med</span></div>
-                    <div class="stat-badge"><span class="stat-label">SPAWN</span><span>Rare</span></div>
+                    <div class="stat-badge"><span class="stat-label">HP</span><span>6.0x</span></div>
+                    <div class="stat-badge"><span class="stat-label">SPEED</span><span>Slow</span></div>
+                    <div class="stat-badge"><span class="stat-label">THREAT</span><span>High</span></div>
                 </div>
             </div>
 
             <!-- MINION -->
             <div class="enemy-card">
                 <canvas id="canvas-minion" width="100" height="100" class="enemy-canvas"></canvas>
-                <div class="enemy-name">Swarm Minion</div>
-                <div class="enemy-role">Minion</div>
-                <div class="enemy-desc">Spawned by Hive Overlords. Small, fast, and agile. Spirals towards the player in
-                    a chaotic pattern.</div>
+                <div class="enemy-name">Swarm Missile</div>
+                <div class="enemy-role">Interceptor</div>
+                <div class="enemy-desc">
+                    <strong>Formation:</strong> Holds "Pig's Head" wedge until launched.<br>
+                    <strong>Attack:</strong> High-speed homing "Snake" pattern.<br>
+                    <strong>Damage:</strong> 15% Max HP (Elite Minions: 3% of Mother HP).
+                </div>
                 <div class="enemy-stats">
                     <div class="stat-badge"><span class="stat-label">HP</span><span>0.25x</span></div>
-                    <div class="stat-badge"><span class="stat-label">SPEED</span><span>Hyper</span></div>
-                    <div class="stat-badge"><span class="stat-label">SPAWN</span><span>Swarm</span></div>
+                    <div class="stat-badge"><span class="stat-label">SPEED</span><span>Extreme</span></div>
+                    <div class="stat-badge"><span class="stat-label">SQUAD</span><span>Up to 15</span></div>
                 </div>
             </div>
 
@@ -890,17 +897,128 @@
                 <div class="enemy-name" style="color: #facc15;">The Quantum Snitch</div>
                 <div class="enemy-role">Legendary Reward</div>
                 <div class="enemy-desc">
-                    <strong>P1 (Yellow):</strong> Stealth Orbit (0.8x Spd).<br>
-                    <strong>P2 (Orange):</strong> Bait (1.5x Spd) + Shield Barrels.<br>
-                    <strong>P3 (Red):</strong> Octopus Split + Invincibility.
+                    <strong>P1 (Yellow):</strong> Proximity Trigger. <strong>Projectile Immune!</strong><br>
+                    <strong>P2 (Orange):</strong> Tactical Avoidance + Barrier Spawning.<br>
+                    <strong>P3 (Red):</strong> Fatal Shift. <strong>Smoke Escape:</strong> Teleports toward center if
+                    cornered.
                 </div>
                 <div class="enemy-stats">
                     <div class="stat-badge"><span class="stat-label">HP</span><span>1 / 1</span></div>
-                    <div class="stat-badge"><span class="stat-label">SPEED</span><span>Dynamic</span></div>
-                    <div class="stat-badge"><span class="stat-label">VALUE</span><span>LEGENDARY</span></div>
+                    <div class="stat-badge"><span class="stat-label">SPEED</span><span>Variable</span></div>
+                    <div class="stat-badge"><span class="stat-label">VALUE</span><span>∞ XP / Orbit Slots</span></div>
                 </div>
             </div>
 
+        </div>
+    </div>
+
+    <!-- TAB 3: ELITE DATABASE -->
+    <div id="elites" class="tab-content">
+        <h2>Elite Intelligence & Merge Mechanics</h2>
+
+        <h3>1. The Merge Protocol</h3>
+        <p>Enemies will naturally attempt to merge when they cluster in tight groups. This process transforms multiple
+            normal units into a single powerful <strong>Elite</strong> entity.</p>
+        <ul>
+            <li><strong>Trigger:</strong> 10 units (or 5 Pentagons) within 100px.</li>
+            <li><strong>Warmup:</strong> A 10-second visual resonance period before the merge completes.</li>
+            <li><strong>Outcome:</strong> One unit consumes the others, fully restoring HP and gaining massive stat
+                modifiers.</li>
+        </ul>
+
+        <h3>2. Elite Stat Modifiers</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Stat</th>
+                    <th>Modifier</th>
+                    <th>Elite Pentagon Variance</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>Health (HP)</strong></td>
+                    <td>12.0x Base</td>
+                    <td>6.0x (Pentagon specific)</td>
+                </tr>
+                <tr>
+                    <td><strong>Size</strong></td>
+                    <td>2.50x Scale</td>
+                    <td>1.20x Scale (Tactical Carrier)</td>
+                </tr>
+                <tr>
+                    <td><strong>Experience (XP)</strong></td>
+                    <td>12.0x Value</td>
+                    <td>6.0x (Pentagon specific)</td>
+                </tr>
+                <tr>
+                    <td><strong>Abilities</strong></td>
+                    <td>Rush Dash (5s CD)</td>
+                    <td>Advanced Fleet (15 Minions)</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h3>3. Elite Tactical Analysis</h3>
+        <div class="enemy-grid">
+            <!-- ELITE MOTHER -->
+            <div class="enemy-card" style="border-color: #EF4444; background: rgba(239, 68, 68, 0.05);">
+                <canvas id="canvas-elite-pentagon" width="100" height="100" class="enemy-canvas"></canvas>
+                <div class="enemy-name" style="color: #EF4444;">Elite Hive Mother</div>
+                <div class="enemy-role">Carrier Flagship</div>
+                <div class="enemy-desc">
+                    Commands a massive 15-minion "Pig's Head" formation. Minions are "Strong" types that deal 3% of
+                    Mother's HP on hit.
+                    High explosion damage on suicide (30% Max HP).
+                </div>
+            </div>
+
+            <!-- ELITE CHASER -->
+            <div class="enemy-card" style="border-color: #facc15; background: rgba(250, 204, 21, 0.05);">
+                <canvas id="canvas-elite-chaser" width="100" height="100" class="enemy-canvas"></canvas>
+                <div class="enemy-name" style="color: #facc15;">Elite Vanguard (Circle)</div>
+                <div class="enemy-role">Bull Charger</div>
+                <div class="enemy-desc">
+                    <strong>Ability: Bull Charge</strong><br>
+                    Locks on player position (0.5s freeze) then executes a massive, high-speed dash with 200px
+                    overshoot.
+                </div>
+            </div>
+
+            <!-- ELITE TRIANGLE -->
+            <div class="enemy-card" style="border-color: #FBBF24; background: rgba(251, 191, 36, 0.05);">
+                <canvas id="canvas-elite-triangle" width="100" height="100" class="enemy-canvas"></canvas>
+                <div class="enemy-name" style="color: #FBBF24;">Elite Whirlwind (Triangle)</div>
+                <div class="enemy-role">Chaos Striker</div>
+                <div class="enemy-desc">
+                    <strong>Ability: Whirlwind</strong><br>
+                    Spins violently and executes a high-speed (2.55x) zigzag dash toward the player for 3.5 seconds.
+                </div>
+            </div>
+
+            <!-- ELITE SQUARE -->
+            <div class="enemy-card" style="border-color: #94A3B8; background: rgba(148, 163, 184, 0.05);">
+                <canvas id="canvas-elite-square" width="100" height="100" class="enemy-canvas"></canvas>
+                <div class="enemy-name" style="color: #94A3B8;">Elite Fortress (Square)</div>
+                <div class="enemy-role">Unstoppable Thorns</div>
+                <div class="enemy-desc">
+                    <strong>Ability: Thorns (Passive)</strong><br>
+                    Moves slowly but is completely unstoppable. Emits jagged metal fragments and deals massive collision
+                    damage.
+                </div>
+            </div>
+
+            <!-- ELITE DIAMOND -->
+            <div class="enemy-card" style="border-color: #38bdf8; background: rgba(56, 189, 248, 0.05);">
+                <canvas id="canvas-elite-diamond" width="100" height="100" class="enemy-canvas"></canvas>
+                <div class="enemy-name" style="color: #38bdf8;">Elite Beam-Lord (Diamond)</div>
+                <div class="enemy-role">Siege Artillery</div>
+                <div class="enemy-desc">
+                    <strong>Ability: Hyper Beam</strong><br>
+                    Locks onto player's last known trajectory and fires a persistent, high-damage laser beam for 1.5
+                    seconds.
+                </div>
+            </div>
         </div>
     </div>
 
@@ -1017,82 +1135,53 @@
         </table>
     </div>
 
-    <!-- TAB 4: MAP & SPAWN -->
+    <!-- TAB 5: MAP & SYSTEMS -->
     <div id="map" class="tab-content">
-        <h2>Map Logic & Spawn Mechanics</h2>
+        <h2>Map Architecture & Arena Systems</h2>
 
-        <h3>1. Spawning Mechanics</h3>
-        <table>
-            <tr>
-                <th>Parameter</th>
-                <th>Value</th>
-                <th>Description</th>
-            </tr>
-            <tr>
-                <td><strong>Spawn Distance</strong></td>
-                <td>1150px - 1250px</td>
-                <td>Enemies spawn in this ring around the player (outside auto-aim range).</td>
-            </tr>
-            <tr>
-                <td><strong>Spawn Rate</strong></td>
-                <td>1.4% + (0.1% per min)</td>
-                <td>Chance per frame to spawn an enemy. Increases over time.</td>
-            </tr>
-            <tr>
-                <td><strong>Boss Spawns</strong></td>
-                <td>Every 2 Minutes</td>
-                <td>Fixed intervals (2:00, 4:00, etc).</td>
-            </tr>
-            <tr>
-                <td><strong>Rare Spawns</strong></td>
-                <td>Odd Minutes (1:00, 3:00...)</td>
-                <td>"Quantum Frame" spawns far away (1150-1250px).</td>
-            </tr>
-        </table>
-
-        <h3>2. Combat Ranges</h3>
-        <ul>
-            <li><strong>Player Visibility:</strong> The camera sees a limited area, but enemies spawn slightly outside
-                it.</li>
-            <li><strong>Auto-Aim Area:</strong> 800px Radius. Player will automatically target the nearest enemy
-                entering this zone.</li>
-            <li><strong>Bullet Reach:</strong> ~1650px. You can manually aim and hit enemies immediately upon spawn.
-            </li>
-        </ul>
-
-        <h3>3. Sector Designations (Arena Map)</h3>
+        <h3>1. Arena Grid (The Infinite Hex)</h3>
+        <p>The world is divided into discrete Hexagonal Arenas. Crossing an Arena boundary shifts the gameplay
+            environment and rules.</p>
         <table>
             <thead>
                 <tr>
-                    <th>Sector ID</th>
-                    <th>Name</th>
-                    <th>Special Property</th>
+                    <th>Arena Type</th>
+                    <th>Designation</th>
+                    <th>Bonus Property</th>
                 </tr>
             </thead>
             <tbody>
                 <tr>
-                    <td><strong>Sector 01</strong></td>
-                    <td style="color: #22d3ee">Economic Hex (Spawn)</td>
-                    <td><strong>+15% XP</strong> gain for kills while inside.</td>
+                    <td><strong>Central Hub</strong></td>
+                    <td style="color: #22d3ee">Sector 01</td>
+                    <td><strong>Standard:</strong> Default spawning and loot tables.</td>
                 </tr>
                 <tr>
-                    <td><strong>Sector 02</strong></td>
-                    <td style="color: #f87171">Combat Hex (Top Right)</td>
-                    <td>Enhanced Spawn Density (High Intensity).</td>
+                    <td><strong>Economic Hex</strong></td>
+                    <td style="color: #4ade80">Resource Sector</td>
+                    <td><strong>+15% XP Kill Bonus:</strong> Permanent buff while standing inside.</td>
                 </tr>
                 <tr>
-                    <td><strong>Sector 03</strong></td>
-                    <td style="color: #a855f7">Research Hex (Bottom Right)</td>
-                    <td>Shifted Loot Tables (Higher Rarity Chance).</td>
+                    <td><strong>Fortress Hex</strong></td>
+                    <td style="color: #f87171">High-Risk Sector</td>
+                    <td><strong>Elite Saturation:</strong> Merges occur 20% faster; Elite spawns are common.</td>
                 </tr>
             </tbody>
         </table>
 
-        <h3>4. AI Navigation Rules</h3>
+        <h3>2. Quantum Reward Logic</h3>
+        <p>Killing the Quantum Snitch triggers a world-state change for the next upgrade cycle.</p>
         <ul>
-            <li><strong>Global Wall Buffer:</strong> 500 pixels. AI will steer away from boundaries to prevent clipping.</li>
-            <li><strong>Wall Sliding:</strong> Enemies will transition to parallel movement when hitting map constraints.</li>
-            <li><strong>Corner Awareness:</strong> AI identifies 90-degree traps and steers early to maintain mobility.</li>
+            <li><strong>XP Burst:</strong> Grants 100% of the current level's needed XP instantly.</li>
+            <li><strong>Quantum Shift:</strong> The next upgrade slot is guaranteed to have vastly improved rarity
+                percentages (Quantum+).</li>
+        </ul>
+
+        <h3>3. Navigational Limits</h3>
+        <ul>
+            <li><strong>Void Boundaries:</strong> Hitting the map edge deals massive recoil damage (10% Max HP).</li>
+            <li><strong>Snitch Recovery:</strong> The Real Snitch cannot be forced into the void. If pushed against a
+                wall, it will use <strong>Ninja Smoke</strong> to teleport 800px toward the arena center.</li>
         </ul>
     </div>
 
@@ -1176,21 +1265,26 @@
                 ctx.closePath();
             }
             else if (type === 'snitch') {
-                // Star shape for the Golden Snitch
-                const spikes = 5;
-                const outerRadius = size;
-                const innerRadius = size / 2;
-                let rot = Math.PI / 2 * 3;
-                let step = Math.PI / spikes;
+                // Winged Circle Design
+                const bodyR = size * 0.7;
+                ctx.arc(cx, cy, bodyR, 0, Math.PI * 2);
+                ctx.closePath();
 
-                ctx.moveTo(cx, cy - outerRadius);
-                for (let i = 0; i < spikes; i++) {
-                    ctx.lineTo(cx + Math.cos(rot) * outerRadius, cy + Math.sin(rot) * outerRadius);
-                    rot += step;
-                    ctx.lineTo(cx + Math.cos(rot) * innerRadius, cy + Math.sin(rot) * innerRadius);
-                    rot += step;
-                }
-                ctx.lineTo(cx, cy - outerRadius);
+                // Wings
+                // Left
+                ctx.moveTo(cx - bodyR, cy);
+                ctx.lineTo(cx - size * 1.5, cy - size * 0.5);
+                ctx.lineTo(cx - size * 1.8, cy);
+                ctx.lineTo(cx - size * 1.5, cy + size * 0.5);
+                ctx.lineTo(cx - bodyR, cy);
+                ctx.closePath();
+
+                // Right
+                ctx.moveTo(cx + bodyR, cy);
+                ctx.lineTo(cx + size * 1.5, cy - size * 0.5);
+                ctx.lineTo(cx + size * 1.8, cy);
+                ctx.lineTo(cx + size * 1.5, cy + size * 0.5);
+                ctx.lineTo(cx + bodyR, cy);
                 ctx.closePath();
             }
 
@@ -1208,8 +1302,15 @@
             drawShape('canvas-square', 'square', '#BF00FF');
             drawShape('canvas-diamond', 'diamond', '#FF9900');
             drawShape('canvas-pentagon', 'pentagon', '#FF0000');
-            drawShape('canvas-minion', 'minion', '#FFD700');
+            drawShape('canvas-minion', 'minion', '#FFB800');
             drawShape('canvas-snitch', 'snitch', '#FACC15');
+
+            // Render Elites
+            drawShape('canvas-elite-pentagon', 'pentagon', '#EF4444');
+            drawShape('canvas-elite-chaser', 'circle', '#FACC15');
+            drawShape('canvas-elite-triangle', 'triangle', '#FBBF24');
+            drawShape('canvas-elite-square', 'square', '#94A3B8');
+            drawShape('canvas-elite-diamond', 'diamond', '#38bdf8');
         };
 
     </script>

@@ -45,6 +45,55 @@ export function isInMap(x: number, y: number): boolean {
     return false;
 }
 
+/**
+ * Calculates the shortest distance to a hex boundary and the normal of that boundary.
+ * For any point in the map, find the nearest hex edge.
+ */
+export function getHexDistToWall(x: number, y: number): { dist: number; normal: { x: number; y: number } } {
+    let minDist = Infinity;
+    let bestNormal = { x: 0, y: 0 };
+
+    ARENA_CENTERS.forEach(c => {
+        const dx = x - c.x;
+        const dy = y - c.y;
+
+        // Plane equations for flat-topped hex:
+        // 1. px = r (right)
+        // 2. px = -r (left)
+        // 3. x*sqrt3 + y = r*sqrt3 
+        // 4. x*sqrt3 - y = r*sqrt3
+        // 5. -x*sqrt3 + y = r*sqrt3
+        // 6. -x*sqrt3 - y = r*sqrt3
+
+        // Inward Normals:
+        const normals = [
+            { x: -1, y: 0 }, { x: 1, y: 0 },
+            { x: -SQRT3 / 2, y: -0.5 }, { x: -SQRT3 / 2, y: 0.5 },
+            { x: SQRT3 / 2, y: -0.5 }, { x: SQRT3 / 2, y: 0.5 }
+        ];
+
+        const r = ARENA_RADIUS;
+
+        // Distances to the 6 lines
+        const dists = [
+            r - dx, r + dx, // Vertical flat sides
+            (r * SQRT3 - (dx * SQRT3 + dy)) / 2,
+            (r * SQRT3 - (dx * SQRT3 - dy)) / 2,
+            (r * SQRT3 - (-dx * SQRT3 + dy)) / 2,
+            (r * SQRT3 - (-dx * SQRT3 - dy)) / 2
+        ];
+
+        dists.forEach((d, i) => {
+            if (d < minDist) {
+                minDist = d;
+                bestNormal = normals[i];
+            }
+        });
+    });
+
+    return { dist: minDist, normal: bestNormal };
+}
+
 // Get the index of the arena closest to the point (or containing it)
 export function getArenaIndex(x: number, y: number): number {
     for (const c of ARENA_CENTERS) {

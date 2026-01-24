@@ -1,5 +1,6 @@
 import { isInMap } from './MapLogic';
 import { playSfx } from './AudioLogic';
+import { calcStat } from './MathUtils';
 import type { GameState } from './types';
 import { spawnParticles } from './ParticleLogic';
 
@@ -37,7 +38,7 @@ export function spawnEnemyBullet(state: GameState, x: number, y: number, angle: 
 }
 
 export function updateProjectiles(state: GameState, onEvent?: (event: string, data?: any) => void) {
-    const { bullets, enemyBullets, enemies, player } = state;
+    const { bullets, enemyBullets, player } = state;
 
     // --- PLAYER BULLETS ---
     for (let i = bullets.length - 1; i >= 0; i--) {
@@ -56,10 +57,13 @@ export function updateProjectiles(state: GameState, onEvent?: (event: string, da
         let bulletRemoved = false;
 
         // Collision with Enemies
-        for (let j = 0; j < enemies.length; j++) {
-            const e = enemies[j];
+        const nearbyEnemies = state.spatialGrid.query(b.x, b.y, 100); // 100px search radius (covers max enemy size)
+
+        for (let j = 0; j < nearbyEnemies.length; j++) {
+            const e = nearbyEnemies[j];
 
             // Critical: Only hit active, alive enemies that haven't been hit by THIS bullet
+            // Keep barrels (Snitch bullet blockers) as hittable objects even if they are neutral
             if (e.dead || e.hp <= 0 || b.hits.has(e.id)) continue;
 
             const dist = Math.hypot(e.x - b.x, e.y - b.y);
@@ -73,61 +77,64 @@ export function updateProjectiles(state: GameState, onEvent?: (event: string, da
                 b.pierce--;
                 if (onEvent) onEvent('hit');
 
-                // 2. Handle Rare Transitions (These may consume bullet or shift phase)
+                // ELITE SKILL: SQUARE THORNS (Blade Mail)
+                if (e.isElite && e.shape === 'square') {
+                    const rawReflectDmg = Math.max(1, Math.floor(e.maxHp * 0.002));
+                    const armor = calcStat(player.arm);
+                    const reflectDmg = Math.max(0, rawReflectDmg - armor);
+
+                    // Cap damage to never kill player (leave at least 1 HP)
+                    const safeDmg = Math.min(reflectDmg, player.curHp - 1);
+                    if (safeDmg > 0) {
+                        player.curHp -= safeDmg;
+                        player.damageTaken += safeDmg;
+                        if (onEvent) onEvent('player_hit', { dmg: safeDmg }); // Trigger red flash
+                        spawnParticles(state, player.x, player.y, '#FF0000', 3); // Visual feedback
+                    }
+                }
+
+                // 2. Handle Rare Transitions (These may shift phase)
                 if (e.isRare) {
                     if (e.rarePhase === 0) {
-                        e.rarePhase = 1;
-                        e.palette = ['#f97316', '#ea580c', '#c2410c'];
-                        e.longTrail = [];
-                        const backAngle = player.faceAngle + Math.PI;
-                        e.x = player.x + Math.cos(backAngle) * 400;
-                        e.y = player.y + Math.sin(backAngle) * 400;
-                        e.rareTimer = state.gameTime;
-                        playSfx('rare-spawn');
-                        b.life = 0;
-                        // Note: We don't break yet, we let b.pierce handle removal
+                        // PHASE 1 is now PROJECTILE IMMUNE (User Request)
+                        // Can only be triggered by proximity (Player coming close)
+                        b.hits.add(e.id); // Register hit so it doesn't try again next frame
+                        // No phase change here
                     } else if (e.rarePhase === 1) {
-                        // Phase 2 -> 3 Split
+                        // Stage 2 -> 3 (Orange -> Red)
                         e.rarePhase = 2;
                         e.rareTimer = state.gameTime;
-                        e.invincibleUntil = Date.now() + 3000;
-                        e.palette = ['#EF4444', '#DC2626', '#B91C1C'];
+                        e.palette = ['#EF4444', '#DC2626', '#B91C1C']; // Red Shift
 
-                        // Dense Smoke Screen
+                        // Phase 3 Stats
+                        e.spd = state.player.speed * 1.4; // 1.4x Player Speed
+                        e.invincibleUntil = Date.now() + 2000; // 2s Immunity
+
+                        // Refresh Skills
+                        e.shieldCd = 0; // Reset Barrels
+                        e.panicCooldown = 0; // Reset Smoke (reusing panicCooldown for smoke CD)
+                        e.lastDodge = 0; // Reset internal logic
+
+                        // Smoke Screen Visual
                         spawnParticles(state, e.x, e.y, ['#FFFFFF', '#808080'], 150, 400, 100);
+                        playSfx('smoke-puff');
 
-                        e.hp = 1; e.maxHp = 1;
-                        e.rareReal = true;
+                        e.hp = 1000; e.maxHp = 1000; // Ensure survival
+                        e.knockback = { x: 0, y: 0 };
+                        b.life = 0; // Consume bullet
 
-                        // Randomize Decoy Spawn
-                        const splitAngle = Math.random() * Math.PI * 2;
-                        const splitDist = 60 + Math.random() * 40; // 60-100px
-                        const dx = Math.cos(splitAngle) * splitDist;
-                        const dy = Math.sin(splitAngle) * splitDist;
-
-                        // Decoy Setup
-                        const decoy: any = {
-                            ...e,
-                            id: Math.random(),
-                            rareReal: false,
-                            parentId: e.id,
-                            x: e.x + dx,
-                            y: e.y + dy,
-                            knockback: { x: Math.cos(splitAngle) * 25, y: Math.sin(splitAngle) * 25 }
-                        };
-
-                        // Real Snitch Knockback (Opposite)
-                        e.knockback = { x: Math.cos(splitAngle + Math.PI) * 25, y: Math.sin(splitAngle + Math.PI) * 25 };
-
-                        state.enemies.push(decoy);
-                        b.life = 0;
+                        // Don't die yet
+                        if (onEvent) onEvent('hit');
+                        return; // Skip death check
                     } else if (e.rarePhase === 2) {
-                        // Standard Phase 3 death handling
+                        // Phase 3: Check Immunity
                         if (e.invincibleUntil && Date.now() < e.invincibleUntil) {
-                            e.hp += b.dmg; // Negate
-                        } else if (e.hp <= 0 && !e.dead) {
-                            // Handled by common death check below
+                            spawnParticles(state, e.x, e.y, '#FFFFFF', 5); // Immune feedback
+                            b.life = 0;
+                            return;
                         }
+                        // Vulnerable -> Death
+                        e.hp = 0;
                     }
                 }
 
@@ -146,7 +153,12 @@ export function updateProjectiles(state: GameState, onEvent?: (event: string, da
                         player.xp.current += player.xp.needed;
                     } else {
                         // Standard XP Reward
-                        const xpGain = player.xp_per_kill.base;
+                        let xpGain = player.xp_per_kill.base;
+                        if (e.xpRewardMult !== undefined) {
+                            xpGain *= e.xpRewardMult;
+                        } else if (e.isElite) {
+                            xpGain *= 12; // Elite = 12x XP
+                        }
                         player.xp.current += xpGain;
                     }
 
@@ -187,10 +199,11 @@ export function updateProjectiles(state: GameState, onEvent?: (event: string, da
 
         const distP = Math.hypot(player.x - eb.x, player.y - eb.y);
         if (distP < player.size + 10) {
-            const armor = player.arm.base + player.arm.flat; // Simplified for robustness
-            const dmg = Math.max(1, eb.dmg - armor);
+            const armor = calcStat(player.arm);
+            const dmg = Math.max(0, eb.dmg - armor);
             player.curHp -= dmg;
-            if (onEvent) onEvent('player_hit');
+            player.damageTaken += dmg;
+            if (onEvent) onEvent('player_hit', { dmg });
             enemyBullets.splice(i, 1);
             continue;
         }

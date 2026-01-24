@@ -28,6 +28,8 @@ export const createInitialPlayer = (): Player => ({
     knockback: { x: 0, y: 0 }
 });
 
+import { SpatialGrid } from './SpatialGrid';
+
 export const createInitialGameState = (): GameState => ({
     player: createInitialPlayer(),
     enemies: [],
@@ -46,7 +48,8 @@ export const createInitialGameState = (): GameState => ({
     nextBossId: 0,
     rareSpawnCycle: 0,
     rareSpawnActive: false,
-    spawnTimer: 1.0, // 1 Second animation
+    spawnTimer: 3.0, // 3 Second animation
     hasPlayedSpawnSound: false,
-    bossPresence: 0
+    bossPresence: 0,
+    spatialGrid: new SpatialGrid(250) // 250px cells
 });

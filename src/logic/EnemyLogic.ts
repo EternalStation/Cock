@@ -1,8 +1,10 @@
 import type { GameState, Enemy, ShapeType, Vector } from './types';
 import { SHAPE_DEFS, PALETTES, PULSE_RATES, SHAPE_CYCLE_ORDER } from './constants';
-import { isInMap, getArenaIndex, getRandomPositionInArena } from './MapLogic';
+import { isInMap, getArenaIndex, getRandomPositionInArena, ARENA_CENTERS, ARENA_RADIUS } from './MapLogic';
 import { spawnEnemyBullet } from './ProjectileLogic';
 import { playSfx } from './AudioLogic';
+import { spawnParticles } from './ParticleLogic';
+import { calcStat } from './MathUtils';
 
 
 // Helper to determine current game era params
@@ -40,7 +42,7 @@ function getProgressionParams(gameTime: number) {
     return { shapeDef, activeColors, pulseDef };
 }
 
-export function updateEnemies(state: GameState) {
+export function updateEnemies(state: GameState, onEvent?: (event: string, data?: any) => void) {
     const { enemies, player, gameTime } = state;
     const { shapeDef, pulseDef } = getProgressionParams(gameTime);
 
@@ -50,7 +52,7 @@ export function updateEnemies(state: GameState) {
     const actualRate = baseSpawnRate * shapeDef.spawnWeight;
 
     if (Math.random() < actualRate / 60) {
-        spawnEnemy(state, false);
+        spawnEnemy(state);
     }
 
     // Rare Spawning Logic
@@ -58,13 +60,41 @@ export function updateEnemies(state: GameState) {
 
     // Boss Spawning
     if (gameTime >= state.nextBossSpawnTime) {
-        spawnEnemy(state, true);
+        // Fix: Pass arguments correctly (x, y, shape, isBoss)
+        spawnEnemy(state, undefined, undefined, undefined, true);
         state.nextBossSpawnTime += 120; // 2 Minutes
+    }
+
+    // --- SPATIAL GRID UPDATE ---
+    state.spatialGrid.clear();
+    enemies.forEach(e => {
+        if (!e.dead) state.spatialGrid.add(e);
+    });
+
+    // --- MERGING LOGIC ---
+    // Only check once per second (approx) to save perf, or spread check?
+    // User wants "3 second warning", so continuous monitoring is needed once triggered.
+    // Let's check every 15 frames for new clusters, but update existing clusters every frame.
+
+    // 1. Manage Active Clusters
+    manageMerges(state);
+
+    // 2. Scan for new clusters (Throttled)
+    if (Math.floor(state.gameTime * 60) % 30 === 0) { // Check every 0.5s
+        scanForMerges(state);
     }
 
     enemies.forEach(e => {
         if (e.frozen && e.frozen > 0) {
             e.frozen -= 1 / 60;
+            return;
+        }
+
+        // Wall collision - instant death if out of bounds
+        if (!isInMap(e.x, e.y)) {
+            e.dead = true;
+            e.hp = 0;
+            spawnParticles(state, e.x, e.y, e.palette[0], 20);
             return;
         }
 
@@ -93,14 +123,22 @@ export function updateEnemies(state: GameState) {
         // Separator
         let pushX = 0;
         let pushY = 0;
-        enemies.forEach(other => {
+
+        // Optimized Push Logic
+        const nearbyEnemies = state.spatialGrid.query(e.x, e.y, e.size * 3);
+
+        nearbyEnemies.forEach(other => {
             if (e === other) return;
             const odx = e.x - other.x;
             const ody = e.y - other.y;
             const odist = Math.hypot(odx, ody);
-            if (odist < e.size * 2) {
-                pushX += (odx / odist) * 0.5;
-                pushY += (ody / odist) * 0.5;
+            // Push radius usually 2*size
+            if (odist < e.size + other.size) {
+                const pushDist = (e.size + other.size) - odist;
+                if (odist > 0.001) { // Avoid div by zero
+                    pushX += (odx / odist) * pushDist * 0.005; // Minimal separation
+                    pushY += (ody / odist) * pushDist * 0.005;
+                }
             }
         });
 
@@ -109,13 +147,14 @@ export function updateEnemies(state: GameState) {
         let vy = (dy / dist) * speed + pushY;
 
         // Apply Speed Modifiers
+        // Speed - elites move at same speed as normal enemies
         let currentSpd = e.spd;
         if (e.shape === 'circle') currentSpd *= 1.5;
 
         // --- BEHAVIOR OVERRIDES ---
         switch (e.shape) {
             case 'circle':
-            case 'minion':
+                // Minion case removed to allow new logic in 2nd switch to run
                 if (e.timer && Date.now() < e.timer) return;
 
                 if (e.spiralRadius && e.spiralRadius > 10) {
@@ -132,122 +171,524 @@ export function updateEnemies(state: GameState) {
                     vy = ty - e.y;
                     if (e.spiralRadius < 20) e.spiralRadius = 0;
                 } else {
-                    // Standard tracking + swarm
-                    const angleToPlayer = Math.atan2(dy, dx);
-                    vx = Math.cos(angleToPlayer) * currentSpd + pushX;
-                    vy = Math.sin(angleToPlayer) * currentSpd + pushY;
+                    if (e.isElite) {
+                        // ELITE SKILL: BULL CHARGE
+                        // State 0: Tracking (Normal)
+                        // State 1: Locking (Warning)
+                        // State 2: Charging (Dash)
+                        if (!e.eliteState) e.eliteState = 0;
+
+                        if (e.eliteState === 0) {
+                            // Tracking Phase
+                            if (dist < 600 && (!e.timer || Date.now() > e.timer)) { // Increased range
+                                e.eliteState = 1;
+                                e.timer = Date.now() + 500; // 0.5s lock-in (changed from 1s)
+                                playSfx('rare-spawn'); // Warning sound reuse
+                                // Store original palette before changing
+                                e.originalPalette = e.palette;
+                                e.palette = ['#EF4444', '#B91C1C', '#991B1B']; // Angry Red
+                            } else {
+                                // Normal movement
+                                const angleToPlayer = Math.atan2(dy, dx);
+                                vx = Math.cos(angleToPlayer) * currentSpd + pushX;
+                                vy = Math.sin(angleToPlayer) * currentSpd + pushY;
+                            }
+                        } else if (e.eliteState === 1) {
+                            // Locking Phase - Frozen, RED
+                            vx = 0; vy = 0;
+                            e.rotationPhase = (e.rotationPhase || 0) + 0.2; // Fast spin
+                            if (Date.now() > e.timer!) {
+                                // Remember player coordinates at 0.5s mark
+                                const targetDx = player.x - e.x;
+                                const targetDy = player.y - e.y;
+                                const targetAngle = Math.atan2(targetDy, targetDx);
+
+                                // Store locked target with 200px overshoot (increased from 100px)
+                                e.lockedTargetX = player.x + Math.cos(targetAngle) * 200;
+                                e.lockedTargetY = player.y + Math.sin(targetAngle) * 200;
+
+                                // Store the angle to charge direction
+                                e.dashState = targetAngle;
+
+                                // Transition to charge
+                                e.eliteState = 2;
+                                e.timer = Date.now() + 500; // 0.5s rush
+                                playSfx('boss-fire');
+                            }
+                        } else if (e.eliteState === 2) {
+                            // Charging Phase - rush toward locked coordinates
+                            if (e.lockedTargetX !== undefined && e.lockedTargetY !== undefined) {
+                                const remainDx = e.lockedTargetX - e.x;
+                                const remainDy = e.lockedTargetY - e.y;
+                                const remainDist = Math.hypot(remainDx, remainDy);
+
+                                if (remainDist > 10) {
+                                    // Still moving toward target
+                                    const angle = Math.atan2(remainDy, remainDx);
+                                    const chargeSpeed = 600 / 60; // 600 pixels per second (increased 50%)
+                                    vx = Math.cos(angle) * chargeSpeed;
+                                    vy = Math.sin(angle) * chargeSpeed;
+
+                                    spawnParticles(state, e.x, e.y, '#EF4444', 1);
+                                } else {
+                                    // Reached target - end charge
+                                    e.eliteState = 0;
+                                    e.timer = Date.now() + 5000; // 5s Cooldown
+                                    e.palette = e.originalPalette || e.palette;
+                                    e.lockedTargetX = undefined;
+                                    e.lockedTargetY = undefined;
+                                    e.dashState = undefined;
+                                }
+                            }
+                        }
+                    } else {
+                        // Standard tracking + swarm
+                        const angleToPlayer = Math.atan2(dy, dx);
+                        vx = Math.cos(angleToPlayer) * currentSpd + pushX;
+                        vy = Math.sin(angleToPlayer) * currentSpd + pushY;
+                    }
                 }
                 break;
             case 'triangle':
-                if (!e.timer) e.timer = Date.now();
-                if (Date.now() - e.lastAttack > 5000) {
-                    e.spd = 18;
-                    e.lastAttack = Date.now();
+                // Aggressive Dash Logic (only for normal triangles, not elites)
+                if (!e.isElite) {
+                    if (!e.timer) e.timer = Date.now();
+                    if (Date.now() - e.lastAttack > 5000) {
+                        e.spd = 18;
+                        e.lastAttack = Date.now();
+                    }
                 }
                 const baseTriSpd = 1.7 * SHAPE_DEFS['triangle'].speedMult;
                 if (e.spd > baseTriSpd) e.spd *= 0.90;
                 else e.spd = baseTriSpd;
 
-                const angleToPlayerT = Math.atan2(dy, dx);
-                vx = Math.cos(angleToPlayerT) * e.spd + pushX;
-                vy = Math.sin(angleToPlayerT) * e.spd + pushY;
+                if (e.isElite) {
+                    // ELITE SKILL: WHIRLWIND
+                    // Initialize state
+                    if (!e.eliteState) e.eliteState = 0;
+
+                    if (e.eliteState === 0) {
+                        // Cooldown phase
+                        if ((!e.timer || Date.now() > e.timer) && dist < 600) { // Increased activation range
+                            e.eliteState = 1;
+                            e.timer = Date.now() + 3500; // 3.5s Whirlwind (reduced from 5s)
+                            e.originalPalette = e.palette;
+                            e.palette = ['#FCD34D', '#FBBF24', '#F59E0B']; // Gold
+                        }
+                        // Normal movement during cooldown
+                        const angleToPlayerT = Math.atan2(dy, dx);
+                        vx = Math.cos(angleToPlayerT) * e.spd + pushX;
+                        vy = Math.sin(angleToPlayerT) * e.spd + pushY;
+                    } else if (e.eliteState === 1) {
+                        // Spinning - Gold, constant fast zigzag movement toward player
+                        e.rotationPhase = (e.rotationPhase || 0) + 0.5; // Super fast spin
+                        // Fast zigzag movement toward player with constant speed
+                        const angleToPlayer = Math.atan2(dy, dx);
+                        const zigzag = Math.sin(Date.now() / 100) * 0.5; // Random zigzag
+                        const moveAngle = angleToPlayer + zigzag;
+                        const fastSpeed = currentSpd * 2.55; // 2.55x speed (reduced 15% from 3x)
+                        vx = Math.cos(moveAngle) * fastSpeed + pushX;
+                        vy = Math.sin(moveAngle) * fastSpeed + pushY;
+
+                        spawnParticles(state, e.x, e.y, '#FCD34D', 1);
+
+                        if (Date.now() > e.timer!) {
+                            // Reset to normal state
+                            e.eliteState = 0;
+                            e.timer = Date.now() + 5000; // 5s Cooldown
+                            e.palette = e.originalPalette || e.palette;
+                            // Reset speed to normal to prevent lingering velocity
+                            vx = 0;
+                            vy = 0;
+                        }
+                    }
+                } else {
+                    const angleToPlayerT = Math.atan2(dy, dx);
+                    vx = Math.cos(angleToPlayerT) * e.spd + pushX;
+                    vy = Math.sin(angleToPlayerT) * e.spd + pushY;
+                }
                 break;
             case 'square':
-                const angleToPlayerS = Math.atan2(dy, dx);
-                vx = Math.cos(angleToPlayerS) * currentSpd + pushX;
-                vy = Math.sin(angleToPlayerS) * currentSpd + pushY;
+                if (e.isElite) {
+                    // ELITE SKILL: THORNS (Passive)
+                    // Movement is slow but unstoppable
+                    const angleToPlayerS = Math.atan2(dy, dx);
+                    vx = Math.cos(angleToPlayerS) * (currentSpd * 0.5) + pushX;
+                    vy = Math.sin(angleToPlayerS) * (currentSpd * 0.5) + pushY;
+
+                    // Visual Spike effect
+                    if (Math.random() < 0.1) {
+                        spawnParticles(state, e.x + (Math.random() - 0.5) * e.size * 2, e.y + (Math.random() - 0.5) * e.size * 2, '#94A3B8', 1);
+                    }
+                } else {
+                    const angleToPlayerS = Math.atan2(dy, dx);
+                    vx = Math.cos(angleToPlayerS) * currentSpd + pushX;
+                    vy = Math.sin(angleToPlayerS) * currentSpd + pushY;
+                }
                 break;
             case 'diamond':
-                // Diamond AI: Kiting Brain (500-900px)
-                const angleToPlayerD = Math.atan2(dy, dx);
-                // Dynamic distance goal: keep between 500 and 900
-                let distGoal = 700;
-                if (dist < 500) distGoal = 800; // Back off
-                if (dist > 900) distGoal = 600; // Close in
+                if (e.isElite) {
+                    // ELITE SKILL: HYPER BEAM
+                    const angleToPlayerD = Math.atan2(dy, dx);
 
-                // Randomized Dodge (3-5s)
-                if (!e.timer || Date.now() > e.timer) {
-                    e.dodgeDir = Math.random() > 0.5 ? 1 : -1;
-                    e.timer = Date.now() + 3000 + Math.random() * 2000;
-                }
+                    // Keep distance (with wall check)
+                    const nearestCenter = ARENA_CENTERS.reduce((best, center) => {
+                        const distToCenter = Math.hypot(e.x - center.x, e.y - center.y);
+                        return distToCenter < Math.hypot(e.x - best.x, e.y - best.y) ? center : best;
+                    }, ARENA_CENTERS[0]);
 
-                const strafeAngle = angleToPlayerD + (e.dodgeDir || 1) * Math.PI / 2;
-                const distFactor = (dist - distGoal) / 100;
+                    const distToCenter = Math.hypot(e.x - nearestCenter.x, e.y - nearestCenter.y);
+                    const distToWall = ARENA_RADIUS - distToCenter;
 
-                vx = Math.cos(strafeAngle) * currentSpd + Math.cos(angleToPlayerD) * distFactor * currentSpd;
-                vy = Math.sin(strafeAngle) * currentSpd + Math.sin(angleToPlayerD) * distFactor * currentSpd;
+                    const veryCloseToWall = distToWall < 500;
 
-                if (Date.now() - (e.lastAttack || 0) > 6000) {
-                    // Scaling: Base 20, +50% every 5m
-                    const minutes = state.gameTime / 60;
-                    const dmgMult = 1 + (Math.floor(minutes / 5) * 0.5);
-                    const finalDmg = 20 * dmgMult;
+                    // Check if escaping (using lockedTargetX as escape flag - 0 means escaping)
+                    const isEscaping = e.lockedTargetX === 0 && e.lockedTargetY && Date.now() < e.lockedTargetY;
 
-                    spawnEnemyBullet(state, e.x, e.y, angleToPlayerD, finalDmg, e.palette[0]);
-                    e.lastAttack = Date.now();
+                    if (isEscaping) {
+                        // Escape dash active
+                        vx = Math.cos(e.dashState || 0) * currentSpd * 2;
+                        vy = Math.sin(e.dashState || 0) * currentSpd * 2;
+                    } else if (veryCloseToWall && dist < 900 && (!e.lastDodge || Date.now() - e.lastDodge > 3000)) {
+                        // Trapped - initiate escape (max once per 3 seconds)
+                        const angleToCenter = Math.atan2(nearestCenter.y - e.y, nearestCenter.x - e.x);
+                        const angleAwayFromPlayer = angleToPlayerD + Math.PI;
+                        const escapeAngle = (angleToCenter + angleAwayFromPlayer) / 2;
+
+                        e.dashState = escapeAngle;
+                        e.lockedTargetX = 0; // Flag for escape mode
+                        e.lockedTargetY = Date.now() + 2000; // Escape timer
+                        e.lastDodge = Date.now(); // Mark escape time
+
+                        vx = Math.cos(escapeAngle) * currentSpd * 2;
+                        vy = Math.sin(escapeAngle) * currentSpd * 2;
+                    } else {
+                        // Clear escape state
+                        if (e.lockedTargetX === 0) {
+                            e.lockedTargetX = undefined;
+                            e.lockedTargetY = undefined;
+                        }
+
+                        // Normal kiting
+                        let distGoal = 600;
+                        const distFactor = (dist - distGoal) / 100;
+                        vx = Math.cos(angleToPlayerD) * distFactor * currentSpd;
+                        vy = Math.sin(angleToPlayerD) * distFactor * currentSpd;
+                    }
+
+                    if (!e.eliteState) e.eliteState = 0;
+
+                    if (e.eliteState === 0) {
+                        // Charge Up - Lock player coordinates NOW
+                        if (Date.now() - (e.lastAttack || 0) > 3600) { // 3.6s cooldown (20% slower)
+                            // Lock the CURRENT player position for the laser
+                            const angleToPlayer = Math.atan2(dy, dx);
+                            e.dashState = angleToPlayer; // Store locked angle
+
+                            e.eliteState = 1;
+                            e.timer = Date.now() + 1000; // 1s delay before firing
+                            playSfx('boss-fire');
+                        }
+                    } else if (e.eliteState === 1) {
+                        // Charging: Locked coordinates stored, waiting 1.5s before firing
+                        vx = 0; vy = 0;
+                        if (Date.now() > e.timer!) {
+                            // Fire laser in the direction locked 1.5 seconds ago
+                            e.eliteState = 2;
+                            e.timer = Date.now() + 1500; // 1.5s Laser Duration
+                        }
+                    } else if (e.eliteState === 2) {
+                        // Firing Laser Beam
+                        vx = 0; vy = 0;
+
+                        // Store laser info for renderer (will be picked up by render logic)
+                        e.lockedTargetX = e.x + Math.cos(e.dashState || 0) * 2000; // Laser end point
+                        e.lockedTargetY = e.y + Math.sin(e.dashState || 0) * 2000;
+
+                        // Damage player if in laser path
+                        const laserAngle = e.dashState || 0;
+                        const px = player.x - e.x;
+                        const py = player.y - e.y;
+                        const playerDist = Math.hypot(px, py);
+                        const playerAngle = Math.atan2(py, px);
+                        const angleDiff = Math.abs(playerAngle - laserAngle);
+
+                        // Hit if player is in laser cone (within 0.1 radians and 2000px range)
+                        if (angleDiff < 0.1 && playerDist < 2000) {
+                            // Deal damage every few frames
+                            if (!e.laserTick || Date.now() - e.laserTick > 100) {
+                                const minutes = state.gameTime / 60;
+                                const dmgMult = 1 + (Math.floor(minutes / 5) * 0.5);
+                                const rawTickDmg = Math.floor(5 * dmgMult); // 5 base, +50% per 5min
+                                const armor = calcStat(player.arm);
+                                const tickDmg = Math.max(0, rawTickDmg - armor);
+
+                                player.curHp -= tickDmg;
+                                player.damageTaken += tickDmg;
+                                e.laserTick = Date.now();
+
+                                // Check for death
+                                if (player.curHp <= 0 && !state.gameOver) {
+                                    player.curHp = 0;
+                                    state.gameOver = true;
+                                    if (onEvent) onEvent('game_over');
+                                }
+                            }
+                        }
+
+                        if (Date.now() > e.timer!) {
+                            e.eliteState = 0;
+                            e.lastAttack = Date.now();
+                        }
+                    }
+
+                } else {
+                    // Diamond standard behavior
+                    const angleToPlayerD = Math.atan2(dy, dx);
+                    // Dynamic distance goal: keep between 500 and 900
+                    let distGoal = 700;
+                    if (dist < 500) distGoal = 800; // Back off
+                    if (dist > 900) distGoal = 600; // Close in
+
+                    // Check distance to nearest arena wall (500px minimum)
+                    const nearestCenter = ARENA_CENTERS.reduce((best, center) => {
+                        const distToCenter = Math.hypot(e.x - center.x, e.y - center.y);
+                        return distToCenter < Math.hypot(e.x - best.x, e.y - best.y) ? center : best;
+                    }, ARENA_CENTERS[0]);
+
+                    const distToCenter = Math.hypot(e.x - nearestCenter.x, e.y - nearestCenter.y);
+                    const distToWall = ARENA_RADIUS - distToCenter;
+
+                    const veryCloseToWall = distToWall < 500; // Emergency at 500px
+
+                    // Randomized Dodge (3-5s)
+                    if (!e.timer || Date.now() > e.timer) {
+                        e.dodgeDir = Math.random() > 0.5 ? 1 : -1;
+                        e.timer = Date.now() + 3000 + Math.random() * 2000;
+                    }
+
+                    const strafeAngle = angleToPlayerD + (e.dodgeDir || 1) * Math.PI / 2;
+                    const distFactor = (dist - distGoal) / 100;
+
+                    // Wall avoidance with escape dash
+                    // Check if currently in escape dash mode (using dodgeCooldown as timer)
+                    const isEscaping = e.dodgeCooldown && Date.now() < e.dodgeCooldown;
+
+                    if (isEscaping) {
+                        // Fast escape dash - move away quickly
+                        vx = Math.cos(e.dashState || 0) * currentSpd * 2;
+                        vy = Math.sin(e.dashState || 0) * currentSpd * 2;
+                    } else if (veryCloseToWall && dist < 900) {
+                        // Trapped between wall and player - initiate 2s escape dash
+                        const angleToCenter = Math.atan2(nearestCenter.y - e.y, nearestCenter.x - e.x);
+                        const angleAwayFromPlayer = angleToPlayerD + Math.PI;
+                        // Combine both angles to escape diagonally
+                        const escapeAngle = (angleToCenter + angleAwayFromPlayer) / 2;
+
+                        e.dashState = escapeAngle; // Store escape direction
+                        e.dodgeCooldown = Date.now() + 2000; // Escape for 2 seconds
+
+                        // Start moving immediately
+                        vx = Math.cos(escapeAngle) * currentSpd * 2;
+                        vy = Math.sin(escapeAngle) * currentSpd * 2;
+                    } else {
+                        // Normal kiting behavior
+                        vx = Math.cos(strafeAngle) * currentSpd + Math.cos(angleToPlayerD) * distFactor * currentSpd;
+                        vy = Math.sin(strafeAngle) * currentSpd + Math.cos(angleToPlayerD) * distFactor * currentSpd;
+                    }
+
+                    if (Date.now() - (e.lastAttack || 0) > 6000) { // 6s cooldown (unchanged)
+                        // Scaling: Base 20, +50% every 5m
+                        const minutes = state.gameTime / 60;
+                        const dmgMult = 1 + (Math.floor(minutes / 5) * 0.5);
+                        const finalDmg = 20 * dmgMult;
+
+                        // Use original palette (Green) if available, so bullets match body not angry state
+                        // Use baseColor if available (most reliable), fallback to originalPalette, then palette
+                        const bulletColor = e.baseColor || (e.originalPalette ? e.originalPalette[0] : e.palette[0]);
+                        spawnEnemyBullet(state, e.x, e.y, angleToPlayerD, finalDmg, bulletColor);
+                        e.lastAttack = Date.now();
+                    }
                 }
                 break;
             case 'pentagon':
-                const age = state.gameTime - (e.spawnedAt || 0);
-                const isSummonerPhase = age < 60;
+                const motherAge = state.gameTime - (e.spawnedAt || 0);
+                const myMinions = state.enemies.filter(m => m.parentId === e.id && !m.dead);
+                const maxMinions = e.isElite ? 15 : 9;
 
-                if (isSummonerPhase) {
-                    // SUMMONER PHASE: 15s Cooldown, 5s Cast
-                    const timeSinceLast = Date.now() - (e.lastAttack || 0);
-
-                    // Ability Ready? Start pulsating/stationary
-                    if (timeSinceLast > 15000) {
-                        e.summonState = 2; // Cast State
-                        e.timer = (e.timer || 0) + 1; // Increment cast tick
-
-                        // Pulsate Visual: Intense breathing
+                // 1. Summoning Logic (Stops after 60s)
+                if (motherAge < 60 && myMinions.length < maxMinions) {
+                    const timeSinceLastSummon = Math.floor((Date.now() - (e.lastAttack || 0)) / 1000);
+                    if (timeSinceLastSummon >= 12) {
+                        e.summonState = 2; // Cast
+                        e.timer = (e.timer || 0) + 1;
                         e.pulsePhase = (e.pulsePhase + 0.3) % (Math.PI * 2);
-
-                        vx = 0; vy = 0; // Frozen during cast
-
-                        // Finish Cast (approx 5s at 60fps = 300 ticks)
-                        if (e.timer >= 300) {
-                            // SPAWN 3 MINIONS
-                            for (let i = 0; i < 3; i++) {
-                                spawnMinion(state, e);
+                        vx = 0; vy = 0;
+                        if (e.timer >= 180) {
+                            const toSpawn = Math.min(3, maxMinions - myMinions.length);
+                            for (let i = 0; i < toSpawn; i++) {
+                                spawnMinion(state, e, !!e.isElite);
                             }
                             e.lastAttack = Date.now();
                             e.timer = 0;
                             e.summonState = 0;
                         }
-                    } else {
-                        // Normal Chase while on Cooldown
-                        const angleToPlayerP = Math.atan2(dy, dx);
+                    }
+                }
+
+                // 2. Launch Trigger Logic (Resets when clear)
+                const inRange = dist < 400;
+                if (dist > 410) e.triggeredLaunchTime = undefined;
+
+                // Only trigger if minions exist (they need to see the entry)
+                if (inRange && myMinions.some(m => m.minionState === 0)) {
+                    if (e.triggeredLaunchTime === undefined) {
+                        e.triggeredLaunchTime = state.gameTime;
+                        e.angryUntil = Date.now() + 2000;
+                        e.originalPalette = [...e.palette];
+                    }
+                }
+
+                // 3. Execution of Launch
+                if (e.triggeredLaunchTime !== undefined) {
+                    // Proximity: Staggered 0.3s launch for ALL
+                    const elapsed = state.gameTime - e.triggeredLaunchTime;
+                    myMinions.forEach((m, idx) => {
+                        if (m.minionState === 0 && elapsed > idx * 0.3) {
+                            m.minionState = 1;
+                            m.spawnedAt = state.gameTime;
+                        }
+                    });
+                } else if (motherAge >= 60) {
+                    // Enrage: Slow 3s launch for ONE
+                    if (!e.lastLaunchTime || state.gameTime - e.lastLaunchTime >= 3.0) {
+                        const nextMinion = myMinions.find(m => m.minionState === 0);
+                        if (nextMinion) {
+                            nextMinion.minionState = 1;
+                            nextMinion.spawnedAt = state.gameTime;
+                            e.lastLaunchTime = state.gameTime;
+                        }
+                    }
+                }
+
+                // Apply Red Flash if angry
+                if (e.angryUntil && Date.now() < e.angryUntil) {
+                    e.palette = ['#FF4444', '#990000', '#660000'];
+                } else if (e.originalPalette && motherAge < 60) {
+                    e.palette = e.originalPalette;
+                }
+
+                // 4. Mother Movement & Suicide
+                if (motherAge < 60) {
+                    const angleToPlayerP = Math.atan2(dy, dx);
+                    if (dist < 700) {
+                        vx = -Math.cos(angleToPlayerP) * currentSpd;
+                        vy = -Math.sin(angleToPlayerP) * currentSpd;
+                    } else if (dist > 900) {
                         vx = Math.cos(angleToPlayerP) * currentSpd;
                         vy = Math.sin(angleToPlayerP) * currentSpd;
+                    } else {
+                        vx = Math.cos(angleToPlayerP + Math.PI / 2) * currentSpd * 0.5;
+                        vy = Math.sin(angleToPlayerP + Math.PI / 2) * currentSpd * 0.5;
                     }
                 } else {
-                    // SUICIDE MODE: Aggressive tracking, no spawn
-                    const angleToPlayerP = Math.atan2(dy, dx);
-                    vx = Math.cos(angleToPlayerP) * (currentSpd * 1.5) + pushX;
-                    vy = Math.sin(angleToPlayerP) * (currentSpd * 1.5) + pushY;
-                    e.palette = ['#FF4444', '#990000', '#660000']; // Visual transition to aggressive red
+                    // Enraged/Suicide Phase: Stop moving completely
+                    vx = 0; vy = 0;
+                    e.palette = ['#FF4444', '#990000', '#660000'];
+
+                    // Force red pulse during enrage
+                    e.pulsePhase = (e.pulsePhase || 0) + 0.2;
+
+                    if (myMinions.length === 0) {
+                        if (e.suicideTimer === undefined) {
+                            e.suicideTimer = state.gameTime;
+                            playSfx('warning'); // Pre-explosion warning
+                        }
+
+                        const timeInSuicide = state.gameTime - e.suicideTimer;
+
+                        // Increasing pulse frequency
+                        e.pulsePhase = (e.pulsePhase || 0) + (0.1 + timeInSuicide * 0.1);
+
+                        if (timeInSuicide >= 5.0) {
+                            // Explosion Damage to Player
+                            const explosionRadius = e.size * 2.0; // 200% of body size
+                            if (dist < explosionRadius) {
+                                const rawExpDmg = e.maxHp * 0.30; // 30% of Mother HP
+                                const armor = calcStat(player.arm);
+                                const finalExpDmg = Math.max(0, rawExpDmg - armor);
+                                player.curHp -= finalExpDmg;
+                                player.damageTaken += finalExpDmg;
+                                if (onEvent) onEvent('player_hit', { dmg: finalExpDmg });
+                            }
+
+                            e.hp = -100; // Trigger death
+                            e.dead = true;
+                            playSfx('boss-fire'); // Use a heavy impact sound
+                            // High-impact fragmentation effect
+                            spawnParticles(state, e.x, e.y, ['#FF0000', '#FF9900', '#FFFFFF'], 50, 4, 60, 'shard');
+                        }
+                    }
                 }
                 break;
+
             case 'minion':
-                // Spiral around player
-                if (e.spiralAngle === undefined) e.spiralAngle = Math.atan2(e.y - player.y, e.x - player.x);
-                if (e.spiralRadius === undefined) e.spiralRadius = dist;
+                const mother = state.enemies.find(p => p.id === e.parentId);
+                const isOrphan = !mother || mother.dead;
 
-                e.spiralAngle += 0.05; // orbit
-                e.spiralRadius -= 1.5; // spiral in
+                if (isOrphan) e.minionState = 1;
 
-                const targetX = player.x + Math.cos(e.spiralAngle) * e.spiralRadius;
-                const targetY = player.y + Math.sin(e.spiralAngle) * e.spiralRadius;
+                if (e.minionState === 0 && mother) {
+                    // MODE: LEGIONNAIRE FORMATION (Guarding in front of mother)
+                    const angleToPlayer = Math.atan2(player.y - mother.y, player.x - mother.x);
+                    const myMinionsActive = state.enemies.filter(m => m.parentId === mother.id && m.minionState === 0 && !m.dead);
+                    const myIndex = myMinionsActive.indexOf(e);
 
-                vx = targetX - e.x;
-                vy = targetY - e.y;
+                    // PIG'S HEAD (Wedge/Arrow) Formation
+                    const baseDist = 180; // Slightly closer to mother
+                    const spacingX = 28; // Reduced from 45
+                    const spacingY = 32; // Reduced from 50
 
-                if (e.spiralRadius < 20) {
-                    // Too close? Just hit
-                    const angle = Math.atan2(dy, dx);
-                    vx = Math.cos(angle) * currentSpd;
-                    vy = Math.sin(angle) * currentSpd;
+                    const row = Math.floor((myIndex + 1) / 2);
+                    const side = (myIndex === 0) ? 0 : (myIndex % 2 === 1 ? -1 : 1);
+
+                    // Local coordinates relative to mother (local X is "forward" towards player)
+                    const localX = baseDist - (row * spacingX);
+                    const localY = side * (row * spacingY);
+
+                    // Rotate and translate to world space
+                    const cosA = Math.cos(angleToPlayer);
+                    const sinA = Math.sin(angleToPlayer);
+                    const tx = mother.x + (localX * cosA - localY * sinA);
+                    const ty = mother.y + (localX * sinA + localY * cosA);
+
+                    vx = (tx - e.x) * 0.15;
+                    vy = (ty - e.y) * 0.15;
+
+                    // ALWAYS LOOK AT PLAYER
+                    e.rotationPhase = Math.atan2(player.y - e.y, player.x - e.x);
+                } else {
+                    // MODE: ROCKET ATTACK
+                    const lifeTimeAttack = state.gameTime - (e.spawnedAt || 0);
+                    const targetAngle = Math.atan2(dy, dx);
+
+                    const currentMoveAngle = Math.atan2(vy || dy, vx || dx);
+                    let diff = targetAngle - currentMoveAngle;
+                    while (diff < -Math.PI) diff += Math.PI * 2;
+                    while (diff > Math.PI) diff -= Math.PI * 2;
+
+                    const steeringStr = 0.08;
+                    const baseAngle = currentMoveAngle + diff * steeringStr;
+
+                    const snakeFreq = 8;
+                    const snakeAmp = 0.4;
+                    const snakeAngle = baseAngle + Math.sin(lifeTimeAttack * snakeFreq) * snakeAmp;
+
+                    const rocketSpd = 6.0;
+                    vx = Math.cos(snakeAngle) * rocketSpd;
+                    vy = Math.sin(snakeAngle) * rocketSpd;
+
+                    e.rotationPhase = snakeAngle;
                 }
                 break;
             case 'snitch':
@@ -296,19 +737,18 @@ export function updateEnemies(state: GameState) {
                         vx = 0; vy = 0;
                     }
 
-                    // REVEAL TRIGGER: Pure Proximity (< 400px)
-                    if (dist < 400) {
+                    // REVEAL TRIGGER: Pure Proximity (< 500px)
+                    if (dist < 500) {
                         // TRIGGER PHASE 2
+                        console.log(`[SNITCH_DEBUG] Phase 1->2 Trigger! Dist: ${dist}, Pos: (${e.x.toFixed(0)}, ${e.y.toFixed(0)})`);
                         e.rarePhase = 1;
                         e.rareTimer = state.gameTime; // RESET TIMER
                         e.palette = ['#f97316', '#ea580c', '#c2410c']; // Orange shift
                         e.longTrail = []; // Clear trail
 
-                        // TELEPORT BEHIND PLAYER (400px)
-                        const backAngle = player.faceAngle + Math.PI;
-                        e.x = player.x + Math.cos(backAngle) * 400;
-                        e.y = player.y + Math.sin(backAngle) * 400;
-
+                        // NO TELEPORT - Just activate Phase 2 behavior immediately
+                        // Stop current momentum so it doesn't "rush" into new phase
+                        vx = 0; vy = 0;
                         playSfx('rare-spawn'); // Re-ping for activation
                     }
 
@@ -317,144 +757,234 @@ export function updateEnemies(state: GameState) {
                     if (e.longTrail.length > 1000) e.longTrail.shift();
 
                 } else {
-                    // PHASE 2 & 3: BAIT & ESCAPE (ORANGE/RED)
-                    // TACTICAL LOOP: 3s Hide / 3s Avoid
-                    if (e.tacticalTimer === undefined) e.tacticalTimer = state.gameTime;
-                    if (state.gameTime - (e.tacticalTimer || 0) > 3) {
-                        e.tacticalMode = (e.tacticalMode === 1 ? 0 : 1); // 0 = Hide, 1 = Avoid
-                        e.tacticalTimer = state.gameTime;
-                    }
-                    const isAvoiding = e.tacticalMode === 1;
-                    let targetSpd = 0;
-                    if (e.rarePhase === 2) {
-                        // PHASE 3: AGGRESSIVE SPLIT (1.1x Player Speed)
-                        targetSpd = player.speed * 1.1;
-                    } else {
-                        // PHASE 2: TACTICAL LOOP (Avoid=1.0x, Hide=1.5x)
-                        const isAvoiding = e.tacticalMode === 1;
-                        targetSpd = isAvoiding ? player.speed : player.speed * 1.5;
-                    }
-                    e.spd = targetSpd;
+                    // PHASE 2 & 3: BAIT & ESCAPE
 
-                    // 1. Hide behind OTHER enemies (Dynamic ID Tracking)
-                    if (isAvoiding) {
-                        e.hideCoverId = undefined;
-                        e.hideTarget = null;
-                    } else if (!e.hideCd || Date.now() > e.hideCd || !e.hideCoverId) {
-                        let bestCover: Enemy | null = null;
-                        let bestScore = -Infinity;
+                    // --- SKILL LOGIC (Reactionary) ---
+                    // Check for incoming projectiles
+                    let threatDetected = false;
+                    const dangerDist = 400;
 
-                        enemies.forEach((other: Enemy) => {
-                            if (other === e || other.shape === 'snitch' || other.dead || (other.spd !== undefined && other.spd === 0)) return;
-                            const dToOther = Math.hypot(e.x - other.x, e.y - other.y);
-                            if (dToOther < 1200) {
-                                const angleToOther = Math.atan2(other.y - player.y, other.x - player.x);
-                                const angleToSnitch = Math.atan2(e.y - player.y, e.x - player.x);
-                                const dot = Math.cos(angleToOther - angleToSnitch);
-                                if (dot > 0.85 && dot > bestScore) {
-                                    bestScore = dot;
-                                    bestCover = other;
-                                }
+                    // Simple threat scan: check bullets moving towards snitch
+                    state.bullets.forEach(b => {
+                        if (threatDetected) return;
+                        const d = Math.hypot(b.x - e.x, b.y - e.y);
+                        if (d < dangerDist) {
+                            // Check if bullet is approaching
+                            const approach = (b.x - e.x) * b.vx + (b.y - e.y) * b.vy;
+                            if (approach < 0) threatDetected = true;
+                        }
+                    });
+
+                    // React to threat
+                    if (threatDetected) {
+                        const time = state.gameTime;
+                        // Skill 1: Barrels (Priority)
+                        if (!e.shieldCd || time > e.shieldCd) {
+                            e.shieldCd = time + 6.0; // 6s CD
+                            e.lastBarrierTime = time; // Mark usage time
+
+                            // Spawn 3 barrels in front
+                            const angleToPlayer = Math.atan2(player.y - e.y, player.x - e.x);
+                            for (let i = -1; i <= 1; i++) {
+                                const ang = angleToPlayer + i * 0.5;
+                                const bx = e.x + Math.cos(ang) * 100;
+                                const by = e.y + Math.sin(ang) * 100;
+                                spawnShield(state, bx, by);
                             }
-                        });
-
-                        if (bestCover !== null) {
-                            const actualCover: Enemy = bestCover;
-                            e.hideCoverId = actualCover.id;
-                            e.hideCd = Date.now() + 5000;
-                        } else {
-                            e.hideCoverId = undefined;
-                            e.hideTarget = null;
+                            playSfx('shoot'); // reused sfx for visual feedback
                         }
                     }
 
-                    // Update Hide Target dynamically based on Cover Enemy's position
-                    if (e.hideCoverId && !isAvoiding) {
-                        const cover = enemies.find(en => en.id === e.hideCoverId && !en.dead);
-                        if (cover) {
-                            const distPE = Math.hypot(cover.x - player.x, cover.y - player.y);
-                            const dirX = (cover.x - player.x) / distPE;
-                            const dirY = (cover.y - player.y) / distPE;
-                            e.hideTarget = { x: cover.x + dirX * 100, y: cover.y + dirY * 100 };
-                        } else {
-                            e.hideCoverId = undefined;
-                            e.hideTarget = null;
-                        }
+                    // AUTO SKILL: Smoke Screen + Rush (Every 6s)
+                    if (!e.panicCooldown || state.gameTime > e.panicCooldown) {
+                        const time = state.gameTime;
+                        e.panicCooldown = time + 6.0; // 6s CD
+
+                        // Visuals
+                        spawnParticles(state, player.x, player.y, ['#FFFFFF', '#808080'], 150, 400, 100);
+                        playSfx('smoke-puff');
+                        state.smokeBlindTime = state.gameTime;
+
+                        // Activate Smoke Rush State
+                        e.smokeRushEndTime = time + 2.0; // 2s Duration
+                        e.invincibleUntil = Date.now() + 2000; // 2s Invincibility
                     }
+
+
+                    // Old Hide Logic Removed (Lines 816-880)
+                    // Replaced by new state machine below
 
                     // HIDING MOVEMENT (Proportional Drift Smoothing)
-                    const fearAngle = Math.atan2(e.y - player.y, e.x - player.x);
-                    const zigZag = Math.sin(Date.now() / 200) * 0.8;
-                    let hideAngle = fearAngle + zigZag;
+                    let moveAngle = 0;
+                    let hidingSpeedMult = 1.0;
 
-                    if (e.hideTarget) {
-                        const target = e.hideTarget as Vector;
-                        const dxT = target.x - e.x;
-                        const dyT = target.y - e.y;
-                        const distToTarget = Math.hypot(dxT, dyT);
+                    // SMOKE RUSH OVERRIDE
+                    if (e.smokeRushEndTime && state.gameTime < e.smokeRushEndTime) {
+                        // Rush to (0,0) - Spawn Point of Economic Arena
+                        const rushTargetX = 0;
+                        const rushTargetY = 0;
+                        moveAngle = Math.atan2(rushTargetY - e.y, rushTargetX - e.x);
 
-                        if (distToTarget > 5) {
-                            // Smooth pull towards target shadow
-                            hideAngle = Math.atan2(dyT, dxT);
-                        } else {
-                            // Hold position relative to player fear
-                            hideAngle = fearAngle;
-                        }
+                        // Override Speed: 2x Player Speed
+                        e.spd = player.speed * 2.0;
                     }
-                    let moveAngle = hideAngle;
+                    else {
+                        // Standard Tactical Movement
+                        // TACTICAL MOVEMENT: ORBIT OR HIDE
 
-                    // Wall Avoidance ( GLOBAL 600px SAFETY PROBE )
-                    const probeDist = 600;
-                    let foundPath = false;
-                    for (let offset = 0; offset <= Math.PI; offset += 0.15) {
-                        const angles = offset === 0 ? [moveAngle] : [moveAngle + offset, moveAngle - offset];
-                        for (const ang of angles) {
-                            const testX = e.x + Math.cos(ang) * probeDist;
-                            const testY = e.y + Math.sin(ang) * probeDist;
-                            if (isInMap(testX, testY)) {
-                                moveAngle = ang;
-                                foundPath = true;
-                                break;
+                        // 1. Check for Hiding Opportunity (Every 3s)
+                        if (!e.hidingStateEndTime || state.gameTime > e.hidingStateEndTime) {
+                            // Not currently hiding
+                            if (!e.tacticalTimer || state.gameTime > e.tacticalTimer) {
+                                e.tacticalTimer = state.gameTime + 3.0; // Check every 3s
+
+                                // Find cover
+                                let bestCover: Enemy | null = null;
+                                let bestScore = -Infinity;
+                                enemies.forEach((other: Enemy) => {
+                                    if (other === e || other.shape === 'snitch' || other.dead || (other.spd !== undefined && other.spd === 0)) return;
+                                    const dToOther = Math.hypot(e.x - other.x, e.y - other.y);
+                                    if (dToOther < 300) { // < 300px range
+                                        // Score based on "behindness" relative to player
+                                        const angleToOther = Math.atan2(other.y - player.y, other.x - player.x);
+                                        const angleToSnitch = Math.atan2(e.y - player.y, e.x - player.x);
+                                        const dot = Math.cos(angleToOther - angleToSnitch); // 1.0 = perfectly aligned
+                                        if (dot > 0.9 && dot > bestScore) {
+                                            bestScore = dot;
+                                            bestCover = other;
+                                        }
+                                    }
+                                });
+
+                                if (bestCover) {
+                                    const c = bestCover as Enemy;
+                                    e.hideCoverId = c.id;
+                                    e.hidingStateEndTime = state.gameTime + 2.0; // Hide for 2s
+                                } else {
+                                    e.hideCoverId = undefined; // No cover found
+                                }
                             }
                         }
-                        if (foundPath) break;
-                    }
 
-                    vx = Math.cos(moveAngle) * e.spd;
-                    vy = Math.sin(moveAngle) * e.spd;
+                        // 2. Execute Movement (Hide vs Orbit)
+                        // 2. Execute Movement (Hide vs Orbit)
+                        if (e.hidingStateEndTime && state.gameTime < e.hidingStateEndTime && e.hideCoverId) {
+                            const cover = enemies.find(en => en.id === e.hideCoverId && !en.dead);
+                            if (cover) {
+                                // HIDE MODE: Move to shadow of cover
+                                const distPE = Math.hypot(cover.x - player.x, cover.y - player.y);
+                                const dirX = (cover.x - player.x) / distPE;
+                                const dirY = (cover.y - player.y) / distPE;
+                                const targetX = cover.x + dirX * 100; // Just 100px behind cover
+                                const targetY = cover.y + dirY * 100;
 
-                    // SPEED DAMPING (Shadow Docking)
-                    // If we are heading to a hide target and getting close, slow down to avoid shaking
-                    if (e.hideTarget) {
-                        const target = e.hideTarget as Vector;
-                        const distToT = Math.hypot(target.x - e.x, target.y - e.y);
-                        if (distToT < 20) {
-                            const damp = distToT / 20;
-                            vx *= damp;
-                            vy *= damp;
-                        }
-                    }
-
-                    // 2. Spawn Bullet Stoppers (Barrels) on 5s CD if targeted
-                    if (!e.shieldCd || Date.now() > e.shieldCd) {
-                        const angFromP = Math.atan2(e.y - player.y, e.x - player.x);
-                        const angleDiff = Math.abs(((angFromP - player.targetAngle + Math.PI + (Math.PI * 2)) % (Math.PI * 2)) - Math.PI);
-
-                        if (dist < 600 && angleDiff < 0.3) {
-                            // SPAWN 5 SHIELDS
-                            for (let i = 0; i < 5; i++) {
-                                spawnShield(state, e.x + (Math.random() - 0.5) * 40, e.y + (Math.random() - 0.5) * 40);
+                                moveAngle = Math.atan2(targetY - e.y, targetX - e.x);
+                                hidingSpeedMult = 1.5; // Catch up to cover faster
+                            } else {
+                                // Cover died, abort hide
+                                e.hidingStateEndTime = 0;
+                                // Fallthrough to Orbit
                             }
-                            e.shieldCd = Date.now() + 8000;
+                        }
+
+                        // ORBIT FALLBACK (If not hiding or hide failed)
+                        if (!e.hidingStateEndTime || state.gameTime >= e.hidingStateEndTime) {
+                            // ORBIT CENTRE (0,0)
+                            const centerX = 0;
+                            const centerY = 0;
+                            const angleFromCenter = Math.atan2(e.y - centerY, e.x - centerX);
+                            const distFromCenter = Math.hypot(e.x - centerX, e.y - centerY);
+
+                            // Radius Maintenance (Target ~1500px)
+                            let spiral = 0;
+                            if (distFromCenter < 1200) spiral = 0.4; // Push Out
+                            else if (distFromCenter > 1800) spiral = -0.4; // Pull In
+
+                            // Tangential Orbit (Counter-Clockwise) + Spiral Correction
+                            moveAngle = angleFromCenter + (Math.PI / 2) + spiral;
                         }
                     }
 
-                    // Add some jitter
-                    e.x += (Math.random() - 0.5) * 1;
-                    e.y += (Math.random() - 0.5) * 1;
+                    // Calculate base velocity from Angle
+                    vx = Math.cos(moveAngle) * e.spd * hidingSpeedMult;
+                    vy = Math.sin(moveAngle) * e.spd * hidingSpeedMult;
+
+                    // GLITCH ANIMATION (If Invincible)
+                    if (e.invincibleUntil && Date.now() < e.invincibleUntil) {
+                        if (Math.random() < 0.3) {
+                            e.x += (Math.random() - 0.5) * 10;
+                            e.y += (Math.random() - 0.5) * 10;
+                            spawnParticles(state, e.x, e.y, '#FFFFFF', 1);
+                        }
+                    }
+
+                    if (Math.random() < 0.05) { // Throttle logs
+                        console.log(`[SNITCH_PHASE2] Pos: (${e.x.toFixed(0)},${e.y.toFixed(0)}) Angle: ${moveAngle.toFixed(2)} VX: ${vx.toFixed(2)} VY: ${vy.toFixed(2)}`);
+                    }
+
+                    // CENTER TIE LOGIC REMOVED
+                    // 1. No Vector Bias
+                    // 2. No Hard Clamp
+
+                    // Proceed directly to Wall Avoidance
+
+                    // Wall Avoidance Removed to prevent "Ghost Walls" at map junctions.
+                    // Collision is handled by the strict isInMap check at the end of the update.
+
+                    // Global 600px SAFETY PROBE (Used if not in limit or wall fallback)
+                    if (!vx && !vy) {
+                        e.dodgeDir = undefined;
+                        const probeDist = 600;
+                        let foundPath = false;
+                        for (let offset = 0; offset <= Math.PI; offset += 0.15) {
+                            const angles = offset === 0 ? [moveAngle] : [moveAngle + offset, moveAngle - offset];
+                            for (const ang of angles) {
+                                const testX = e.x + Math.cos(ang) * probeDist;
+                                const testY = e.y + Math.sin(ang) * probeDist;
+                                if (isInMap(testX, testY)) {
+                                    moveAngle = ang;
+                                    foundPath = true;
+                                    break;
+                                }
+                            }
+                            if (foundPath) break;
+                        }
+                        vx = Math.cos(moveAngle) * e.spd;
+                        vy = Math.sin(moveAngle) * e.spd;
+                    }
                 }
                 break;
         }
+
+        // --- GLOBAL PER-ENEMY LOGIC (Applies after switch behaviors) ---
+
+        // SPEED DAMPING (Shadow Docking)
+        if (e.hideTarget) {
+            const target = e.hideTarget as Vector;
+            const distToT = Math.hypot(target.x - e.x, target.y - e.y);
+            if (distToT < 20) {
+                const damp = distToT / 20;
+                vx *= damp;
+                vy *= damp;
+            }
+        }
+
+        // 2. Spawn Bullet Stoppers (Barrels) on 7s CD if targeted (Snitch only)
+        if (e.shape === 'snitch' && e.rarePhase !== 0 && (!e.shieldCd || Date.now() > e.shieldCd)) {
+            const angFromP = Math.atan2(e.y - player.y, e.x - player.x);
+            const angleDiff = Math.abs(((angFromP - player.targetAngle + Math.PI + (Math.PI * 2)) % (Math.PI * 2)) - Math.PI);
+
+            if (dist < 600 && angleDiff < 0.3) {
+                for (let i = 0; i < 5; i++) {
+                    spawnShield(state, e.x + (Math.random() - 0.5) * 40, e.y + (Math.random() - 0.5) * 40);
+                }
+                e.shieldCd = Date.now() + 7000;
+            }
+        }
+
+        // Jitter
+        e.x += (Math.random() - 0.5) * 1;
+        e.y += (Math.random() - 0.5) * 1;
 
         // --- WALL COLLISION CHECK ---
         const nextX = e.x + vx;
@@ -464,84 +994,115 @@ export function updateEnemies(state: GameState) {
             e.x = nextX;
             e.y = nextY;
         } else {
-            // Hit Wall
-            // Attempt Slide
-            if (isInMap(nextX, e.y)) {
-                e.x = nextX;
-                e.y += (Math.random() - 0.5) * 2; // Shake
-            } else if (isInMap(e.x, nextY)) {
-                e.y = nextY;
-                e.x += (Math.random() - 0.5) * 2;
+            // REAL SNITCH IMMUNITY
+            if (e.shape === 'snitch' && e.rareReal) {
+                const nearestCenterPos = ARENA_CENTERS.reduce((best, center) => {
+                    const distToCenter = Math.hypot(e.x - center.x, e.y - center.y);
+                    return distToCenter < Math.hypot(e.x - best.x, e.y - best.y) ? center : best;
+                }, ARENA_CENTERS[0]);
+                const angToCenter = Math.atan2(nearestCenterPos.y - e.y, nearestCenterPos.x - e.x);
+                e.x += Math.cos(angToCenter) * 50;
+                e.y += Math.sin(angToCenter) * 50;
             } else {
-                // Bounce / Stop
-                e.x -= vx * 0.5;
-                e.y -= vy * 0.5;
+                // Hit Wall - INSTANT DEATH
+                e.dead = true;
+                e.hp = 0;
+                state.killCount++;
+                state.score += 1;
+                spawnParticles(state, e.x, e.y, e.palette[0], 20);
+
+                if (e.isRare && e.rareReal) {
+                    playSfx('rare-kill');
+                    state.rareRewardActive = true;
+                    state.rareSpawnActive = false;
+                    state.player.xp.current += state.player.xp.needed;
+                } else {
+                    let xpGain = state.player.xp_per_kill.base;
+                    if (e.xpRewardMult !== undefined) xpGain *= e.xpRewardMult;
+                    else if (e.isElite) xpGain *= 12;
+                    state.player.xp.current += xpGain;
+                }
+
+                while (state.player.xp.current >= state.player.xp.needed) {
+                    state.player.xp.current -= state.player.xp.needed;
+                    state.player.level++;
+                    state.player.xp.needed *= 1.10;
+                    if (onEvent) onEvent('level_up');
+                }
+                return;
             }
         }
 
         // Visual Updates
-        const pulseSpeed = (Math.PI * 2) / pulseDef.interval;
-        e.pulsePhase = (e.pulsePhase + pulseSpeed) % (Math.PI * 2);
+        if (e.shape !== 'pentagon' || e.summonState === 2) {
+            const pulseSpeed = (Math.PI * 2) / pulseDef.interval;
+            e.pulsePhase = (e.pulsePhase + pulseSpeed) % (Math.PI * 2);
+        }
         e.rotationPhase = (e.rotationPhase || 0) + 0.01;
 
-        // --- GLOBAL DEATH SAFETY ---
         if (e.hp <= 0 && !e.dead) {
             e.dead = true;
         }
     });
 }
 
-function spawnEnemy(state: GameState, isBoss: boolean = false) {
+export function spawnEnemy(state: GameState, x?: number, y?: number, shape?: ShapeType, isBoss: boolean = false) {
     const { player, gameTime } = state;
     const { shapeDef, activeColors } = getProgressionParams(gameTime);
 
-    // NEW LOGIC: Spawn in Player's Arena Only
+    // Use provided shape OR respect game progression (shapeDef unlocks based on game time)
+    const chosenShape: ShapeType = shape || shapeDef.type as ShapeType;
+
+    // If specific position provided (cheat command), use it; otherwise calculate spawn location
+    let spawnPos = (x !== undefined && y !== undefined) ? { x, y } : { x: player.x, y: player.y };
     const playerArena = getArenaIndex(player.x, player.y);
-    let spawnPos = { x: player.x, y: player.y };
     let found = false;
 
-    // Try Ring around player valid in arena
-    for (let i = 0; i < 8; i++) {
-        const a = Math.random() * 6.28;
-        const d = (isBoss ? 1500 : 1200) + Math.random() * 300;
-        const tx = player.x + Math.cos(a) * d;
-        const ty = player.y + Math.sin(a) * d;
+    // Only calculate spawn position if not provided
+    if (x === undefined || y === undefined) {
+        // Try Ring around player valid in arena
+        for (let i = 0; i < 8; i++) {
+            const a = Math.random() * 6.28;
+            const d = (isBoss ? 1500 : 1200) + Math.random() * 300;
+            const tx = player.x + Math.cos(a) * d;
+            const ty = player.y + Math.sin(a) * d;
 
-        if (isInMap(tx, ty) && getArenaIndex(tx, ty) === playerArena) {
-            spawnPos = { x: tx, y: ty };
-            found = true;
-            break;
+            if (isInMap(tx, ty) && getArenaIndex(tx, ty) === playerArena) {
+                spawnPos = { x: tx, y: ty };
+                found = true;
+                break;
+            }
+        }
+
+        // Fallback: Random spot in Arena
+        if (!found) {
+            spawnPos = getRandomPositionInArena(playerArena);
         }
     }
 
-    // Fallback: Random spot in Arena
-    if (!found) {
-        spawnPos = getRandomPositionInArena(playerArena);
-    }
 
-    const { x, y } = spawnPos;
 
     // Scaling
     const cycleCount = Math.floor(gameTime / 300);
-    const hpMult = Math.pow(1.2, cycleCount) * shapeDef.hpMult;
-    const size = isBoss ? 60 : (20 * shapeDef.sizeMult);
+    const hpMult = Math.pow(1.2, cycleCount) * SHAPE_DEFS[chosenShape].hpMult;
+    const size = isBoss ? 60 : (20 * SHAPE_DEFS[chosenShape].sizeMult);
     const minutes = gameTime / 60;
     const baseHp = 50 * Math.pow(1.15, Math.floor(minutes));
     const hp = (isBoss ? baseHp * 15 : baseHp) * hpMult;
 
     const newEnemy: Enemy = {
         id: Math.random(),
-        type: (isBoss ? 'boss' : shapeDef.type) as 'boss' | ShapeType,
-        x, y,
+        type: (isBoss ? 'boss' : chosenShape) as 'boss' | ShapeType,
+        x: spawnPos.x, y: spawnPos.y,
         size,
         hp,
         maxHp: hp,
-        spd: 2.4 * shapeDef.speedMult,
+        spd: 2.4 * SHAPE_DEFS[chosenShape].speedMult,
         boss: isBoss,
         bossType: isBoss ? Math.floor(Math.random() * 2) : 0,
         bossAttackPattern: 0,
         dead: false,
-        shape: shapeDef.type as ShapeType,
+        shape: chosenShape as ShapeType,
         shellStage: 2,
         palette: activeColors,
         pulsePhase: 0,
@@ -590,7 +1151,7 @@ export function spawnRareEnemy(state: GameState) {
         boss: false, bossType: 0, bossAttackPattern: 0, lastAttack: 0, dead: false,
         shape: 'snitch', shellStage: 2, palette: ['#FACC15', '#EAB308', '#CA8A04'],
         pulsePhase: 0, rotationPhase: 0, timer: Date.now(),
-        isRare: true, size: 25, rarePhase: 0, rareTimer: state.gameTime, rareIntent: 0, rareReal: true, canBlock: false,
+        isRare: true, size: 18, rarePhase: 0, rareTimer: state.gameTime, rareIntent: 0, rareReal: true, canBlock: false,
         trails: [], longTrail: [{ x, y }], wobblePhase: 0,
         knockback: { x: 0, y: 0 },
         glitchPhase: 0, crackPhase: 0, particleOrbit: 0,
@@ -613,8 +1174,17 @@ function manageRareSpawnCycles(state: GameState) {
     }
 }
 
-function spawnMinion(state: GameState, parent: Enemy) {
-    const minionHp = parent.maxHp * 0.15;
+// Updated signature to support Strong Minions
+function spawnMinion(state: GameState, parent: Enemy, isStrong: boolean = false) {
+    // Normal Minion: 5% of Mother HP
+    // Strong Minion: 10% of Mother HP
+    const hpRatio = isStrong ? 0.10 : 0.05;
+    const minionHp = parent.maxHp * hpRatio;
+
+    // XP: 15% of Mother's XP
+    const motherMult = parent.xpRewardMult || (parent.isElite ? 12 : 1);
+    const minionXpMult = motherMult * 0.15;
+
     const newMinion: Enemy = {
         id: Math.random(),
         type: 'minion',
@@ -622,7 +1192,7 @@ function spawnMinion(state: GameState, parent: Enemy) {
         size: 12,
         hp: minionHp,
         maxHp: minionHp,
-        spd: 6, // Fast
+        spd: 5.5, // Rocket speed
         boss: false, bossType: 0, bossAttackPattern: 0, lastAttack: 0, dead: false,
         shape: 'minion',
         shellStage: 0,
@@ -631,7 +1201,18 @@ function spawnMinion(state: GameState, parent: Enemy) {
         rotationPhase: Math.random() * 6.28,
         spawnedAt: state.gameTime,
         knockback: { x: 0, y: 0 },
-        isRare: false
+        isRare: false,
+
+        // Guard behavior
+        parentId: parent.id,
+        minionState: 0, // Orbit
+        orbitAngle: Math.random() * Math.PI * 2,
+        orbitDistance: 160 + Math.random() * 80,
+
+        // Custom Stats
+        stunOnHit: isStrong,
+        xpRewardMult: minionXpMult,
+        customCollisionDmg: isStrong ? (parent.maxHp * 0.03) : (parent.maxHp * 0.15)
     };
     state.enemies.push(newMinion);
 }
@@ -653,7 +1234,140 @@ function spawnShield(state: GameState, x: number, y: number) {
         rotationPhase: Math.random() * 6.28,
         spawnedAt: state.gameTime,
         knockback: { x: 0, y: 0 },
-        isRare: false
+        isRare: false,
+        isNeutral: true // Tag as neutral for auto-aim (ignored)
     };
     state.enemies.push(shield);
+}
+
+function scanForMerges(state: GameState) {
+    const { enemies, spatialGrid } = state;
+
+    for (const e of enemies) {
+        if (e.dead || e.boss || e.isElite || e.isRare || e.mergeState) continue;
+
+        // Check merge cooldown
+        if (e.mergeCooldown && state.gameTime < e.mergeCooldown) continue;
+
+        // Query neighbors in 100px radius (50% reduction)
+        const neighbors = spatialGrid.query(e.x, e.y, 100);
+
+        // Filter: Same shape, not merging, not elite, not boss, not on cooldown, not neutral
+        const candidates = neighbors.filter(n =>
+            n.shape === e.shape &&
+            !n.dead && !n.boss && !n.isElite && !n.isRare && !n.mergeState && !n.isNeutral &&
+            n.shape !== 'minion' && // Fix: Minions (Summoners) cannot merge
+            (!n.mergeCooldown || state.gameTime >= n.mergeCooldown)
+        );
+
+        const threshold = e.shape === 'pentagon' ? 5 : 10;
+
+        if (candidates.length >= threshold) {
+            // FOUND CLUSTER!
+            const cluster = candidates.slice(0, threshold);
+            const mergeId = `merge_${Math.random()}`;
+
+            cluster.forEach((c, index) => {
+                c.mergeState = 'warming_up';
+                c.mergeId = mergeId;
+                c.mergeTimer = state.gameTime + 3; // 3 seconds from now
+                c.mergeHost = index === 0;
+                c.mergeCooldown = undefined; // Clear cooldown when joining new merge
+            });
+
+            playSfx('merge-start');
+            return;
+        }
+    }
+}
+
+function manageMerges(state: GameState) {
+    const { enemies } = state;
+    const mergeGroups = new Map<string, Enemy[]>();
+
+    enemies.forEach(e => {
+        if (e.mergeState === 'warming_up' && e.mergeId && !e.dead) { // Only include alive enemies
+            if (!mergeGroups.has(e.mergeId)) mergeGroups.set(e.mergeId, []);
+            mergeGroups.get(e.mergeId)!.push(e);
+        }
+    });
+
+    mergeGroups.forEach((group, mergeId) => {
+        // Filter out dead enemies
+        const aliveEnemies = group.filter(e => !e.dead && e.hp > 0);
+
+        // Determine threshold based on shape of first member
+        const sample = group[0];
+        const threshold = (sample && sample.shape === 'pentagon') ? 5 : 10;
+
+        if (aliveEnemies.length < threshold) {
+            // Try to recruit new enemies to replace dead ones
+            const firstAlive = aliveEnemies[0];
+            if (firstAlive) {
+                const nearby = state.spatialGrid.query(firstAlive.x, firstAlive.y, 100);
+                const recruits = nearby.filter(n =>
+                    n.shape === firstAlive.shape &&
+                    !n.dead && !n.boss && !n.isElite && !n.isRare && !n.mergeState
+                ).slice(0, threshold - aliveEnemies.length);
+
+                // Add recruits to merge
+                recruits.forEach((r) => {
+                    r.mergeState = 'warming_up';
+                    r.mergeId = mergeId;
+                    r.mergeTimer = firstAlive.mergeTimer; // Same timer
+                    r.mergeHost = false; // New recruits aren't host
+                    r.mergeCooldown = undefined; // Clear cooldown when joining merge
+                });
+
+                // Update alive count
+                aliveEnemies.push(...recruits);
+            }
+
+            // If still not enough after recruitment, cancel
+            if (aliveEnemies.length < threshold) {
+                group.forEach(e => {
+                    e.mergeState = 'none';
+                    e.mergeTimer = 0;
+                    e.mergeId = undefined;
+                    e.mergeHost = false;
+                    e.mergeCooldown = state.gameTime + 2; // 2s cooldown before trying again
+                });
+                return;
+            }
+        }
+
+        const first = aliveEnemies[0];
+        if (state.gameTime >= (first.mergeTimer || 0)) {
+            // SUCCESS
+            const host = aliveEnemies.find(e => e.mergeHost); // Use alive enemies only
+            if (!host) return;
+
+            // Upgrade Host
+            host.mergeState = 'none';
+            host.isElite = true;
+            host.eliteState = 0;
+            host.spawnedAt = state.gameTime; // Reset age for Elites
+            host.lastAttack = Date.now() + 3000; // 15s Cooldown for first spawn (12s base + 3s offset)
+            host.size *= 1.2; // Significantly reduced scale from 2.5 (Reduce by "200%" relative to growth)
+
+            // Stats Multiplier: 12x for standard (10 merge), 6x for Pentagon (5 merge)
+            const mult = host.shape === 'pentagon' ? 6 : 12;
+            host.hp *= mult;
+            host.maxHp *= mult;
+            host.hp = host.maxHp;
+
+            // Set XP Multiplier
+            host.xpRewardMult = mult;
+
+            // Despawn others (only from alive enemies)
+            aliveEnemies.forEach(e => {
+                if (e !== host) {
+                    e.dead = true;
+                    e.hp = 0;
+                }
+            });
+
+            playSfx('merge-complete');
+        }
+    });
 }

@@ -114,6 +114,30 @@ export const HUD: React.FC<HUDProps> = ({ gameState, upgradeChoices, onUpgradeSe
                                 </span>
                             </div>
                         )}
+
+                        {/* STUN INDICATOR (Top Left Stack) */}
+                        {player.stunnedUntil && Date.now() < player.stunnedUntil && (
+                            <div style={{
+                                marginTop: 10,
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 6,
+                                padding: '2px 8px',
+                                background: 'rgba(239, 68, 68, 0.1)',
+                                border: '1px solid rgba(239, 68, 68, 0.5)',
+                                borderRadius: 4,
+                                animation: 'pulse 0.2s infinite',
+                                boxShadow: '0 0 10px rgba(239, 68, 68, 0.2)'
+                            }}>
+                                <div style={{
+                                    width: 8, height: 8, background: '#EF4444',
+                                    borderRadius: '50%', boxShadow: '0 0 8px #EF4444'
+                                }} />
+                                <span style={{ color: '#EF4444', fontSize: 10, fontWeight: 900, letterSpacing: 1 }}>
+                                    ENGINE DISABLED ({Math.ceil((player.stunnedUntil - Date.now()) / 1000)}s)
+                                </span>
+                            </div>
+                        )}
                     </div>
 
                     {/* Boss Warning */}
@@ -126,7 +150,6 @@ export const HUD: React.FC<HUDProps> = ({ gameState, upgradeChoices, onUpgradeSe
                         </div>
                     )}
 
-                    {/* Snitch Active Warning */}
                     {showSnitchAlert && (
                         <div className="glitch-text" style={{
                             position: 'absolute', top: 45, right: 15, textAlign: 'right',
@@ -140,6 +163,8 @@ export const HUD: React.FC<HUDProps> = ({ gameState, upgradeChoices, onUpgradeSe
                             </div>
                         </div>
                     )}
+
+
 
                     {/* XP Bar */}
                     <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: 6, background: '#000' }}>
@@ -232,6 +257,7 @@ export const HUD: React.FC<HUDProps> = ({ gameState, upgradeChoices, onUpgradeSe
                             width: `${(player.curHp / maxHp) * 100}%`,
                             height: '100%',
                             background: 'linear-gradient(90deg, #ef4444, #f87171)',
+                            boxShadow: 'none',
                             transition: isHealing ? 'width 0.3s' : 'width 0s' // Instant drop on damage, slow growth on regen
                         }} />
                         <div style={{

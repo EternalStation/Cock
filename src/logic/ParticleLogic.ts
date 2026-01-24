@@ -10,12 +10,12 @@ export interface Particle {
     size: number;
 }
 
-export function spawnParticles(state: GameState, x: number, y: number, color: string | string[], count: number = 8, sizeOverride?: number, lifeOverride?: number) {
+export function spawnParticles(state: GameState, x: number, y: number, color: string | string[], count: number = 8, sizeOverride?: number, lifeOverride?: number, type: 'shard' | 'spark' = 'spark') {
     if (!state.particles) state.particles = [];
 
     for (let i = 0; i < count; i++) {
         const angle = Math.random() * 6.28;
-        const speed = Math.random() * 2 + 1;
+        const speed = type === 'shard' ? (Math.random() * 4 + 2) : (Math.random() * 2 + 1);
 
         let selectedColor = '';
         if (Array.isArray(color)) {
@@ -31,7 +31,8 @@ export function spawnParticles(state: GameState, x: number, y: number, color: st
             vy: Math.sin(angle) * speed,
             life: (lifeOverride || 30) + Math.random() * 20,
             color: selectedColor,
-            size: (sizeOverride || (Math.random() * 3 + 1))
+            size: (sizeOverride || (Math.random() * 3 + 1)),
+            type
         });
     }
 }

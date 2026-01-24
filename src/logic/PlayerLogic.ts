@@ -7,6 +7,11 @@ import { playSfx } from './AudioLogic';
 export function updatePlayer(state: GameState, keys: Record<string, boolean>, onEvent?: (type: string, data?: any) => void) {
     const { player } = state;
 
+    // Track player position history for laser prediction (last 60 frames = ~1 second at 60fps)
+    if (!state.playerPosHistory) state.playerPosHistory = [];
+    state.playerPosHistory.unshift({ x: player.x, y: player.y, timestamp: Date.now() });
+    if (state.playerPosHistory.length > 60) state.playerPosHistory.pop();
+
     // Spawn Animation Logic
     if (state.spawnTimer > 0) {
         state.spawnTimer -= 1 / 60;
@@ -15,10 +20,15 @@ export function updatePlayer(state: GameState, keys: Record<string, boolean>, on
 
     // Movement
     let vx = 0, vy = 0;
-    if (keys['w'] || keys['arrowup']) vy--;
-    if (keys['s'] || keys['arrowdown']) vy++;
-    if (keys['a'] || keys['arrowleft']) vx--;
-    if (keys['d'] || keys['arrowright']) vx++;
+
+    const isStunned = player.stunnedUntil && Date.now() < player.stunnedUntil;
+
+    if (!isStunned) {
+        if (keys['w'] || keys['arrowup']) vy--;
+        if (keys['s'] || keys['arrowdown']) vy++;
+        if (keys['a'] || keys['arrowleft']) vx--;
+        if (keys['d'] || keys['arrowright']) vx++;
+    }
 
     if (vx !== 0 || vy !== 0) {
         // Normalize
@@ -76,7 +86,9 @@ export function updatePlayer(state: GameState, keys: Record<string, boolean>, on
             player.knockback.y = Math.sin(reflectDir) * 37.5;
 
             const maxHp = calcStat(player.hp);
-            const wallDmg = maxHp * 0.10;
+            const rawWallDmg = maxHp * 0.10;
+            const armor = calcStat(player.arm);
+            const wallDmg = Math.max(0, rawWallDmg - armor);
             player.curHp -= wallDmg;
             player.damageTaken += wallDmg;
             playSfx('wall-shock');
@@ -114,11 +126,11 @@ export function updatePlayer(state: GameState, keys: Record<string, boolean>, on
     const regenAmount = calcStat(player.reg) / 60;
     player.curHp = Math.min(maxHp, player.curHp + regenAmount);
 
-    // Auto-Aim Logic
+    // Auto-Aim Logic (skip barrels - they're neutral)
     let nearest: Enemy | null = null;
     let minDist = 800;
     state.enemies.forEach((e: Enemy) => {
-        if (e.dead) return;
+        if (e.dead || e.isNeutral) return; // Skip dead enemies and neutral barrels
         const d = Math.hypot(e.x - player.x, e.y - player.y);
         if (d < minDist) {
             minDist = d;
@@ -141,26 +153,48 @@ export function updatePlayer(state: GameState, keys: Record<string, boolean>, on
         const contactDist = e.size + 15;
 
         if (dToE < contactDist) {
+            // Check collision cooldown (prevent damage every frame)
+            const now = Date.now();
             // Apply Contact Damage to Player
-            const rawDmg = 5;
+            // Default: 15% of enemy max HP, or custom if set. Neutral objects (barrels) deal 0 dmg.
+            const rawDmg = e.isNeutral ? 0 : (e.customCollisionDmg !== undefined ? e.customCollisionDmg : e.maxHp * 0.15);
             const armor = calcStat(player.arm);
-            const finalDmg = Math.max(1, rawDmg - armor);
+            const finalDmg = Math.max(0, rawDmg - armor);
 
-            player.curHp -= finalDmg;
-            player.damageTaken += finalDmg;
-            playSfx('hit');
+            if (finalDmg > 0) {
+                player.curHp -= finalDmg;
+                player.damageTaken += finalDmg;
+            }
+
+            // Stun Logic
+            if (e.stunOnHit) {
+                const currentStunEnd = Math.max(Date.now(), player.stunnedUntil || 0);
+                player.stunnedUntil = currentStunEnd + 1000; // Stack 1 second
+                playSfx('stun-disrupt'); // "Engine Disabled" sound
+            } else {
+                playSfx('hit');
+            }
 
             if (onEvent) onEvent('player_hit', { dmg: finalDmg });
 
-            // Contact Death for Standard Enemies
-            if (!e.boss && !e.isRare) {
+            // Set collision cooldown for this specific enemy
+            e.lastCollisionDamage = now;
+
+
+            // Contact Death for ALL Enemies (only if not on cooldown)
+            if (!e.lastCollisionDamage || now - e.lastCollisionDamage <= 10) {
                 e.dead = true;
                 e.hp = 0;
                 state.killCount++;
                 state.score += 1;
 
-                // XP Reward
-                const xpGain = player.xp_per_kill.base;
+                // XP Reward - 12x for elites
+                let xpGain = player.xp_per_kill.base;
+                if (e.xpRewardMult !== undefined) {
+                    xpGain *= e.xpRewardMult;
+                } else if (e.isElite) {
+                    xpGain *= 12; // Elite = 12x XP
+                }
                 player.xp.current += xpGain;
                 while (player.xp.current >= player.xp.needed) {
                     player.xp.current -= player.xp.needed;

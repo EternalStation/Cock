@@ -88,7 +88,7 @@ export const Minimap: React.FC<MinimapProps> = ({ gameState }) => {
             border: '2px solid rgba(100, 116, 139, 0.5)', // Semi-transparent border
             boxShadow: '0 0 20px rgba(0,0,0,0.2)',
             backgroundColor: 'transparent',
-            zIndex: 50
+            zIndex: 5 // Behind upgrade menu
         }}>
             <canvas ref={canvasRef} width={150} height={150} />
         </div>

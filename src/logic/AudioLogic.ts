@@ -372,7 +372,7 @@ export async function playUpgradeSfx(rarityId: string) {
     }
 }
 
-export function playSfx(type: 'shoot' | 'hit' | 'level' | 'hurt' | 'boss-fire' | 'rare-spawn' | 'rare-kill' | 'rare-despawn' | 'spawn' | 'smoke-puff' | 'wall-shock') {
+export function playSfx(type: 'shoot' | 'hit' | 'level' | 'hurt' | 'boss-fire' | 'rare-spawn' | 'rare-kill' | 'rare-despawn' | 'spawn' | 'smoke-puff' | 'wall-shock' | 'merge-start' | 'merge-complete' | 'stun-disrupt' | 'warning') {
     if (audioCtx.state === 'suspended') {
         audioCtx.resume().catch(() => { });
         return;
@@ -593,6 +593,82 @@ export function playSfx(type: 'shoot' | 'hit' | 'level' | 'hurt' | 'boss-fire' |
         osc2.start(t);
         osc1.stop(t + 0.3);
         osc2.stop(t + 0.3);
+    }
+    else if (type === 'merge-start') {
+        const t = audioCtx.currentTime;
+        const osc = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(100, t);
+        osc.frequency.linearRampToValueAtTime(150, t + 0.5);
+        g.gain.setValueAtTime(0, t);
+        g.gain.linearRampToValueAtTime(0.2, t + 0.1);
+        g.gain.linearRampToValueAtTime(0, t + 0.5);
+        osc.connect(g);
+        g.connect(masterSfxGain!);
+        osc.start(t);
+        osc.stop(t + 0.5);
+    }
+    else if (type === 'warning') {
+        const t = audioCtx.currentTime;
+        const count = 3;
+        for (let i = 0; i < count; i++) {
+            const osc = audioCtx.createOscillator();
+            const g = audioCtx.createGain();
+            const startT = t + i * 0.4;
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(880, startT);
+            osc.frequency.exponentialRampToValueAtTime(440, startT + 0.2);
+            g.gain.setValueAtTime(0, startT);
+            g.gain.linearRampToValueAtTime(0.3 * sfxVolume, startT + 0.05);
+            g.gain.linearRampToValueAtTime(0, startT + 0.3);
+            osc.connect(g);
+            g.connect(masterSfxGain!);
+            osc.start(startT);
+            osc.stop(startT + 0.3);
+        }
+    }
+    else if (type === 'merge-complete') {
+        const t = audioCtx.currentTime;
+        const osc = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(220, t);
+        osc.frequency.exponentialRampToValueAtTime(880, t + 0.5);
+        g.gain.setValueAtTime(0.1, t);
+        g.gain.linearRampToValueAtTime(0, t + 0.6);
+        osc.connect(g);
+        g.connect(masterSfxGain!);
+        osc.start(t);
+        osc.stop(t + 0.6);
+    }
+    else if (type === 'stun-disrupt') {
+        // "Engine Disabled" - Electrical power down + static
+        const t = audioCtx.currentTime;
+
+        // 1. Power Down Sweep (Sine)
+        const osc1 = audioCtx.createOscillator();
+        const g1 = audioCtx.createGain();
+        osc1.type = 'sine';
+        osc1.frequency.setValueAtTime(800, t);
+        osc1.frequency.exponentialRampToValueAtTime(100, t + 0.5); // Rapid pitch drop
+        g1.gain.setValueAtTime(0.2, t);
+        g1.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+        osc1.connect(g1); g1.connect(masterSfxGain!);
+        osc1.start(t); osc1.stop(t + 0.5);
+
+        // 2. Static Burst (Noise)
+        const count = 5;
+        for (let i = 0; i < count; i++) {
+            const noise = audioCtx.createOscillator();
+            const ng = audioCtx.createGain();
+            noise.type = 'sawtooth';
+            noise.frequency.setValueAtTime(50 + Math.random() * 200, t);
+            ng.gain.setValueAtTime(0.05, t);
+            ng.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+            noise.connect(ng); ng.connect(masterSfxGain!);
+            noise.start(t); noise.stop(t + 0.3);
+        }
     }
 }
 
