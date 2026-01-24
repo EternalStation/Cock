@@ -7,9 +7,9 @@ import { updateProjectiles, spawnBullet } from '../logic/ProjectileLogic';
 import { updateBossBehavior } from '../logic/BossLogic';
 import { spawnUpgrades, applyUpgrade } from '../logic/UpgradeLogic';
 import { calcStat } from '../logic/MathUtils';
-import { playSfx, startBGM, updateBGMPhase, duckMusic, restoreMusic, pauseMusic, resumeMusic, startBossAmbience, stopBossAmbience } from '../logic/AudioLogic';
 import { updateParticles } from '../logic/ParticleLogic';
-import { ARENA_CENTERS, ARENA_RADIUS } from '../logic/MapLogic';
+import { ARENA_CENTERS, ARENA_RADIUS, PORTALS, getHexWallLine } from '../logic/MapLogic';
+import { playSfx, startBGM, updateBGMPhase, duckMusic, restoreMusic, pauseMusic, resumeMusic, startBossAmbience, stopBossAmbience, startPortalAmbience, stopPortalAmbience } from '../logic/AudioLogic';
 
 export function useGameLoop(gameStarted: boolean) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -96,6 +96,13 @@ export function useGameLoop(gameStarted: boolean) {
                     const dist = 400 + Math.random() * 100;
                     spawnEnemy(gameState.current, player.x + Math.cos(angle) * dist, player.y + Math.sin(angle) * dist, 'pentagon');
                 }
+                cheatBuffer = '';
+            }
+
+            if (cheatBuffer.endsWith('por')) {
+                // Trigger Portal Sequence (10s warning then open)
+                gameState.current.portalState = 'closed';
+                gameState.current.portalTimer = 10.1; // Slightly above 10 to ensure clean transition
                 cheatBuffer = '';
             }
 
@@ -220,6 +227,119 @@ export function useGameLoop(gameStarted: boolean) {
                     updateEnemies(state, eventHandler);
 
                     updateProjectiles(state, eventHandler);
+
+                    // --- PORTAL LOGIC ---
+                    // 1. Timer & State Management
+                    if (state.portalState !== 'transferring') {
+                        state.portalTimer -= FIXED_STEP;
+
+                        // State Transitions
+                        if (state.portalState === 'closed') {
+                            if (state.portalTimer <= 10) {
+                                state.portalState = 'warn';
+                                playSfx('warning'); // Alert sound
+                            }
+                        } else if (state.portalState === 'warn') {
+                            if (state.portalTimer <= 0) {
+                                state.portalState = 'open';
+                                state.portalTimer = state.portalOpenDuration; // 10s open
+                                startPortalAmbience();
+                                playSfx('spawn'); // Open sound
+                            }
+                        } else if (state.portalState === 'open') {
+                            if (state.portalTimer <= 0) {
+                                state.portalState = 'closed';
+                                state.portalTimer = 240; // Reset cycle (4 mins)
+                                stopPortalAmbience();
+                            } else {
+                                // Check Collisions
+                                const activePortals = PORTALS.filter(p => p.from === state.currentArena);
+                                const currentArenaCenter = ARENA_CENTERS.find(c => c.id === state.currentArena) || ARENA_CENTERS[0];
+
+                                for (const p of activePortals) {
+                                    const wall = getHexWallLine(currentArenaCenter.x, currentArenaCenter.y, ARENA_RADIUS, p.wall);
+
+                                    // Point-Line Distance
+                                    // Line: P1(wall.x1, y1) to P2(wall.x2, y2)
+                                    // Player: P0(state.player.x, y.y)
+                                    // Dist = |(y2-y1)x0 - (x2-x1)y0 + x2y1 - y2x1| / Length
+                                    const num = Math.abs((wall.y2 - wall.y1) * state.player.x - (wall.x2 - wall.x1) * state.player.y + wall.x2 * wall.y1 - wall.y2 * wall.x1);
+                                    const den = Math.hypot(wall.y2 - wall.y1, wall.x2 - wall.x1);
+                                    const dist = num / den;
+
+                                    // If close to line (within 50px) AND within segment bounds (approx check via radius from center of wall)
+                                    // Wall Center
+                                    const wcx = (wall.x1 + wall.x2) / 2;
+                                    const wcy = (wall.y1 + wall.y2) / 2;
+                                    const distToCenter = Math.hypot(state.player.x - wcx, state.player.y - wcy);
+
+                                    // Length of wall segment is approx R (actually R for flat sides?)
+                                    const wallLen = den;
+
+                                    if (dist < 100 && distToCenter < wallLen / 2 + 50) {
+                                        // ENTER PORTAL
+                                        state.portalState = 'transferring';
+                                        state.transferTimer = 3.0;
+                                        state.nextArenaId = p.to;
+                                        playSfx('rare-despawn'); // Warp sound
+                                        stopPortalAmbience();
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        // TRANSFERRING Logic
+                        state.transferTimer -= FIXED_STEP;
+                        if (state.transferTimer <= 0) {
+                            // EXECUTE TRANSFER
+                            if (state.nextArenaId !== null) {
+                                const oldArena = state.currentArena;
+                                const newArena = state.nextArenaId;
+
+                                // 1. Move Player
+                                // Find where to spawn in new arena?
+                                // Let's spawn them at the "Entry" portal (Reverse path)?
+                                const destCenter = ARENA_CENTERS.find(c => c.id === newArena) || ARENA_CENTERS[0];
+                                const reversePortal = PORTALS.find(p => p.from === newArena && p.to === oldArena);
+
+                                if (reversePortal) {
+                                    // Spawn near the "Home" portal of the new arena, slightly inward
+                                    const wall = getHexWallLine(destCenter.x, destCenter.y, ARENA_RADIUS, reversePortal.wall);
+                                    const wcx = (wall.x1 + wall.x2) / 2;
+                                    const wcy = (wall.y1 + wall.y2) / 2;
+
+                                    // Move inward along normal (-nx, -ny) by 300px
+                                    state.player.x = wcx - wall.nx * 300;
+                                    state.player.y = wcy - wall.ny * 300;
+
+                                    // Jump Out Effect (High Decay Knockback)
+                                    state.player.knockback = {
+                                        x: -wall.nx * 80, // Strong impulse inward
+                                        y: -wall.ny * 80
+                                    }
+                                } else {
+                                    // Fallback Center
+                                    state.player.x = destCenter.x;
+                                    state.player.y = destCenter.y;
+                                }
+                                state.currentArena = newArena;
+                                state.nextArenaId = null;
+
+                                // 2. Despawn Enemies
+                                state.enemies = []; // "all enemies on previous arene despans"
+                                state.bullets = []; // Clear bullets too for safety
+                                state.drones.forEach(d => { d.x = state.player.x; d.y = state.player.y; });
+
+                                // 3. Reset Portal State
+                                state.portalState = 'closed';
+                                state.portalTimer = 240;
+                                state.spawnTimer = 3.0; // Re-trigger spawn animation
+
+                                playSfx('spawn'); // Arrival sound
+                            }
+                        }
+                    }
 
                     // --- COMBAT CLEANUP ---
                     state.enemies = state.enemies.filter(e => !e.dead);
@@ -470,6 +590,43 @@ function renderGame(ctx: CanvasRenderingContext2D, state: GameState) {
                 ctx.stroke();
             });
             ctx.restore();
+
+            // --- PORTAL RENDERING ---
+            if (state.portalState !== 'closed') {
+                const activePortals = PORTALS.filter(p => p.from === state.currentArena);
+                const center = ARENA_CENTERS.find(c => c.id === state.currentArena);
+
+                if (center) {
+                    activePortals.forEach(p => {
+                        const wall = getHexWallLine(center.x, center.y, ARENA_RADIUS, p.wall);
+
+                        ctx.save();
+                        // Glow
+                        ctx.shadowBlur = 20;
+                        ctx.shadowColor = p.color;
+                        ctx.strokeStyle = p.color;
+                        ctx.lineWidth = 10;
+                        ctx.lineCap = 'round';
+
+                        // Pulse opacity
+                        if (state.portalState === 'warn') {
+                            ctx.globalAlpha = 0.5 + Math.sin(state.gameTime * 10) * 0.5;
+                            ctx.setLineDash([50, 50]); // Warning Dash
+                        } else {
+                            // OPEN
+                            ctx.globalAlpha = 1.0;
+                            ctx.lineWidth = 15 + Math.sin(state.gameTime * 20) * 5; // Energy pulse breadth
+                        }
+
+                        ctx.beginPath();
+                        ctx.moveTo(wall.x1, wall.y1);
+                        ctx.lineTo(wall.x2, wall.y2);
+                        ctx.stroke();
+
+                        ctx.restore();
+                    });
+                }
+            }
         };
 
         // 1. STABLE LAYER (Background)
@@ -636,6 +793,71 @@ function renderGame(ctx: CanvasRenderingContext2D, state: GameState) {
             ctx.fill();
         });
 
+
+        // --- PORTAL UI / OVERLAYS ---
+        // 1. Transfer Darken
+        if (state.portalState === 'transferring') {
+            ctx.save();
+            // Reset transforms to draw full screen overlay
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+            // Warp Tunnel Animation
+            // "Creative and beautiful"
+            // Center of screen
+            const cx = width / 2;
+            const cy = height / 2;
+
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(0, 0, width, height);
+
+            // Timer = 3.0 -> 0.0
+            // Progress = 0 -> 1
+            // const t = (3.0 - state.transferTimer) / 3.0; unused
+            // const speed = t * t * 20; // Accelerating unused
+
+            ctx.save();
+            ctx.translate(cx, cy);
+
+            // Rotating Hexagon Tunnel
+            const color = '#22d3ee'; // Cyan portal color
+            const baseSize = 50;
+
+            for (let i = 0; i < 20; i++) {
+                // Perspective depth
+                const z = (state.gameTime * 2 + i * 0.5) % 10; // Moving forward
+                const scale = Math.pow(1.5, z); // Exponential scale
+                const alpha = Math.max(0, 1 - z / 10);
+
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 2 + scale;
+                ctx.globalAlpha = alpha;
+
+                // Rotation based on depth
+                ctx.rotate(state.gameTime + i * 0.1);
+
+                ctx.beginPath();
+                for (let j = 0; j < 6; j++) {
+                    const ang = Math.PI / 3 * j;
+                    const r = baseSize * scale;
+                    if (j === 0) ctx.moveTo(r * Math.cos(ang), r * Math.sin(ang));
+                    else ctx.lineTo(r * Math.cos(ang), r * Math.sin(ang));
+                }
+                ctx.closePath();
+                ctx.stroke();
+
+                // Reset rotation for next
+                ctx.rotate(-(state.gameTime + i * 0.1));
+            }
+
+            // Flash at end
+            if (state.transferTimer < 0.2) {
+                ctx.fillStyle = '#FFFFFF';
+                ctx.globalAlpha = (0.2 - state.transferTimer) / 0.2;
+                ctx.fillRect(-cx, -cy, width, height);
+            }
+
+            ctx.restore();
+        }
 
         // Snitch Trails (Breadcrumbs) - Draw BEHIND enemies
         enemies.forEach(e => {

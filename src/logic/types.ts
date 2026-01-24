@@ -251,4 +251,12 @@ export interface GameState {
     bossPresence: number; // 0 to 1 smooth transition for boss effects
     smokeBlindTime?: number; // Timestamp for full-screen white fog effect
     spatialGrid: import('./SpatialGrid').SpatialGrid;
+
+    // Portal / Multiverse Props
+    currentArena: number; // ID of the arena the player is currently in
+    portalState: 'closed' | 'warn' | 'open' | 'transferring';
+    portalTimer: number; // Cycles every 4 minutes (240s)
+    portalOpenDuration: number; // 10s
+    transferTimer: number; // 3s delay during teleport
+    nextArenaId: number | null; // Destination
 }

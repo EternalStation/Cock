@@ -52,5 +52,13 @@ export const createInitialGameState = (): GameState => ({
     spawnTimer: 3.0, // 3 Second animation
     hasPlayedSpawnSound: false,
     bossPresence: 0,
-    spatialGrid: new SpatialGrid(250) // 250px cells
+    spatialGrid: new SpatialGrid(250), // 250px cells
+
+    // Portal / Arena Defaults
+    currentArena: 0,
+    portalState: 'closed',
+    portalTimer: 240, // 240s = 4 minutes (Cycle)
+    portalOpenDuration: 10, // 10 seconds open
+    transferTimer: 0,
+    nextArenaId: null
 });

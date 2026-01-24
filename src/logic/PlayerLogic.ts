@@ -1,5 +1,5 @@
 import type { GameState, Enemy } from './types';
-import { isInMap, ARENA_CENTERS } from './MapLogic';
+import { isInMap, ARENA_CENTERS, PORTALS, getHexWallLine, ARENA_RADIUS } from './MapLogic';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from './constants';
 import { calcStat } from './MathUtils';
 import { playSfx } from './AudioLogic';
@@ -44,10 +44,16 @@ export function updatePlayer(state: GameState, keys: Record<string, boolean>, on
         const hitboxR = 56;
 
         const checkMove = (tx: number, ty: number) => {
-            if (!isInMap(tx, ty)) return false;
+            // Check if point is inside map OR inside an active portal
+            const valid = isInMap(tx, ty) || isInActivePortal(tx, ty, state);
+            if (!valid) return false;
+
+            // Check hitbox points
             for (let i = 0; i < 6; i++) {
                 const ang = (Math.PI / 3) * i;
-                if (!isInMap(tx + Math.cos(ang) * hitboxR, ty + Math.sin(ang) * hitboxR)) return false;
+                const hx = tx + Math.cos(ang) * hitboxR;
+                const hy = ty + Math.sin(ang) * hitboxR;
+                if (!isInMap(hx, hy) && !isInActivePortal(hx, hy, state)) return false;
             }
             return true;
         };
@@ -159,7 +165,7 @@ export function updatePlayer(state: GameState, keys: Record<string, boolean>, on
             // Default: 15% of enemy max HP, or custom if set. Neutral objects (barrels) deal 0 dmg.
             const rawDmg = e.isNeutral ? 0 : (e.customCollisionDmg !== undefined ? e.customCollisionDmg : e.maxHp * 0.15);
             const armor = calcStat(player.arm);
-            const finalDmg = Math.max(0, rawDmg - armor);
+            const finalDmg = Math.max(1, rawDmg - armor);
 
             if (finalDmg > 0) {
                 player.curHp -= finalDmg;
@@ -211,4 +217,52 @@ export function updatePlayer(state: GameState, keys: Record<string, boolean>, on
             }
         }
     });
+}
+
+// Helper to check if point is inside an active portal trigger zone (ignoring wall collision)
+function isInActivePortal(x: number, y: number, state: GameState): boolean {
+    if (state.portalState !== 'open') return false;
+
+    // Find active portals in current arena
+    const activePortals = PORTALS.filter(p => p.from === state.currentArena);
+    const center = ARENA_CENTERS.find(c => c.id === state.currentArena) || ARENA_CENTERS[0];
+
+    // Check distance to any portal line segment
+    for (const p of activePortals) {
+        const wall = getHexWallLine(center.x, center.y, ARENA_RADIUS, p.wall);
+
+        // Distance from point to line segment
+        const A = x - wall.x1;
+        const B = y - wall.y1;
+        const C = wall.x2 - wall.x1;
+        const D = wall.y2 - wall.y1;
+
+        const dot = A * C + B * D;
+        const lenSq = C * C + D * D;
+        let param = -1;
+        if (lenSq !== 0) param = dot / lenSq;
+
+        let xx, yy;
+
+        if (param < 0) {
+            xx = wall.x1;
+            yy = wall.y1;
+        }
+        else if (param > 1) {
+            xx = wall.x2;
+            yy = wall.y2;
+        }
+        else {
+            xx = wall.x1 + param * C;
+            yy = wall.y1 + param * D;
+        }
+
+        const dx = x - xx;
+        const dy = y - yy;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (dist < 80) return true;
+    }
+
+    return false;
 }

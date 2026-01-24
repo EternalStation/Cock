@@ -228,6 +228,76 @@ export function stopBossAmbience() {
     bossAmbienceGain = null;
 }
 
+// Portal Ambience System
+let portalAmbienceOscs: OscillatorNode[] = [];
+let portalAmbienceGain: GainNode | null = null;
+let isPortalAmbiencePlaying = false;
+
+export function startPortalAmbience() {
+    if (isPortalAmbiencePlaying) return;
+    if (audioCtx.state === 'suspended') {
+        audioCtx.resume().catch(() => { });
+    }
+
+    if (!masterSfxGain) {
+        masterSfxGain = audioCtx.createGain();
+        masterSfxGain.gain.value = sfxVolume;
+        masterSfxGain.connect(audioCtx.destination);
+    }
+
+    isPortalAmbiencePlaying = true;
+    const t = audioCtx.currentTime;
+
+    portalAmbienceGain = audioCtx.createGain();
+    portalAmbienceGain.gain.value = 0;
+    portalAmbienceGain.gain.linearRampToValueAtTime(0.2, t + 1.0); // Fade in
+    portalAmbienceGain.connect(masterSfxGain);
+
+    // Shimmering Cluster (High Pitch)
+    const freqs = [880, 1108, 1320, 1760]; // A5, C#6, E6, A6
+    portalAmbienceOscs = freqs.map((f, i) => {
+        const osc = audioCtx.createOscillator();
+        osc.type = i % 2 === 0 ? 'sine' : 'triangle';
+        osc.frequency.value = f;
+
+        // Detune LFO
+        const lfo = audioCtx.createOscillator();
+        lfo.frequency.value = 4 + Math.random() * 2; // Fast shimmer
+        const lfoGain = audioCtx.createGain();
+        lfoGain.gain.value = 15;
+        lfo.connect(lfoGain);
+        lfoGain.connect(osc.detune);
+        lfo.start(t);
+
+        const oscGain = audioCtx.createGain();
+        oscGain.gain.value = 1 / freqs.length;
+        osc.connect(oscGain);
+        oscGain.connect(portalAmbienceGain!);
+        osc.start(t);
+        return osc;
+    });
+}
+
+export function stopPortalAmbience() {
+    if (!isPortalAmbiencePlaying || !portalAmbienceGain) return;
+
+    isPortalAmbiencePlaying = false;
+    const t = audioCtx.currentTime;
+
+    // Fade out
+    portalAmbienceGain.gain.cancelScheduledValues(t);
+    portalAmbienceGain.gain.setValueAtTime(portalAmbienceGain.gain.value, t);
+    portalAmbienceGain.gain.linearRampToValueAtTime(0, t + 0.5);
+
+    setTimeout(() => {
+        portalAmbienceOscs.forEach(o => {
+            try { o.stop(); } catch (e) { }
+        });
+        portalAmbienceOscs = [];
+    }, 600);
+}
+
+
 export function playShootDing() {
     if (audioCtx.state === 'suspended') return;
 

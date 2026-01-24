@@ -164,6 +164,34 @@ export const HUD: React.FC<HUDProps> = ({ gameState, upgradeChoices, onUpgradeSe
                         </div>
                     )}
 
+                    {/* Portal Alerts */}
+                    {gameState.portalState === 'warn' && (
+                        <div className="glitch-text" style={{
+                            position: 'absolute', top: 85, right: 15, textAlign: 'right',
+                            animation: 'pulse 0.5s infinite alternate'
+                        }}>
+                            <div style={{ color: '#00FFFF', fontWeight: 900, letterSpacing: 1, fontSize: 20 }}>
+                                DIMENSIONAL RIFT OPENING
+                            </div>
+                            <div style={{ color: '#fff', fontWeight: 700, letterSpacing: 2, fontSize: 14, marginTop: 2 }}>
+                                T-MINUS {Math.ceil(gameState.portalTimer)}s
+                            </div>
+                        </div>
+                    )}
+                    {gameState.portalState === 'open' && (
+                        <div className="glitch-text" style={{
+                            position: 'absolute', top: 85, right: 15, textAlign: 'right',
+                            animation: gameState.portalTimer <= 5 ? 'pulse 0.2s infinite' : 'pulse 1s infinite'
+                        }}>
+                            <div style={{ color: gameState.portalTimer <= 5 ? '#FF0000' : '#00FF00', fontWeight: 900, letterSpacing: 1, fontSize: 20 }}>
+                                {gameState.portalTimer <= 5 ? "PORTAL CLOSING" : "PORTAL ACTIVE"}
+                            </div>
+                            <div style={{ color: '#fff', fontWeight: 700, letterSpacing: 2, fontSize: 14, marginTop: 2 }}>
+                                CLOSING IN {Math.ceil(gameState.portalTimer)}s
+                            </div>
+                        </div>
+                    )}
+
 
 
                     {/* XP Bar */}

@@ -1,3 +1,4 @@
+
 export const ARENA_RADIUS = 3750; // Increased by 3x (1250 -> 3750)
 export const MAP_GAP = 400;
 
@@ -19,8 +20,80 @@ export const ARENA_CENTERS = [
 export const SECTOR_NAMES: Record<number, string> = {
     0: "ECONOMIC HEX",
     1: "COMBAT HEX",
-    2: "RESEARCH HEX"
+    2: "DEFENCE HEX" // Changed from Research
 };
+
+// Portal Definitions
+export interface PortalDef {
+    from: number;
+    to: number;
+    wall: number; // Index into wall definitions
+    color: string;
+}
+
+// Wall Indices based on getHexDistToWall normals
+// 0: Right (0, R)
+// 1: Left (180, -R)
+// 2: Bottom Right (60)
+// 3: Top Right (300/-60)
+// 4: Bottom Left (120)
+// 5: Top Left (240/-120)
+
+export const PORTALS: PortalDef[] = [
+    // From Economic (0)
+    { from: 0, to: 1, wall: 5, color: '#FF3333' }, // To Combat (Red) - Top Left Wall (between vertex 5 and 0)
+    { from: 0, to: 2, wall: 0, color: '#3388FF' }, // To Defence (Blue) - Right Wall (between vertex 0 and 1)
+
+    // From Combat (1) - To Economic
+    { from: 1, to: 0, wall: 2, color: '#33FF33' }, // Bottom Right Wall (between vertex 2 and 3)
+    { from: 1, to: 2, wall: 1, color: '#3388FF' }, // To Defence - Top Right Wall (between vertex 1 and 2)
+
+    // From Defence (2) - To Economic
+    { from: 2, to: 0, wall: 3, color: '#33FF33' }, // Top Right Wall (between vertex 3 and 4)
+    { from: 2, to: 1, wall: 4, color: '#FF3333' }, // To Combat - Bottom Left Wall (between vertex 4 and 5)
+];
+
+// Helper to get Wall Line Segment (Visual Match)
+// Vertices are at i * 60 degrees (0, 60, 120...)
+// Wall i connects Vertex i and Vertex (i+1)%6
+export function getHexWallLine(cx: number, cy: number, r: number, wallIndex: number): { x1: number, y1: number, x2: number, y2: number, nx: number, ny: number } {
+    // 1. Calculate Start Vertex and End Vertex angles
+    const ang1 = (Math.PI / 3) * wallIndex;
+    const ang2 = (Math.PI / 3) * ((wallIndex + 1) % 6);
+
+    // 2. Vertex Coordinates
+    const vx1 = cx + r * Math.cos(ang1);
+    const vy1 = cy + r * Math.sin(ang1);
+    const vx2 = cx + r * Math.cos(ang2);
+    const vy2 = cy + r * Math.sin(ang2);
+
+    // 3. Shorten for Portal (Center 30% of wall)
+    // Lerp function
+    const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+
+    // Start at 35%, End at 65% (30% length)
+    const px1 = lerp(vx1, vx2, 0.35);
+    const py1 = lerp(vy1, vy2, 0.35);
+    const px2 = lerp(vx1, vx2, 0.65);
+    const py2 = lerp(vy1, vy2, 0.65);
+
+    // 4. Calculate Normal (Outward)
+    // Midpoint Angle is (ang1 + ang2) / 2? Need to handle wrap around roughly?
+    // Actually just perpendicular to vector (vx2-vx1)
+    // Vector V = (dx, dy). Normal = (dy, -dx) or (-dy, dx).
+    // Vector 0->60: dx>0, dy>0. Normal should point +/+ (30 deg).
+    // Let's use Midpoint Angle Logic: ang = wallIndex * 60 + 30.
+    const midAng = (Math.PI / 3) * wallIndex + (Math.PI / 6);
+    const nx = Math.cos(midAng);
+    const ny = Math.sin(midAng);
+
+    return {
+        x1: px1, y1: py1,
+        x2: px2, y2: py2,
+        nx, ny
+    };
+}
+
 
 // Flat-Topped Hexagon Math Helper
 function textHex(x: number, y: number, r: number): boolean {

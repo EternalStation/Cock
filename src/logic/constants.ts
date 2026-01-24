@@ -39,7 +39,7 @@ export const BASE_UPGRADE_VALUES: Record<string, number> = {
     reg_m: 15,
     xp_f: 15, // Defaulted based on context (User left blank)
     xp_m: 5,
-    arm_f: 40,
+    arm_f: 2,
     arm_m: 10
 };
 

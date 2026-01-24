@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import type { GameState } from '../logic/types';
-import { ARENA_CENTERS, ARENA_RADIUS } from '../logic/MapLogic';
+import { ARENA_CENTERS, ARENA_RADIUS, PORTALS, getHexWallLine } from '../logic/MapLogic';
 
 interface MinimapProps {
     gameState: GameState;
@@ -8,7 +8,7 @@ interface MinimapProps {
 
 export const Minimap: React.FC<MinimapProps> = ({ gameState }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
-    const { player, enemies } = gameState;
+    const { player, enemies, portalState, currentArena } = gameState;
 
     // Minimap Scale
     // Map bounds are roughly: (-6000, -6000) to (12000, 6000)
@@ -50,6 +50,32 @@ export const Minimap: React.FC<MinimapProps> = ({ gameState }) => {
             ctx.fillStyle = '#1e293b';
             ctx.fill();
         });
+
+        // Draw Portals on Minimap
+        if (portalState !== 'closed') {
+            const activePortals = PORTALS.filter(p => p.from === currentArena);
+            const center = ARENA_CENTERS.find(c => c.id === currentArena);
+
+            if (center) {
+                // Flash if warn, Solid if open
+                const shouldDraw = portalState === 'open' || (portalState === 'warn' && Math.floor(Date.now() / 200) % 2 === 0);
+
+                if (shouldDraw) {
+                    ctx.beginPath();
+                    activePortals.forEach(p => {
+                        const wall = getHexWallLine(center.x, center.y, ARENA_RADIUS, p.wall);
+                        ctx.moveTo(wall.x1, wall.y1);
+                        ctx.lineTo(wall.x2, wall.y2);
+                    });
+
+                    ctx.strokeStyle = portalState === 'open' ? '#00FF00' : '#FFD700'; // Green if open, Gold/Yellow if warn
+                    ctx.lineWidth = 400; // Thick line on minimap
+                    ctx.globalAlpha = 1;
+                    ctx.stroke();
+                }
+            }
+        }
+
 
         // Draw Player
         ctx.fillStyle = '#22d3ee';
