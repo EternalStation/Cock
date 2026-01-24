@@ -256,6 +256,8 @@ export function useGameLoop(gameStarted: boolean) {
 
                     updateParticles(state);
                     state.gameTime += FIXED_STEP;
+                    state.frameCount++; // Increment for throttling
+
 
                     // Boss Warning
                     const timeLeft = state.nextBossSpawnTime - state.gameTime;

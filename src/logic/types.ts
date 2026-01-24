@@ -144,6 +144,11 @@ export interface Enemy {
     untargetable?: boolean; // If true, player bullets won't home in on it
     phase3AudioTriggered?: boolean; // Flag for Phase 3 Audio Trigger
     spawnedAt?: number; // GameTime when spawned
+
+    // Snitch AI Props
+    // Snitch AI Props
+    charge?: number; // For Snitch Phase 2 Charge Mechanic
+
     // Custom Collision Props
     customCollisionDmg?: number; // If set, overrides standard 15% damage
     stunOnHit?: boolean; // If true, stuns player on collision
@@ -232,6 +237,7 @@ export interface GameState {
     killCount: number; // Dedicated kill counter
     bossKills: number; // Track boss kills separately
     gameTime: number;
+    frameCount: number; // For throttling particle effects
     isPaused: boolean;
     gameOver: boolean;
     nextBossSpawnTime: number;

@@ -1,4 +1,4 @@
-import type { GameState, Enemy, ShapeType, Vector } from './types';
+import type { GameState, Enemy, ShapeType } from './types';
 import { SHAPE_DEFS, PALETTES, PULSE_RATES, SHAPE_CYCLE_ORDER } from './constants';
 import { isInMap, getArenaIndex, getRandomPositionInArena, ARENA_CENTERS, ARENA_RADIUS } from './MapLogic';
 import { spawnEnemyBullet } from './ProjectileLogic';
@@ -111,7 +111,7 @@ export function updateEnemies(state: GameState, onEvent?: (event: string, data?:
 
         const dx = player.x - e.x;
         const dy = player.y - e.y;
-        const dist = Math.hypot(dx, dy);
+        const dist = Math.hypot(dx, dy) || 0.001; // Prevent div by zero
 
         let speed = e.spd; // FIXED: Using 'spd' instead of 'speed'
 
@@ -746,8 +746,10 @@ export function updateEnemies(state: GameState, onEvent?: (event: string, data?:
                         e.palette = ['#f97316', '#ea580c', '#c2410c']; // Orange shift
                         e.longTrail = []; // Clear trail
 
-                        // NO TELEPORT - Just activate Phase 2 behavior immediately
-                        // Stop current momentum so it doesn't "rush" into new phase
+
+                        playSfx('smoke-puff');
+                        e.hideCd = 0; // Allow immediate hiding
+
                         vx = 0; vy = 0;
                         playSfx('rare-spawn'); // Re-ping for activation
                     }
@@ -757,231 +759,144 @@ export function updateEnemies(state: GameState, onEvent?: (event: string, data?:
                     if (e.longTrail.length > 1000) e.longTrail.shift();
 
                 } else {
-                    // PHASE 2 & 3: BAIT & ESCAPE
+                    // PHASE 2: QUANTUM DISPLACEMENT (Elusive & Frustrating)
+                    // Goal: Avoid being caught at all costs.
+                    // The tether kills enemies it touches.
+                    // If enemies die to tether, Snitch charges up and explodes.
 
-                    // --- SKILL LOGIC (Reactionary) ---
-                    // Check for incoming projectiles
-                    let threatDetected = false;
-                    const dangerDist = 400;
+                    const time = state.gameTime;
+                    const distToPlayer = Math.hypot(player.x - e.x, player.y - e.y);
 
-                    // Simple threat scan: check bullets moving towards snitch
-                    state.bullets.forEach(b => {
-                        if (threatDetected) return;
-                        const d = Math.hypot(b.x - e.x, b.y - e.y);
-                        if (d < dangerDist) {
-                            // Check if bullet is approaching
-                            const approach = (b.x - e.x) * b.vx + (b.y - e.y) * b.vy;
-                            if (approach < 0) threatDetected = true;
+                    // --- 1. MOVEMENT: WAYPOINT STALKING (No Jitter) ---
+                    // Decoupled from frame-by-frame player movement to ensure smoothness.
+                    // Snitch picks a spot, goes there, then picks another.
+
+                    // Initialize or Refresh Waypoint
+                    if (e.lockedTargetX === undefined || e.lockedTargetY === undefined ||
+                        (Math.abs(e.x - e.lockedTargetX) < 50 && Math.abs(e.y - e.lockedTargetY) < 50) ||
+                        (e.timer && Date.now() > e.timer)) {
+
+                        // Pick new waypoint
+                        // Strategy: Flank - pick a point ~600px from player at random angle
+                        const angle = Math.random() * Math.PI * 2;
+                        const dist = 500 + Math.random() * 300;
+
+                        let tx = player.x + Math.cos(angle) * dist;
+                        let ty = player.y + Math.sin(angle) * dist;
+
+                        // Bounds check
+                        if (!isInMap(tx, ty)) {
+                            // If invalid, just pick random in arena
+                            const center = ARENA_CENTERS[0]; // fallback
+                            tx = center.x + (Math.random() - 0.5) * 500;
+                            ty = center.y + (Math.random() - 0.5) * 500;
                         }
-                    });
 
-                    // React to threat
-                    if (threatDetected) {
-                        const time = state.gameTime;
-                        // Skill 1: Barrels (Priority)
-                        if (!e.shieldCd || time > e.shieldCd) {
-                            e.shieldCd = time + 6.0; // 6s CD
-                            e.lastBarrierTime = time; // Mark usage time
-
-                            // Spawn 3 barrels in front
-                            const angleToPlayer = Math.atan2(player.y - e.y, player.x - e.x);
-                            for (let i = -1; i <= 1; i++) {
-                                const ang = angleToPlayer + i * 0.5;
-                                const bx = e.x + Math.cos(ang) * 100;
-                                const by = e.y + Math.sin(ang) * 100;
-                                spawnShield(state, bx, by);
-                            }
-                            playSfx('shoot'); // reused sfx for visual feedback
-                        }
+                        e.lockedTargetX = tx;
+                        e.lockedTargetY = ty;
+                        e.timer = Date.now() + 3000; // 3s max to reach point
                     }
 
-                    // AUTO SKILL: Smoke Screen + Rush (Every 6s)
-                    if (!e.panicCooldown || state.gameTime > e.panicCooldown) {
-                        const time = state.gameTime;
-                        e.panicCooldown = time + 6.0; // 6s CD
+                    // MOVEMENT EXECUTION
+                    // Smooth steering towards waypoint
+                    const dx = e.lockedTargetX - e.x;
+                    const dy = e.lockedTargetY - e.y;
+                    const d = Math.hypot(dx, dy);
 
-                        // Visuals
-                        spawnParticles(state, player.x, player.y, ['#FFFFFF', '#808080'], 150, 400, 100);
-                        playSfx('smoke-puff');
-                        state.smokeBlindTime = state.gameTime;
+                    if (d > 1) {
+                        // Steer
+                        vx = (dx / d) * e.spd;
+                        vy = (dy / d) * e.spd;
+                    } else {
+                        vx = 0; vy = 0;
+                    }
 
-                        // Activate Smoke Rush State
-                        e.smokeRushEndTime = time + 2.0; // 2s Duration
-                        e.invincibleUntil = Date.now() + 2000; // 2s Invincibility
+                    // EMERGENCY OVERRIDE: Too close to player?
+                    // Only react if VERY close (< 250), otherwise ignore to prevent jitter
+                    if (distToPlayer < 250) {
+                        const angAway = Math.atan2(e.y - player.y, e.x - player.x);
+                        vx = Math.cos(angAway) * e.spd * 2.0;
+                        vy = Math.sin(angAway) * e.spd * 2.0;
+                        // Force new waypoint next frame
+                        e.lockedTargetX = undefined;
                     }
 
 
-                    // Old Hide Logic Removed (Lines 816-880)
-                    // Replaced by new state machine below
 
-                    // HIDING MOVEMENT (Proportional Drift Smoothing)
-                    let moveAngle = 0;
-                    let hidingSpeedMult = 1.0;
 
-                    // SMOKE RUSH OVERRIDE
-                    if (e.smokeRushEndTime && state.gameTime < e.smokeRushEndTime) {
-                        // Rush to (0,0) - Spawn Point of Economic Arena
-                        const rushTargetX = 0;
-                        const rushTargetY = 0;
-                        moveAngle = Math.atan2(rushTargetY - e.y, rushTargetX - e.x);
 
-                        // Override Speed: 2x Player Speed
-                        e.spd = player.speed * 2.0;
-                    }
-                    else {
-                        // Standard Tactical Movement
-                        // TACTICAL MOVEMENT: ORBIT OR HIDE
+                    // --- 2. SUBSTITUTION JUTSU (Swap with Enemy) ---
+                    // Trigger: Player dangerously close (< 350px)
+                    if (distToPlayer < 350 && (!e.tacticalTimer || time > e.tacticalTimer)) {
+                        // Find swap target (nearest enemy outside of immediate danger radius)
+                        // Ideally somewhat far from player but within Snitch's range
+                        let bestTarget: Enemy | null = null;
+                        let maxDist = 0;
 
-                        // 1. Check for Hiding Opportunity (Every 3s)
-                        if (!e.hidingStateEndTime || state.gameTime > e.hidingStateEndTime) {
-                            // Not currently hiding
-                            if (!e.tacticalTimer || state.gameTime > e.tacticalTimer) {
-                                e.tacticalTimer = state.gameTime + 3.0; // Check every 3s
+                        for (const other of state.enemies) {
+                            if (other === e || other.dead || other.boss || other.shape === 'snitch') continue;
 
-                                // Find cover
-                                let bestCover: Enemy | null = null;
-                                let bestScore = -Infinity;
-                                enemies.forEach((other: Enemy) => {
-                                    if (other === e || other.shape === 'snitch' || other.dead || (other.spd !== undefined && other.spd === 0)) return;
-                                    const dToOther = Math.hypot(e.x - other.x, e.y - other.y);
-                                    if (dToOther < 300) { // < 300px range
-                                        // Score based on "behindness" relative to player
-                                        const angleToOther = Math.atan2(other.y - player.y, other.x - player.x);
-                                        const angleToSnitch = Math.atan2(e.y - player.y, e.x - player.x);
-                                        const dot = Math.cos(angleToOther - angleToSnitch); // 1.0 = perfectly aligned
-                                        if (dot > 0.9 && dot > bestScore) {
-                                            bestScore = dot;
-                                            bestCover = other;
-                                        }
-                                    }
-                                });
+                            const dToP = Math.hypot(other.x - player.x, other.y - player.y);
+                            const dToS = Math.hypot(other.x - e.x, other.y - e.y);
 
-                                if (bestCover) {
-                                    const c = bestCover as Enemy;
-                                    e.hideCoverId = c.id;
-                                    e.hidingStateEndTime = state.gameTime + 2.0; // Hide for 2s
-                                } else {
-                                    e.hideCoverId = undefined; // No cover found
+                            // Criteria:
+                            // 1. Target must be further from player than Snitch is (dToP > distToPlayer)
+                            // 2. Target must be within swap range of Snitch (e.g. < 800px)
+                            if (dToP > distToPlayer + 200 && dToS < 800) {
+                                if (dToP > maxDist) {
+                                    maxDist = dToP;
+                                    bestTarget = other;
                                 }
                             }
                         }
 
-                        // 2. Execute Movement (Hide vs Orbit)
-                        // 2. Execute Movement (Hide vs Orbit)
-                        if (e.hidingStateEndTime && state.gameTime < e.hidingStateEndTime && e.hideCoverId) {
-                            const cover = enemies.find(en => en.id === e.hideCoverId && !en.dead);
-                            if (cover) {
-                                // HIDE MODE: Move to shadow of cover
-                                const distPE = Math.hypot(cover.x - player.x, cover.y - player.y);
-                                const dirX = (cover.x - player.x) / distPE;
-                                const dirY = (cover.y - player.y) / distPE;
-                                const targetX = cover.x + dirX * 100; // Just 100px behind cover
-                                const targetY = cover.y + dirY * 100;
+                        if (bestTarget) {
+                            // EXECUTE SWAP
+                            const oldX = e.x; const oldY = e.y;
+                            const newX = bestTarget.x; const newY = bestTarget.y;
 
-                                moveAngle = Math.atan2(targetY - e.y, targetX - e.x);
-                                hidingSpeedMult = 1.5; // Catch up to cover faster
-                            } else {
-                                // Cover died, abort hide
-                                e.hidingStateEndTime = 0;
-                                // Fallthrough to Orbit
-                            }
-                        }
+                            // Move Snitch
+                            e.x = newX; e.y = newY;
+                            // Move Target (Substitution)
+                            bestTarget.x = oldX; bestTarget.y = oldY;
 
-                        // ORBIT FALLBACK (If not hiding or hide failed)
-                        if (!e.hidingStateEndTime || state.gameTime >= e.hidingStateEndTime) {
-                            // ORBIT CENTRE (0,0)
-                            const centerX = 0;
-                            const centerY = 0;
-                            const angleFromCenter = Math.atan2(e.y - centerY, e.x - centerX);
-                            const distFromCenter = Math.hypot(e.x - centerX, e.y - centerY);
+                            // FX: Smoke puffs at both locations
+                            spawnParticles(state, oldX, oldY, ['#F0F0F0', '#808080'], 20, 50, 60); // At old snitch pos
+                            spawnParticles(state, newX, newY, ['#F0F0F0', '#808080'], 20, 50, 60); // At new snitch pos
 
-                            // Radius Maintenance (Target ~1500px)
-                            let spiral = 0;
-                            if (distFromCenter < 1200) spiral = 0.4; // Push Out
-                            else if (distFromCenter > 1800) spiral = -0.4; // Pull In
+                            // Flash effects
+                            playSfx('smoke-puff'); // "Poof" sound
 
-                            // Tangential Orbit (Counter-Clockwise) + Spiral Correction
-                            moveAngle = angleFromCenter + (Math.PI / 2) + spiral;
+                            e.tacticalTimer = time + 4.0; // 4s Cooldown
+
+                            // Brief speed boost after swap
+                            e.panicCooldown = time + 1.0;
                         }
                     }
 
-                    // Calculate base velocity from Angle
-                    vx = Math.cos(moveAngle) * e.spd * hidingSpeedMult;
-                    vy = Math.sin(moveAngle) * e.spd * hidingSpeedMult;
 
-                    // GLITCH ANIMATION (If Invincible)
-                    if (e.invincibleUntil && Date.now() < e.invincibleUntil) {
-                        if (Math.random() < 0.3) {
-                            e.x += (Math.random() - 0.5) * 10;
-                            e.y += (Math.random() - 0.5) * 10;
-                            spawnParticles(state, e.x, e.y, '#FFFFFF', 1);
-                        }
+
+                    // Apply Panic Speed Boost (from swap)
+                    if (e.panicCooldown && time < e.panicCooldown) {
+                        vx *= 2.0;
+                        vy *= 2.0;
                     }
 
-                    if (Math.random() < 0.05) { // Throttle logs
-                        console.log(`[SNITCH_PHASE2] Pos: (${e.x.toFixed(0)},${e.y.toFixed(0)}) Angle: ${moveAngle.toFixed(2)} VX: ${vx.toFixed(2)} VY: ${vy.toFixed(2)}`);
+                    // Wall Avoidance
+                    const nextX = e.x + vx;
+                    const nextY = e.y + vy;
+                    if (!isInMap(nextX, nextY)) {
+                        vx = -vx;
+                        vy = -vy;
                     }
 
-                    // CENTER TIE LOGIC REMOVED
-                    // 1. No Vector Bias
-                    // 2. No Hard Clamp
 
-                    // Proceed directly to Wall Avoidance
-
-                    // Wall Avoidance Removed to prevent "Ghost Walls" at map junctions.
-                    // Collision is handled by the strict isInMap check at the end of the update.
-
-                    // Global 600px SAFETY PROBE (Used if not in limit or wall fallback)
-                    if (!vx && !vy) {
-                        e.dodgeDir = undefined;
-                        const probeDist = 600;
-                        let foundPath = false;
-                        for (let offset = 0; offset <= Math.PI; offset += 0.15) {
-                            const angles = offset === 0 ? [moveAngle] : [moveAngle + offset, moveAngle - offset];
-                            for (const ang of angles) {
-                                const testX = e.x + Math.cos(ang) * probeDist;
-                                const testY = e.y + Math.sin(ang) * probeDist;
-                                if (isInMap(testX, testY)) {
-                                    moveAngle = ang;
-                                    foundPath = true;
-                                    break;
-                                }
-                            }
-                            if (foundPath) break;
-                        }
-                        vx = Math.cos(moveAngle) * e.spd;
-                        vy = Math.sin(moveAngle) * e.spd;
-                    }
                 }
-                break;
+                break; // End snitch case
         }
 
         // --- GLOBAL PER-ENEMY LOGIC (Applies after switch behaviors) ---
-
-        // SPEED DAMPING (Shadow Docking)
-        if (e.hideTarget) {
-            const target = e.hideTarget as Vector;
-            const distToT = Math.hypot(target.x - e.x, target.y - e.y);
-            if (distToT < 20) {
-                const damp = distToT / 20;
-                vx *= damp;
-                vy *= damp;
-            }
-        }
-
-        // 2. Spawn Bullet Stoppers (Barrels) on 7s CD if targeted (Snitch only)
-        if (e.shape === 'snitch' && e.rarePhase !== 0 && (!e.shieldCd || Date.now() > e.shieldCd)) {
-            const angFromP = Math.atan2(e.y - player.y, e.x - player.x);
-            const angleDiff = Math.abs(((angFromP - player.targetAngle + Math.PI + (Math.PI * 2)) % (Math.PI * 2)) - Math.PI);
-
-            if (dist < 600 && angleDiff < 0.3) {
-                for (let i = 0; i < 5; i++) {
-                    spawnShield(state, e.x + (Math.random() - 0.5) * 40, e.y + (Math.random() - 0.5) * 40);
-                }
-                e.shieldCd = Date.now() + 7000;
-            }
-        }
-
+        // (Existing Jitter/Wall logic follows naturally now)
         // Jitter
         e.x += (Math.random() - 0.5) * 1;
         e.y += (Math.random() - 0.5) * 1;
@@ -1217,7 +1132,7 @@ function spawnMinion(state: GameState, parent: Enemy, isStrong: boolean = false)
     state.enemies.push(newMinion);
 }
 
-function spawnShield(state: GameState, x: number, y: number) {
+export function spawnShield(state: GameState, x: number, y: number) {
     const shield: Enemy = {
         id: Math.random(),
         type: 'square', // Acts as a block

@@ -42,6 +42,7 @@ export const createInitialGameState = (): GameState => ({
     killCount: 0,
     bossKills: 0,
     gameTime: 0,
+    frameCount: 0,
     isPaused: false,
     gameOver: false,
     nextBossSpawnTime: 120, // 2 minutes
