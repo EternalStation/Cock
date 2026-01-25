@@ -78,34 +78,47 @@ export function useGameLoop(gameStarted: boolean) {
 
     // Input Handling
     useEffect(() => {
-        if (!gameStarted) return; // Ignore inputs if game hasn't started
-
         const handleDown = (e: KeyboardEvent) => {
-            console.log('Key down:', e.key);
+            if (e.repeat) return;
+            const key = e.key.toLowerCase();
+            const code = e.code.toLowerCase();
+
+            // Start music on first interaction
             startBGM();
-            if (e.key === 'Escape') {
+
+            if (key === 'escape') {
                 setShowSettings(p => !p);
             }
-            // Handle C key for stats toggle
-            if (e.key.toLowerCase() === 'c') {
-                setShowStats(prev => !prev);
-                if (!showStats) {
-                    setShowSettings(false);
-                    setShowInventory(false);
-                    setShowModuleMenu(false);
-                }
+
+            // Handle C key for stats toggle (Always allow if gameStarted or in Main Menu)
+            if (key === 'c') {
+                setShowStats(prev => {
+                    const next = !prev;
+                    if (next) {
+                        setShowSettings(false);
+                        setShowInventory(false);
+                        setShowModuleMenu(false);
+                    }
+                    return next;
+                });
             }
+
             // Handle I key for inventory toggle
-            if (e.key.toLowerCase() === 'i') {
-                setShowInventory(prev => !prev);
+            if (key === 'i') {
+                setShowInventory(prev => {
+                    const next = !prev;
+                    if (next) {
+                        setShowSettings(false);
+                        setShowStats(false);
+                        setShowModuleMenu(false);
+                    }
+                    return next;
+                });
                 gameState.current.isInventoryOpen = !gameState.current.isInventoryOpen;
-                if (!showInventory) {
-                    setShowSettings(false);
-                    setShowStats(false);
-                    setShowModuleMenu(false);
-                }
             }
-            if (e.key.toLowerCase() === 'm') {
+
+            // Handle M key for module matrix toggle
+            if (key === 'm') {
                 setShowModuleMenu(prev => {
                     const next = !prev;
                     if (next) {
@@ -118,10 +131,21 @@ export function useGameLoop(gameStarted: boolean) {
                 gameState.current.showModuleMenu = !gameState.current.showModuleMenu;
             }
 
-            // Track keys regardless of UI state so they don't get 'stuck' if held down while closing menu
-            keys.current[e.key.toLowerCase()] = true;
+            // Track movement keys - use e.code for WASD and Arrow keys for better reliability
+            if (['keyw', 'keys', 'keya', 'keyd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(code)) {
+                keys.current[code] = true;
+            } else {
+                // Also fallback to key for other keys
+                keys.current[key] = true;
+            }
         };
-        const handleUp = (e: KeyboardEvent) => keys.current[e.key.toLowerCase()] = false;
+
+        const handleUp = (e: KeyboardEvent) => {
+            const key = e.key.toLowerCase();
+            const code = e.code.toLowerCase();
+            keys.current[key] = false;
+            keys.current[code] = false;
+        };
 
         // Cheat Code Buffer
         let cheatBuffer = '';
@@ -181,7 +205,7 @@ export function useGameLoop(gameStarted: boolean) {
             window.removeEventListener('keyup', handleUp);
             window.removeEventListener('keydown', handleCheat);
         };
-    }, [showSettings, showStats, showInventory, showModuleMenu, gameStarted]); // Re-bind if blocking state changes
+    }, [showSettings, showStats, showInventory, showModuleMenu]); // GameStarted removed from dependency to keep listeners active in Main Menu
 
     const restartGame = () => {
         gameState.current = createInitialGameState();
@@ -236,7 +260,7 @@ export function useGameLoop(gameStarted: boolean) {
             state.isPaused = isMenuOpen;
             if (state.isPaused) {
                 // Ensure keys are cleared when pausing to prevent stuck movement
-                // keys.current = {}; 
+                Object.keys(keys.current).forEach(k => keys.current[k] = false);
             }
 
             // Music volume control based on menu state

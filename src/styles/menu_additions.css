@@ -306,33 +306,71 @@ body {
 }
 
 .death-title {
-    font-size: 80px;
+    font-size: 48px;
     color: var(--neon-red);
     font-weight: 900;
     text-transform: uppercase;
     letter-spacing: 15px;
     text-shadow: 0 0 30px var(--neon-red);
-    margin-bottom: 30px;
+    margin-bottom: 20px;
     animation: chaos-glitch-text 0.5s infinite;
 }
 
 .stats-table {
-    border: 2px solid var(--neon-red);
-    padding: 30px;
-    background: #000;
-    box-shadow: 0 0 50px var(--neon-red);
-    width: 400px;
-    margin-bottom: 40px;
+    border: 1px solid rgba(190, 18, 60, 0.3);
+    padding: 24px;
+    background: rgba(0, 0, 0, 0.9);
+    border-radius: 16px;
+    box-shadow: 0 15px 50px rgba(0, 0, 0, 0.8), 0 0 20px rgba(190, 18, 60, 0.1);
+    width: 100%;
+    backdrop-filter: blur(10px);
+}
+
+.death-tabs {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 15px;
+    border-bottom: 1px solid #333;
+    padding-bottom: 0;
+    width: 100%;
+    max-width: 1200px;
+    justify-content: center;
+}
+
+.death-tab {
+    padding: 10px 24px;
+    background: transparent;
+    border: none;
+    color: #64748b;
+    font-family: 'Orbitron', monospace;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    border-bottom: 3px solid transparent;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+.death-tab.active {
+    color: var(--neon-cyan);
+    border-bottom-color: var(--neon-cyan);
+    background: rgba(34, 211, 238, 0.05);
+}
+
+.death-tab:hover:not(.active) {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.05);
 }
 
 .stat-row-death {
     display: flex;
     justify-content: space-between;
-    margin: 15px 0;
-    font-size: 18px;
+    margin: 12px 0;
+    font-size: 17px;
     color: #fff;
     border-bottom: 1px solid #333;
-    padding-bottom: 5px;
+    padding-bottom: 4px;
 }
 
 .stat-val-death {

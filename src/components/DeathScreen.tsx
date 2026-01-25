@@ -16,6 +16,7 @@ interface DeathScreenProps {
 }
 
 export const DeathScreen: React.FC<DeathScreenProps> = ({ stats, gameState, onRestart, onQuit }) => {
+    const [activeTab, setActiveTab] = useState<'overview' | 'modules'>('overview');
     const [displayStats, setDisplayStats] = useState({
         kills: 0,
         level: 0,
@@ -78,113 +79,132 @@ export const DeathScreen: React.FC<DeathScreenProps> = ({ stats, gameState, onRe
     });
 
     return (
-        <div className="death-screen" style={{ overflowY: 'auto', padding: '40px 20px', justifyContent: 'flex-start' }}>
-            <div className="death-title" style={{ fontSize: 64, marginBottom: 30, marginTop: 20 }}>TERMINATED</div>
+        <div className="death-screen" style={{ overflowY: 'auto', padding: '25px 20px', justifyContent: 'flex-start' }}>
+            <div className="death-title" style={{ fontSize: 56, marginBottom: 20, marginTop: 10 }}>TERMINATED</div>
 
-            <div style={{ display: 'flex', gap: 40, alignItems: 'flex-start', flexWrap: 'wrap', justifyContent: 'center', width: '100%', maxWidth: 1200 }}>
+            <div className="death-tabs">
+                <button
+                    className={`death-tab ${activeTab === 'overview' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('overview')}
+                >
+                    Overview
+                </button>
+                <button
+                    className={`death-tab ${activeTab === 'modules' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('modules')}
+                >
+                    Installed Modules ({gameState.player.upgradesCollected.length})
+                </button>
+            </div>
 
-                {/* LEFT COLUMN: STATS */}
-                <div className="stats-table" style={{ width: 400, background: 'rgba(0,0,0,0.85)', padding: 30, borderRadius: 12, border: '1px solid #333', display: 'flex', flexDirection: 'column', gap: 20 }}>
-                    <div>
-                        <h3 style={{ borderBottom: '1px solid #444', paddingBottom: 15, marginBottom: 15, color: '#fff', letterSpacing: 2, fontSize: 18 }}>COMBAT RECORD</h3>
+            <div style={{ width: '100%', maxWidth: 1000, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
 
-                        <div className="stat-row-death">
-                            <span>Time Survived</span>
-                            <span className="stat-val-death" style={{ color: '#fff' }}>{formatTime(stats.time)}</span>
-                        </div>
-                        <div className="stat-row-death">
-                            <span>Level Reached</span>
-                            <span className="stat-val-death" style={{ color: '#00FF88' }}>{displayStats.level}</span>
-                        </div>
-                        <div className="stat-row-death">
-                            <span>Enemies Eliminated</span>
-                            <span className="stat-val-death" style={{ color: '#fff' }}>{displayStats.kills}</span>
-                        </div>
-                    </div>
-
-                    <div style={{ borderTop: '1px solid #444', paddingTop: 15 }}>
-                        <h3 style={{ borderBottom: '1px solid #444', paddingBottom: 15, marginBottom: 15, color: '#fff', letterSpacing: 2, fontSize: 18 }}>FINAL ATTRIBUTES</h3>
-                        <div className="stat-row-death">
-                            <span>Damage</span>
-                            <span className="stat-val-death" style={{ color: '#fff' }}>{Math.round(calcStat(gameState.player.dmg))}</span>
-                        </div>
-                        <div className="stat-row-death">
-                            <span>Attack Speed</span>
-                            <span className="stat-val-death" style={{ color: '#fff' }}>{(calcStat(gameState.player.atk) / 200).toFixed(1)}/s</span>
-                        </div>
-                        <div className="stat-row-death">
-                            <span>XP Gain</span>
-                            <span className="stat-val-death" style={{ color: '#00FF88' }}>
-                                {Math.round(calcStat({
-                                    ...gameState.player.xp_per_kill,
-                                    base: 40 + (gameState.player.level * 3)
-                                }))}
-                            </span>
-                        </div>
-                    </div>
-
-
-                    {/* RADAR CHART & SYSTEM STATS */}
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', margin: '10px 0', borderTop: '1px solid #444', borderBottom: '1px solid #444', padding: '20px 0' }}>
-                        <div style={{ color: '#64748b', fontSize: 10, marginBottom: 10, textTransform: 'uppercase' }}>System Profile</div>
-                        <RadarChart player={gameState.player} size={150} />
-                    </div>
-
-
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                        <h3 style={{ color: '#94a3b8', fontSize: 14, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 5 }}>Performance</h3>
-                        <div className="stat-row-death" style={{ fontSize: 14 }}>
-                            <span style={{ color: '#94a3b8' }}>Total Damage Dealt</span>
-                            <span className="stat-val-death" style={{ color: '#f59e0b' }}>{formatDmg(gameState.player.damageDealt)}</span>
-                        </div>
-                        <div className="stat-row-death" style={{ fontSize: 14 }}>
-                            <span style={{ color: '#94a3b8' }}>Total Damage Taken</span>
-                            <span className="stat-val-death" style={{ color: '#fff' }}>{formatDmg(gameState.player.damageTaken)}</span>
-                        </div>
-                        <div className="stat-row-death" style={{ fontSize: 14 }}>
-                            <span style={{ color: '#94a3b8' }}>Damage Blocked</span>
-                            <span className="stat-val-death" style={{ color: '#3b82f6' }}>{formatDmg(gameState.player.damageBlocked)}</span>
-                        </div>
-                    </div>
-                </div>
-
-                {/* RIGHT COLUMN: UPGRADES */}
-                <div style={{ width: 600, background: 'rgba(0,0,0,0.85)', padding: 30, borderRadius: 12, border: '1px solid #333', maxHeight: 600, overflowY: 'auto' }}>
-                    <h3 style={{ borderBottom: '1px solid #444', paddingBottom: 15, marginBottom: 25, color: '#fff', letterSpacing: 2, fontSize: 18 }}>INSTALLED MODULES</h3>
-
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                        {grouped.map((g, i) => (
-                            <div key={i} style={{
-                                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                                background: 'rgba(255,255,255,0.05)', padding: '10px 15px', borderRadius: 8,
-                                borderLeft: `4px solid ${g.choice.rarity.color}`,
-                                boxShadow: '0 2px 5px rgba(0,0,0,0.2)'
-                            }}>
-                                <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                                    <span style={{ color: g.choice.rarity.color, fontSize: 10, fontWeight: 800, textTransform: 'uppercase', marginBottom: 2 }}>
-                                        {g.choice.rarity.label}
-                                    </span>
-                                    <span style={{ color: '#e2e8f0', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                        {g.choice.type.name}
-                                    </span>
+                {activeTab === 'overview' && (
+                    <div className="stats-table" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+                        {/* LEFT SUB-COLUMN */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 15 }}>
+                            <div>
+                                <h3 style={{ borderBottom: '1px solid #444', paddingBottom: 10, marginBottom: 10, color: '#fff', letterSpacing: 2, fontSize: 16 }}>COMBAT RECORD</h3>
+                                <div className="stat-row-death">
+                                    <span>Time Survived</span>
+                                    <span className="stat-val-death" style={{ color: '#fff' }}>{formatTime(stats.time)}</span>
                                 </div>
-                                <div style={{
-                                    background: '#1e293b', color: '#fff', fontSize: 12, fontWeight: 700,
-                                    padding: '2px 8px', borderRadius: 4, minWidth: 28, textAlign: 'center', marginLeft: 10
-                                }}>
-                                    x{g.count}
+                                <div className="stat-row-death">
+                                    <span>Level Reached</span>
+                                    <span className="stat-val-death" style={{ color: '#00FF88' }}>{displayStats.level}</span>
+                                </div>
+                                <div className="stat-row-death">
+                                    <span>Enemies Eliminated</span>
+                                    <span className="stat-val-death" style={{ color: '#fff' }}>{displayStats.kills}</span>
                                 </div>
                             </div>
-                        ))}
-                        {grouped.length === 0 && <div style={{ color: '#666', fontStyle: 'italic', gridColumn: 'span 2' }}>No modules installed.</div>}
+
+                            <div>
+                                <h3 style={{ borderBottom: '1px solid #444', paddingBottom: 10, marginBottom: 10, color: '#fff', letterSpacing: 2, fontSize: 16 }}>FINAL ATTRIBUTES</h3>
+                                <div className="stat-row-death">
+                                    <span>Damage</span>
+                                    <span className="stat-val-death" style={{ color: '#fff' }}>{Math.round(calcStat(gameState.player.dmg))}</span>
+                                </div>
+                                <div className="stat-row-death">
+                                    <span>Attack Speed</span>
+                                    <span className="stat-val-death" style={{ color: '#fff' }}>{(calcStat(gameState.player.atk) / 200).toFixed(1)}/s</span>
+                                </div>
+                                <div className="stat-row-death">
+                                    <span>XP Gain</span>
+                                    <span className="stat-val-death" style={{ color: '#00FF88' }}>
+                                        {Math.round(calcStat({
+                                            ...gameState.player.xp_per_kill,
+                                            base: 40 + (gameState.player.level * 3)
+                                        }))}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* RIGHT SUB-COLUMN */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 15 }}>
+                            <div style={{ background: 'rgba(255,255,255,0.02)', padding: 10, borderRadius: 12, border: '1px solid rgba(255,255,255,0.05)' }}>
+                                <div style={{ color: '#64748b', fontSize: 10, marginBottom: 5, textTransform: 'uppercase', textAlign: 'center', letterSpacing: 2 }}>System Profile</div>
+                                <RadarChart player={gameState.player} size={160} />
+                            </div>
+
+                            <div>
+                                <h3 style={{ borderBottom: '1px solid #444', paddingBottom: 10, marginBottom: 10, color: '#94a3b8', letterSpacing: 2, fontSize: 13, textTransform: 'uppercase' }}>Performance</h3>
+                                <div className="stat-row-death" style={{ fontSize: 14 }}>
+                                    <span style={{ color: '#94a3b8' }}>Total Damage Dealt</span>
+                                    <span className="stat-val-death" style={{ color: '#f59e0b' }}>{formatDmg(gameState.player.damageDealt)}</span>
+                                </div>
+                                <div className="stat-row-death" style={{ fontSize: 14 }}>
+                                    <span style={{ color: '#94a3b8' }}>Total Damage Taken</span>
+                                    <span className="stat-val-death" style={{ color: '#fff' }}>{formatDmg(gameState.player.damageTaken)}</span>
+                                </div>
+                                <div className="stat-row-death" style={{ fontSize: 14 }}>
+                                    <span style={{ color: '#94a3b8' }}>Damage Blocked</span>
+                                    <span className="stat-val-death" style={{ color: '#3b82f6' }}>{formatDmg(gameState.player.damageBlocked)}</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                </div>
+                )}
+
+                {activeTab === 'modules' && (
+                    <div className="stats-table" style={{ maxHeight: 600, overflowY: 'auto' }}>
+                        <h3 style={{ borderBottom: '1px solid #444', paddingBottom: 15, marginBottom: 25, color: '#fff', letterSpacing: 2, fontSize: 18 }}>INSTALLED MODULES</h3>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                            {grouped.map((g, i) => (
+                                <div key={i} style={{
+                                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                    background: 'rgba(255,255,255,0.05)', padding: '10px 15px', borderRadius: 8,
+                                    borderLeft: `4px solid ${g.choice.rarity.color}`,
+                                    boxShadow: '0 2px 5px rgba(0,0,0,0.2)'
+                                }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                                        <span style={{ color: g.choice.rarity.color, fontSize: 10, fontWeight: 800, textTransform: 'uppercase', marginBottom: 2 }}>
+                                            {g.choice.rarity.label}
+                                        </span>
+                                        <span style={{ color: '#e2e8f0', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                            {g.choice.type.name}
+                                        </span>
+                                    </div>
+                                    <div style={{
+                                        background: '#1e293b', color: '#fff', fontSize: 12, fontWeight: 700,
+                                        padding: '2px 8px', borderRadius: 4, minWidth: 28, textAlign: 'center', marginLeft: 10
+                                    }}>
+                                        x{g.count}
+                                    </div>
+                                </div>
+                            ))}
+                            {grouped.length === 0 && <div style={{ color: '#666', fontStyle: 'italic', gridColumn: 'span 3' }}>No modules installed.</div>}
+                        </div>
+                    </div>
+                )}
 
             </div>
 
-            <div style={{ display: 'flex', gap: 30, marginTop: 30, marginBottom: 40 }}>
-                <button className="btn-restart" onClick={onRestart} style={{ minWidth: 220, padding: '15px 30px', fontSize: 24 }}>RESTART</button>
-                <button className="btn-restart" onClick={onQuit} style={{ minWidth: 220, padding: '15px 30px', fontSize: 24, background: 'transparent', border: '1px solid #666', color: '#aaa', boxShadow: 'none' }}>MAIN MENU</button>
+            <div style={{ display: 'flex', gap: 24, marginTop: 24, marginBottom: 24 }}>
+                <button className="btn-restart" onClick={onRestart} style={{ minWidth: 200, padding: '12px 24px', fontSize: 23 }}>RESTART</button>
+                <button className="btn-restart" onClick={onQuit} style={{ minWidth: 200, padding: '12px 24px', fontSize: 23, background: 'transparent', border: '1px solid #666', color: '#aaa', boxShadow: 'none' }}>MAIN MENU</button>
             </div>
         </div>
     );

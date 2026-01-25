@@ -24,10 +24,10 @@ export function updatePlayer(state: GameState, keys: Record<string, boolean>, on
     const isStunned = player.stunnedUntil && Date.now() < player.stunnedUntil;
 
     if (!isStunned) {
-        if (keys['w'] || keys['arrowup']) vy--;
-        if (keys['s'] || keys['arrowdown']) vy++;
-        if (keys['a'] || keys['arrowleft']) vx--;
-        if (keys['d'] || keys['arrowright']) vx++;
+        if (keys['w'] || keys['keyw'] || keys['arrowup']) vy--;
+        if (keys['s'] || keys['keys'] || keys['arrowdown']) vy++;
+        if (keys['a'] || keys['keya'] || keys['arrowleft']) vx--;
+        if (keys['d'] || keys['keyd'] || keys['arrowright']) vx++;
     }
 
     if (vx !== 0 || vy !== 0) {

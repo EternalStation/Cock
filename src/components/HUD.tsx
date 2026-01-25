@@ -47,10 +47,12 @@ export const HUD: React.FC<HUDProps> = ({ gameState, upgradeChoices, onUpgradeSe
         const handleKeys = (e: KeyboardEvent) => {
             if (e.repeat) return;
             const key = e.key.toLowerCase();
-            if (key === 'a' || key === 'arrowleft') {
+            const code = e.code.toLowerCase();
+
+            if (key === 'a' || code === 'keya' || code === 'arrowleft' || key === 'arrowleft') {
                 setSelectedIndex(prev => (prev > 0 ? prev - 1 : upgradeChoices.length - 1));
             }
-            if (key === 'd' || key === 'arrowright') {
+            if (key === 'd' || code === 'keyd' || code === 'arrowright' || key === 'arrowright') {
                 setSelectedIndex(prev => (prev < upgradeChoices.length - 1 ? prev + 1 : 0));
             }
         };

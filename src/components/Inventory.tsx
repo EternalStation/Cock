@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { Meteorite, MeteoriteRarity } from '../logic/types';
+import { MeteoriteTooltip } from './MeteoriteTooltip';
 
 interface InventoryProps {
     inventory: (Meteorite | null)[];
@@ -26,6 +27,7 @@ const RARITY_IMAGES: Record<MeteoriteRarity, string> = {
 
 export function Inventory({ inventory, isOpen, onClose, onInventoryUpdate }: InventoryProps) {
     const [draggedItem, setDraggedItem] = useState<{ item: Meteorite, index: number } | null>(null);
+    const [hoveredItem, setHoveredItem] = useState<{ item: Meteorite, x: number, y: number } | null>(null);
 
     if (!isOpen) return null;
 
@@ -36,7 +38,8 @@ export function Inventory({ inventory, isOpen, onClose, onInventoryUpdate }: Inv
             left: 0,
             width: '100%',
             height: '100%',
-            backgroundColor: 'rgba(0,0,0,0.85)',
+            background: 'radial-gradient(circle, rgb(10, 10, 30) 0%, rgb(2, 2, 5) 100%)',
+            backdropFilter: 'blur(20px)',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
@@ -54,13 +57,13 @@ export function Inventory({ inventory, isOpen, onClose, onInventoryUpdate }: Inv
 
             <div style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(6, 1fr)',
-                gap: '12px',
-                padding: '20px',
-                backgroundColor: 'rgba(2, 6, 23, 0.9)',
+                gridTemplateColumns: 'repeat(5, 1fr)',
+                gap: '15px',
+                padding: '30px',
+                backgroundColor: 'rgba(2, 6, 23, 0.7)',
                 border: '2px solid #3b82f6',
-                borderRadius: '8px',
-                boxShadow: '0 0 30px rgba(59, 130, 246, 0.3)'
+                borderRadius: '12px',
+                boxShadow: '0 0 40px rgba(59, 130, 246, 0.2)'
             }}>
                 {inventory.map((item, index) => (
                     <InventorySlot
@@ -68,8 +71,12 @@ export function Inventory({ inventory, isOpen, onClose, onInventoryUpdate }: Inv
                         item={item}
                         index={index}
                         draggedItem={draggedItem}
-                        onDragStart={(item, idx) => setDraggedItem({ item, index: idx })}
+                        onDragStart={(item, idx) => {
+                            setDraggedItem({ item, index: idx });
+                            setHoveredItem(null); // Hide tooltip on drag
+                        }}
                         onDragEnd={() => setDraggedItem(null)}
+                        onHover={(item, x, y) => setHoveredItem(item ? { item, x, y } : null)}
                         onDrop={(targetIdx) => {
                             if (draggedItem && draggedItem.index !== targetIdx) {
                                 const fromIdx = draggedItem.index;
@@ -84,7 +91,15 @@ export function Inventory({ inventory, isOpen, onClose, onInventoryUpdate }: Inv
                 ))}
             </div>
 
-            <div style={{ marginTop: '20px', color: '#94a3b8', display: 'flex', gap: '20px', alignItems: 'center' }}>
+            {hoveredItem && (
+                <MeteoriteTooltip
+                    meteorite={hoveredItem.item}
+                    x={hoveredItem.x}
+                    y={hoveredItem.y}
+                />
+            )}
+
+            <div style={{ marginTop: '10px', color: '#94a3b8', display: 'flex', gap: '20px', alignItems: 'center' }}>
                 <span>Press <span style={{ color: 'white', fontWeight: 'bold' }}>I</span> to Close</span>
                 <button
                     onClick={onClose}
@@ -112,10 +127,11 @@ interface InventorySlotProps {
     draggedItem: { item: Meteorite, index: number } | null;
     onDragStart: (item: Meteorite, index: number) => void;
     onDragEnd: () => void;
+    onHover: (item: Meteorite | null, x: number, y: number) => void;
     onDrop: (index: number) => void;
 }
 
-function InventorySlot({ item, index, draggedItem, onDragStart, onDragEnd, onDrop }: InventorySlotProps) {
+function InventorySlot({ item, index, draggedItem, onDragStart, onDragEnd, onHover, onDrop }: InventorySlotProps) {
     const borderColor = item ? RARITY_COLORS[item.rarity] : '#1e293b';
     const glow = item ? `0 0 15px ${borderColor}66` : 'none';
     const isDragging = draggedItem?.index === index;
@@ -150,6 +166,12 @@ function InventorySlot({ item, index, draggedItem, onDragStart, onDragEnd, onDro
                 e.preventDefault();
                 onDrop(index);
             }}
+            onMouseMove={(e) => {
+                if (item && !draggedItem) {
+                    onHover(item, e.clientX, e.clientY);
+                }
+            }}
+            onMouseLeave={() => onHover(null, 0, 0)}
             style={{
                 width: '80px',
                 height: '80px',
@@ -165,7 +187,6 @@ function InventorySlot({ item, index, draggedItem, onDragStart, onDragEnd, onDro
                 cursor: item ? 'grab' : 'default',
                 opacity: isDragging ? 0.5 : 1
             }}
-            title={item ? `${item.rarity.toUpperCase()} METEORITE` : 'Empty Slot'}
         >
             {item ? (
                 <img

@@ -1,16 +1,16 @@
 import type { GameState, Meteorite, MeteoriteRarity } from './types';
 import { playSfx } from './AudioLogic';
 
-const DROP_CHANCE = 0.10; // 10%
+const DROP_CHANCE = 0.03; // 3% (Avg 1 per 33 kills)
 const MAGNET_RANGE = 200;
 const PICKUP_RANGE = 20;
 
 const RARITIES: { type: MeteoriteRarity; weight: number }[] = [
-    { type: 'scrap', weight: 40 },
-    { type: 'anomalous', weight: 30 },
-    { type: 'quantum', weight: 15 },
-    { type: 'astral', weight: 10 },
-    { type: 'radiant', weight: 5 }
+    { type: 'scrap', weight: 20 },
+    { type: 'anomalous', weight: 20 },
+    { type: 'quantum', weight: 20 },
+    { type: 'astral', weight: 20 },
+    { type: 'radiant', weight: 20 }
 ];
 
 function getRandomRarity(): MeteoriteRarity {
@@ -33,6 +33,31 @@ export function trySpawnMeteorite(state: GameState, x: number, y: number) {
     const dropX = x + (Math.random() - 0.5) * 20;
     const dropY = y + (Math.random() - 0.5) * 20;
 
+    const stats: Meteorite['stats'] = {};
+
+    // Perk 1: Core Surge (5-40%) - Available to all rarities
+    stats.coreSurge = 5 + Math.floor(Math.random() * 36);
+
+    // Perk 2: Neighbor (1-3%) - Anomalous and above
+    if (['anomalous', 'quantum', 'astral', 'radiant'].includes(rarity)) {
+        stats.neighbor = 1 + Math.floor(Math.random() * 3);
+    }
+
+    // Perk 3: Hex (1-50%) - Quantum and above
+    if (['quantum', 'astral', 'radiant'].includes(rarity)) {
+        stats.hex = 1 + Math.floor(Math.random() * 50);
+    }
+
+    // Perk 4: Same-Type (1-7%) - Astral and above
+    if (['astral', 'radiant'].includes(rarity)) {
+        stats.sameType = 1 + Math.floor(Math.random() * 7);
+    }
+
+    // Perk 5: Hex Type (1-10%) - Radiant only
+    if (rarity === 'radiant') {
+        stats.hexType = 1 + Math.floor(Math.random() * 10);
+    }
+
     const meteorite: Meteorite = {
         id: Math.random(),
         x: dropX,
@@ -40,7 +65,8 @@ export function trySpawnMeteorite(state: GameState, x: number, y: number) {
         rarity,
         vx: (Math.random() - 0.5) * 2, // Initial scattering bounce
         vy: (Math.random() - 0.5) * 2,
-        magnetized: false
+        magnetized: false,
+        stats
     };
 
     state.meteorites.push(meteorite);

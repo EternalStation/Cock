@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import type { GameState, Meteorite, MeteoriteRarity } from '../logic/types';
+import { MeteoriteTooltip } from './MeteoriteTooltip';
 
 interface ModuleMenuProps {
     gameState: GameState;
@@ -27,6 +28,7 @@ const RARITY_IMAGES: Record<MeteoriteRarity, string> = {
 
 export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClose, onSocketUpdate, onInventoryUpdate }) => {
     const [draggedItem, setDraggedItem] = useState<{ item: Meteorite, source: 'inventory' | 'diamond', index: number } | null>(null);
+    const [hoveredItem, setHoveredItem] = useState<{ item: Meteorite, x: number, y: number } | null>(null);
 
     if (!isOpen) return null;
 
@@ -460,6 +462,7 @@ export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClo
                                         const item = moduleSockets.diamonds[i];
                                         if (item) {
                                             setDraggedItem({ item, source: 'diamond', index: i });
+                                            setHoveredItem(null);
                                             e.dataTransfer.effectAllowed = 'move';
                                             e.dataTransfer.setData('text/plain', 'meteorite');
                                         }
@@ -467,6 +470,13 @@ export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClo
                                     onDragEnd={() => {
                                         setDraggedItem(null);
                                     }}
+                                    onMouseMove={(e) => {
+                                        const item = moduleSockets.diamonds[i];
+                                        if (item && !draggedItem) {
+                                            setHoveredItem({ item, x: e.clientX, y: e.clientY });
+                                        }
+                                    }}
+                                    onMouseLeave={() => setHoveredItem(null)}
                                 >
                                     <img
                                         src={RARITY_IMAGES[moduleSockets.diamonds[i]!.rarity]}
@@ -498,6 +508,7 @@ export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClo
                             onDragStart={(e) => {
                                 if (item) {
                                     setDraggedItem({ item, source: 'inventory', index: idx });
+                                    setHoveredItem(null);
 
                                     // Create custom drag image - just the meteorite, no card border
                                     const dragImg = document.createElement('img');
@@ -519,6 +530,12 @@ export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClo
                                 }
                             }}
                             onDragEnd={() => setDraggedItem(null)}
+                            onMouseMove={(e) => {
+                                if (item && !draggedItem) {
+                                    setHoveredItem({ item, x: e.clientX, y: e.clientY });
+                                }
+                            }}
+                            onMouseLeave={() => setHoveredItem(null)}
                             onDragOver={(ev) => ev.preventDefault()}
                             onDrop={() => {
                                 if (draggedItem) {
@@ -594,6 +611,14 @@ export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClo
                     </button>
                 </div>
             </div>
+
+            {hoveredItem && (
+                <MeteoriteTooltip
+                    meteorite={hoveredItem.item}
+                    x={hoveredItem.x}
+                    y={hoveredItem.y}
+                />
+            )}
 
             {/* Custom Styles */}
             <style>{`

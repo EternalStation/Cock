@@ -165,6 +165,22 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onStart }) => {
                         </div>
                         <span className="control-label">DATA</span>
                     </div>
+
+                    {/* I - Inventory */}
+                    <div className="control-group">
+                        <div className="keys-visual">
+                            <div className="key-box">I</div>
+                        </div>
+                        <span className="control-label">INVENTORY</span>
+                    </div>
+
+                    {/* M - Matrix */}
+                    <div className="control-group">
+                        <div className="keys-visual">
+                            <div className="key-box">M</div>
+                        </div>
+                        <span className="control-label">MATRIX</span>
+                    </div>
                 </div>
             </div>
         </div>

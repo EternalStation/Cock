@@ -283,4 +283,11 @@ export interface Meteorite {
     vx: number;
     vy: number;
     magnetized: boolean; // Is it being pulled to player?
+    stats: {
+        coreSurge?: number;
+        neighbor?: number;
+        hex?: number;
+        sameType?: number;
+        hexType?: number;
+    };
 }
