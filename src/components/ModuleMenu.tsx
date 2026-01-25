@@ -446,19 +446,32 @@ export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClo
                         {moduleSockets.diamonds[i] && (
                             <foreignObject x={pos.x - 35} y={pos.y - 35} width="70" height="70" style={{ pointerEvents: 'auto' }}>
                                 <div
-                                    style={{ width: '100%', height: '100%', cursor: 'grab', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                    style={{
+                                        width: '100%',
+                                        height: '100%',
+                                        cursor: draggedItem?.source === 'diamond' && draggedItem?.index === i ? 'grabbing' : 'grab',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        opacity: draggedItem?.source === 'diamond' && draggedItem?.index === i ? 0.5 : 1
+                                    }}
                                     draggable="true"
                                     onDragStart={(e) => {
                                         const item = moduleSockets.diamonds[i];
                                         if (item) {
                                             setDraggedItem({ item, source: 'diamond', index: i });
+                                            e.dataTransfer.effectAllowed = 'move';
                                             e.dataTransfer.setData('text/plain', 'meteorite');
                                         }
+                                    }}
+                                    onDragEnd={() => {
+                                        setDraggedItem(null);
                                     }}
                                 >
                                     <img
                                         src={RARITY_IMAGES[moduleSockets.diamonds[i]!.rarity]}
                                         style={{ width: '100%', height: '100%', objectFit: 'contain', pointerEvents: 'none' }}
+                                        alt="meteorite"
                                     />
                                 </div>
                             </foreignObject>
@@ -482,7 +495,29 @@ export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClo
                     {inventory.map((item, idx) => (
                         <div key={idx}
                             draggable={!!item}
-                            onDragStart={() => item && setDraggedItem({ item, source: 'inventory', index: idx })}
+                            onDragStart={(e) => {
+                                if (item) {
+                                    setDraggedItem({ item, source: 'inventory', index: idx });
+
+                                    // Create custom drag image - just the meteorite, no card border
+                                    const dragImg = document.createElement('img');
+                                    dragImg.src = RARITY_IMAGES[item.rarity];
+                                    dragImg.style.width = '60px';
+                                    dragImg.style.height = '60px';
+                                    dragImg.style.position = 'absolute';
+                                    dragImg.style.top = '-1000px'; // Hide it offscreen
+                                    document.body.appendChild(dragImg);
+
+                                    // Set the custom drag image
+                                    e.dataTransfer.setDragImage(dragImg, 30, 30);
+                                    e.dataTransfer.effectAllowed = 'move';
+
+                                    // Clean up after drag starts
+                                    setTimeout(() => {
+                                        document.body.removeChild(dragImg);
+                                    }, 0);
+                                }
+                            }}
                             onDragEnd={() => setDraggedItem(null)}
                             onDragOver={(ev) => ev.preventDefault()}
                             onDrop={() => {
@@ -505,14 +540,43 @@ export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClo
                                 }
                             }}
                             style={{
-                                width: '100%', height: '65px', background: 'rgba(2, 6, 23, 0.5)',
+                                width: '100%', height: '80px', background: '#0f172a',
                                 border: `2px solid ${item ? RARITY_COLORS[item.rarity] : '#1e293b'}`,
-                                borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center',
                                 cursor: item ? 'grab' : 'default', position: 'relative',
+                                boxShadow: item ? `0 0 15px ${RARITY_COLORS[item.rarity]}66` : 'none',
+                                transition: 'all 0.2s ease',
                                 opacity: draggedItem?.source === 'inventory' && draggedItem?.index === idx ? 0.5 : 1
                             }}>
-                            {item && (
-                                <img src={RARITY_IMAGES[item.rarity]} style={{ width: '80%', height: '80%', objectFit: 'contain', pointerEvents: 'none' }} />
+                            {item ? (
+                                <>
+                                    <img
+                                        src={RARITY_IMAGES[item.rarity]}
+                                        style={{ width: '90%', height: '90%', objectFit: 'contain', pointerEvents: 'none', filter: 'drop-shadow(0 0 5px rgba(255,255,255,0.3))' }}
+                                        alt="meteorite"
+                                    />
+                                    <div style={{
+                                        position: 'absolute',
+                                        bottom: '2px',
+                                        width: '100%',
+                                        textAlign: 'center',
+                                        fontSize: '0.6rem',
+                                        color: RARITY_COLORS[item.rarity],
+                                        fontWeight: 900,
+                                        textShadow: '0 0 2px black',
+                                        pointerEvents: 'none'
+                                    }}>
+                                        {item.rarity.toUpperCase().slice(0, 3)}
+                                    </div>
+                                </>
+                            ) : (
+                                <div style={{
+                                    width: '100%',
+                                    height: '100%',
+                                    opacity: 0.1,
+                                    backgroundImage: 'radial-gradient(circle, #334155 1px, transparent 1px)',
+                                    backgroundSize: '8px 8px'
+                                }} />
                             )}
                         </div>
                     ))}

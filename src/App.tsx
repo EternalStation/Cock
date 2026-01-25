@@ -87,6 +87,7 @@ function App() {
             inventory={hook.gameState.inventory}
             isOpen={hook.showInventory}
             onClose={() => hook.setShowInventory(false)}
+            onInventoryUpdate={hook.updateInventorySlot}
           />
 
           {/* Settings Menu */}
@@ -100,7 +101,7 @@ function App() {
             isOpen={hook.showModuleMenu}
             onClose={() => hook.setShowModuleMenu(false)}
             onSocketUpdate={hook.handleModuleSocketUpdate}
-            onInventoryUpdate={hook.handleInventoryUpdate}
+            onInventoryUpdate={hook.updateInventorySlot}
           />
 
           {/* Death Screen */}

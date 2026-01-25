@@ -1,9 +1,11 @@
+import { useState } from 'react';
 import type { Meteorite, MeteoriteRarity } from '../logic/types';
 
 interface InventoryProps {
     inventory: (Meteorite | null)[];
     isOpen: boolean;
     onClose: () => void;
+    onInventoryUpdate: (index: number, item: Meteorite | null) => void;
 }
 
 const RARITY_COLORS: Record<MeteoriteRarity, string> = {
@@ -22,7 +24,9 @@ const RARITY_IMAGES: Record<MeteoriteRarity, string> = {
     radiant: '/assets/meteorites/radiantNoBackgound.png'
 };
 
-export function Inventory({ inventory, isOpen, onClose }: InventoryProps) {
+export function Inventory({ inventory, isOpen, onClose, onInventoryUpdate }: InventoryProps) {
+    const [draggedItem, setDraggedItem] = useState<{ item: Meteorite, index: number } | null>(null);
+
     if (!isOpen) return null;
 
     return (
@@ -39,7 +43,7 @@ export function Inventory({ inventory, isOpen, onClose }: InventoryProps) {
             justifyContent: 'center',
             zIndex: 100,
             color: 'white',
-            fontFamily: 'Orbitron, sans-serif' // Assuming font exists or fallback
+            fontFamily: 'Orbitron, sans-serif'
         }}>
             <h1 style={{
                 marginBottom: '20px',
@@ -59,7 +63,24 @@ export function Inventory({ inventory, isOpen, onClose }: InventoryProps) {
                 boxShadow: '0 0 30px rgba(59, 130, 246, 0.3)'
             }}>
                 {inventory.map((item, index) => (
-                    <InventorySlot key={index} item={item} />
+                    <InventorySlot
+                        key={index}
+                        item={item}
+                        index={index}
+                        draggedItem={draggedItem}
+                        onDragStart={(item, idx) => setDraggedItem({ item, index: idx })}
+                        onDragEnd={() => setDraggedItem(null)}
+                        onDrop={(targetIdx) => {
+                            if (draggedItem && draggedItem.index !== targetIdx) {
+                                const fromIdx = draggedItem.index;
+                                const item1 = inventory[fromIdx];
+                                const item2 = inventory[targetIdx];
+                                onInventoryUpdate(targetIdx, item1);
+                                onInventoryUpdate(fromIdx, item2);
+                            }
+                            setDraggedItem(null);
+                        }}
+                    />
                 ))}
             </div>
 
@@ -85,25 +106,65 @@ export function Inventory({ inventory, isOpen, onClose }: InventoryProps) {
     );
 }
 
-function InventorySlot({ item }: { item: Meteorite | null }) {
+interface InventorySlotProps {
+    item: Meteorite | null;
+    index: number;
+    draggedItem: { item: Meteorite, index: number } | null;
+    onDragStart: (item: Meteorite, index: number) => void;
+    onDragEnd: () => void;
+    onDrop: (index: number) => void;
+}
+
+function InventorySlot({ item, index, draggedItem, onDragStart, onDragEnd, onDrop }: InventorySlotProps) {
     const borderColor = item ? RARITY_COLORS[item.rarity] : '#1e293b';
     const glow = item ? `0 0 15px ${borderColor}66` : 'none';
+    const isDragging = draggedItem?.index === index;
 
     return (
-        <div style={{
-            width: '80px',
-            height: '80px',
-            backgroundColor: '#0f172a',
-            border: `2px solid ${borderColor}`,
-            borderRadius: '8px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            position: 'relative',
-            boxShadow: glow,
-            transition: 'all 0.2s ease',
-            cursor: 'pointer'
-        }}
+        <div
+            draggable={!!item}
+            onDragStart={(e) => {
+                if (item) {
+                    onDragStart(item, index);
+
+                    // Create custom drag image - just the meteorite
+                    const dragImg = document.createElement('img');
+                    dragImg.src = RARITY_IMAGES[item.rarity];
+                    dragImg.style.width = '60px';
+                    dragImg.style.height = '60px';
+                    dragImg.style.position = 'absolute';
+                    dragImg.style.top = '-1000px';
+                    document.body.appendChild(dragImg);
+
+                    e.dataTransfer.setDragImage(dragImg, 30, 30);
+                    e.dataTransfer.effectAllowed = 'move';
+
+                    setTimeout(() => {
+                        document.body.removeChild(dragImg);
+                    }, 0);
+                }
+            }}
+            onDragEnd={onDragEnd}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => {
+                e.preventDefault();
+                onDrop(index);
+            }}
+            style={{
+                width: '80px',
+                height: '80px',
+                backgroundColor: '#0f172a',
+                border: `2px solid ${borderColor}`,
+                borderRadius: '8px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                position: 'relative',
+                boxShadow: glow,
+                transition: 'all 0.2s ease',
+                cursor: item ? 'grab' : 'default',
+                opacity: isDragging ? 0.5 : 1
+            }}
             title={item ? `${item.rarity.toUpperCase()} METEORITE` : 'Empty Slot'}
         >
             {item ? (
@@ -114,7 +175,8 @@ function InventorySlot({ item }: { item: Meteorite | null }) {
                         width: '90%',
                         height: '90%',
                         objectFit: 'contain',
-                        filter: 'drop-shadow(0 0 5px rgba(255,255,255,0.3))'
+                        filter: 'drop-shadow(0 0 5px rgba(255,255,255,0.3))',
+                        pointerEvents: 'none'
                     }}
                 />
             ) : (
@@ -137,7 +199,8 @@ function InventorySlot({ item }: { item: Meteorite | null }) {
                     fontSize: '0.6rem',
                     color: borderColor,
                     fontWeight: 900,
-                    textShadow: '0 0 2px black'
+                    textShadow: '0 0 2px black',
+                    pointerEvents: 'none'
                 }}>
                     {item.rarity.toUpperCase().slice(0, 3)}
                 </div>

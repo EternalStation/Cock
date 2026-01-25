@@ -501,7 +501,7 @@ export function useGameLoop(gameStarted: boolean) {
             else gameState.current.moduleSockets.diamonds[index] = item;
             setUiState(prev => prev + 1); // Force re-render
         },
-        handleInventoryUpdate: (index: number, item: any) => {
+        updateInventorySlot: (index: number, item: any) => {
             gameState.current.inventory[index] = item;
             setUiState(prev => prev + 1);
         },
