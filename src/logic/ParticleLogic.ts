@@ -13,6 +13,9 @@ export interface Particle {
 export function spawnParticles(state: GameState, x: number, y: number, color: string | string[], count: number = 8, sizeOverride?: number, lifeOverride?: number, type: 'shard' | 'spark' = 'spark') {
     if (!state.particles) state.particles = [];
 
+    // Performance: Cap total particles to 300 active
+    if (state.particles.length > 300) return;
+
     for (let i = 0; i < count; i++) {
         const angle = Math.random() * 6.28;
         const speed = type === 'shard' ? (Math.random() * 4 + 2) : (Math.random() * 2 + 1);

@@ -1,10 +1,13 @@
-import { useState } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import { GameCanvas } from './components/GameCanvas';
 import { HUD } from './components/HUD';
 import { StatsMenu } from './components/StatsMenu';
 import { SettingsMenu } from './components/SettingsMenu';
 import { MainMenu } from './components/MainMenu';
 import { DeathScreen } from './components/DeathScreen';
+
+import { Inventory } from './components/Inventory';
+import { ModuleMenu } from './components/ModuleMenu';
 
 import { useGameLoop } from './hooks/useGame';
 import { startBGM } from './logic/AudioLogic';
@@ -13,6 +16,14 @@ import './styles/menu_additions.css';
 function App() {
   const [gameStarted, setGameStarted] = useState(false);
   const hook = useGameLoop(gameStarted);
+  const appRef = useRef<HTMLDivElement>(null);
+
+  // Auto-focus logic
+  useEffect(() => {
+    if (gameStarted && !hook.showStats && !hook.showSettings && !hook.showInventory && !hook.showModuleMenu) {
+      appRef.current?.focus();
+    }
+  }, [gameStarted, hook.showStats, hook.showSettings, hook.showInventory, hook.showModuleMenu]);
 
   // Reset logic when quitting to main menu
   const handleQuit = () => {
@@ -41,6 +52,7 @@ function App() {
 
   return (
     <div
+      ref={appRef}
       style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden', outline: 'none' }}
       tabIndex={0}
       onClick={(e) => e.currentTarget.focus()}
@@ -53,24 +65,43 @@ function App() {
           <GameCanvas hook={hook} />
 
           {/* Overlays */}
-          <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 10 }}>
-            <HUD
-              gameState={hook.gameState}
-              upgradeChoices={hook.upgradeChoices}
-              onUpgradeSelect={hook.handleUpgradeSelect}
-              gameOver={hook.gameOver}
-              onRestart={hook.restartGame}
-              bossWarning={hook.bossWarning}
-            />
-          </div>
+          {!hook.showModuleMenu && (
+            <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 10 }}>
+              <HUD
+                gameState={hook.gameState}
+                upgradeChoices={hook.upgradeChoices}
+                onUpgradeSelect={hook.handleUpgradeSelect}
+                gameOver={hook.gameOver}
+                onRestart={hook.restartGame}
+                bossWarning={hook.bossWarning}
+                fps={hook.fps}
+              />
+            </div>
+          )}
 
           {/* Stats Menu */}
           {hook.showStats && <StatsMenu gameState={hook.gameState} />}
+
+          {/* Inventory Menu */}
+          <Inventory
+            inventory={hook.gameState.inventory}
+            isOpen={hook.showInventory}
+            onClose={() => hook.setShowInventory(false)}
+          />
 
           {/* Settings Menu */}
           {hook.showSettings && <SettingsMenu onClose={() => hook.setShowSettings(false)} onRestart={hook.restartGame} onQuit={handleQuit} />}
 
 
+
+          {/* Module Menu */}
+          <ModuleMenu
+            gameState={hook.gameState}
+            isOpen={hook.showModuleMenu}
+            onClose={() => hook.setShowModuleMenu(false)}
+            onSocketUpdate={hook.handleModuleSocketUpdate}
+            onInventoryUpdate={hook.handleInventoryUpdate}
+          />
 
           {/* Death Screen */}
           {hook.gameOver && (

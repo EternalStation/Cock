@@ -259,4 +259,28 @@ export interface GameState {
     portalOpenDuration: number; // 10s
     transferTimer: number; // 3s delay during teleport
     nextArenaId: number | null; // Destination
+
+    // Inventory System
+    meteorites: Meteorite[]; // Dropped items in the world
+    inventory: (Meteorite | null)[];  // Collected items (30 slots)
+    isInventoryOpen: boolean;
+
+    // Module Menu System
+    showModuleMenu: boolean;
+    moduleSockets: {
+        hexagons: (UpgradeChoice | null)[];   // 6 outer sockets
+        diamonds: (Meteorite | null)[];       // 6 inner sockets
+    };
+}
+
+export type MeteoriteRarity = 'scrap' | 'anomalous' | 'quantum' | 'astral' | 'radiant';
+
+export interface Meteorite {
+    id: number;
+    x: number;
+    y: number;
+    rarity: MeteoriteRarity;
+    vx: number;
+    vy: number;
+    magnetized: boolean; // Is it being pulled to player?
 }

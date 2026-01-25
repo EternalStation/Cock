@@ -257,6 +257,7 @@
     <!-- TABS -->
     <div class="tab-container">
         <button class="tab-button active" onclick="openTab('progression')">Game Mechanics</button>
+        <button class="tab-button" onclick="openTab('rarity')">Rarity</button>
         <button class="tab-button" onclick="openTab('enemies')">Enemy Intel</button>
         <button class="tab-button" onclick="openTab('elites')">Elite Database</button>
         <button class="tab-button" onclick="openTab('scaling')">Scaling & Colors</button>
@@ -275,6 +276,83 @@
             </li>
             <li><strong>Level Scaling:</strong> XP Required increases by <strong>1.10x</strong> (10%) per level.</li>
         </ul>
+
+
+
+        <h3>Upgrade Base Values</h3>
+        <table>
+            <tr>
+                <th>Stat</th>
+                <th>Base Value</th>
+            </tr>
+            <tr>
+                <td>Damage (Flat)</td>
+                <td>10</td>
+            </tr>
+            <tr>
+                <td>Damage (%)</td>
+                <td>5%</td>
+            </tr>
+            <tr>
+                <td>Attack Speed</td>
+                <td>25 (Points)</td>
+            </tr>
+            <tr>
+                <td>Max Health</td>
+                <td>40</td>
+            </tr>
+            <tr>
+                <td>Max Health (%)</td>
+                <td>20%</td>
+            </tr>
+            <tr>
+                <td>Health Regen</td>
+                <td>5</td>
+            </tr>
+            <tr>
+                <td>Regen (%)</td>
+                <td>15%</td>
+            </tr>
+            <tr>
+                <td>XP Per Kill</td>
+                <td>15</td>
+            </tr>
+            <tr>
+                <td>XP Multiplier (%)</td>
+                <td>5%</td>
+            </tr>
+            <tr>
+                <td>Armor (Flat)</td>
+                <td>2</td>
+            </tr>
+            <tr>
+                <td>Armor (%)</td>
+                <td>10%</td>
+            </tr>
+        </table>
+
+        <h3>2. Player Stats</h3>
+        <ul>
+            <li><strong>Starting HP:</strong> 150</li>
+            <li><strong>Starting Attack Speed:</strong> 330 (~1.2s delay). Cap is 9990.</li>
+            <li><strong>Starting Damage:</strong> 50</li>
+            <li><strong>Auto-Attack Range:</strong> ~1656px (Bullet Travel)</li>
+            <li><strong>Auto-Aim Scan:</strong> 800px (Targets nearest enemy)</li>
+            <li><strong>First Level XP Requirement:</strong> 250</li>
+            <li><strong>XP Gain:</strong>
+                <ul>
+                    <li>Normal Kill: <code>40 + (2 * Levels)</code></li>
+                    <li>Boss Kill: <strong>3 Special Upgrades</strong> (No XP)</li>
+                </ul>
+            </li>
+        </ul>
+    </div>
+
+    </div>
+
+    <!-- TAB: RARITY -->
+    <div id="rarity" class="tab-content">
+        <h2>Rarity Distribution & Bonuses</h2>
 
         <h3>Rarity System (Time-Gated Drop Rates)</h3>
         <p>Probability check runs on every upgrade slot generation (3 slots per level up).</p>
@@ -673,125 +751,57 @@
                 <tr>
                     <th>Rarity</th>
                     <th>Multiplier</th>
-                    <th>Example (Armor Base 40)</th>
+                    <th>Example (Armor Base 2)</th>
                 </tr>
             </thead>
             <tbody>
                 <tr class="rarity-scrap">
                     <td>Scrap</td>
                     <td>x0.5</td>
-                    <td>+20 Armor</td>
+                    <td>+1 Armor</td>
                 </tr>
                 <tr class="rarity-anomalous">
                     <td>Anomalous</td>
                     <td>x0.8</td>
-                    <td>+32 Armor</td>
+                    <td>+2 Armor</td>
                 </tr>
                 <tr class="rarity-quantum">
                     <td>Quantum</td>
                     <td>x1.5</td>
-                    <td>+60 Armor</td>
+                    <td>+3 Armor</td>
                 </tr>
                 <tr class="rarity-astral">
                     <td>Astral</td>
                     <td>x2.5</td>
-                    <td>+100 Armor</td>
+                    <td>+5 Armor</td>
                 </tr>
                 <tr class="rarity-radiant">
                     <td>Radiant</td>
                     <td>x4.0</td>
-                    <td>+160 Armor</td>
+                    <td>+8 Armor</td>
                 </tr>
                 <tr class="rarity-abyss">
                     <td>Abyss</td>
                     <td>x7.0</td>
-                    <td>+280 Armor</td>
+                    <td>+14 Armor</td>
                 </tr>
                 <tr class="rarity-eternal">
                     <td>Eternal</td>
                     <td>x12.0</td>
-                    <td>+480 Armor</td>
+                    <td>+24 Armor</td>
                 </tr>
                 <tr class="rarity-divine">
                     <td>Divine</td>
                     <td>x20.0</td>
-                    <td>+800 Armor</td>
+                    <td>+40 Armor</td>
                 </tr>
                 <tr class="rarity-singularity">
                     <td>Singularity</td>
                     <td>x35.0</td>
-                    <td>+1400 Armor</td>
+                    <td>+70 Armor</td>
                 </tr>
             </tbody>
         </table>
-
-        <h3>Upgrade Base Values</h3>
-        <table>
-            <tr>
-                <th>Stat</th>
-                <th>Base Value</th>
-            </tr>
-            <tr>
-                <td>Damage (Flat)</td>
-                <td>10</td>
-            </tr>
-            <tr>
-                <td>Damage (%)</td>
-                <td>5%</td>
-            </tr>
-            <tr>
-                <td>Attack Speed</td>
-                <td>25 (Points)</td>
-            </tr>
-            <tr>
-                <td>Max Health</td>
-                <td>40</td>
-            </tr>
-            <tr>
-                <td>Max Health (%)</td>
-                <td>20%</td>
-            </tr>
-            <tr>
-                <td>Health Regen</td>
-                <td>5</td>
-            </tr>
-            <tr>
-                <td>Regen (%)</td>
-                <td>15%</td>
-            </tr>
-            <tr>
-                <td>XP Per Kill</td>
-                <td>15</td>
-            </tr>
-            <tr>
-                <td>XP Multiplier (%)</td>
-                <td>5%</td>
-            </tr>
-            <tr>
-                <td>Armor (Flat)</td>
-                <td>40</td>
-            </tr>
-            <tr>
-                <td>Armor (%)</td>
-                <td>10%</td>
-            </tr>
-        </table>
-
-        <h3>2. Player Stats</h3>
-        <ul>
-            <li><strong>Starting HP:</strong> 150</li>
-            <li><strong>Starting Attack Speed:</strong> 330 (~1.2s delay). Cap is 9990.</li>
-            <li><strong>Starting Damage:</strong> 50</li>
-            <li><strong>Auto-Attack Range:</strong> ~1656px (Bullet Travel)</li>
-            <li><strong>Auto-Aim Scan:</strong> 800px (Targets nearest enemy)</li>
-            <li><strong>First Level XP Requirement:</strong> 250</li>
-            <li><strong>XP Gain:</strong>
-                <ul>
-                    <li>Normal Kill: <code>40 + (2 * Levels)</code></li>
-                    <li>Boss Kill: <strong>3 Special Upgrades</strong> (No XP)</li>
-                </ul>
-            </li>
-        </ul>
     </div>
 
     <!-- TAB 2: ENEMIES -->
@@ -863,9 +873,9 @@
                 <div class="enemy-name">Hive Mother</div>
                 <div class="enemy-role">Tactical Carrier</div>
                 <div class="enemy-desc">
-                    <strong>Guard:</strong> Deploys minions in a protective <strong>Pig's Head</strong> wedge.<br>
-                    <strong>Trigger:</strong> Launches missiles if player is < 400px.<br>
-                        <strong>Enrage:</strong> At 60s, turns Red, launches all, and self-destructs.
+                    <strong>Guard:</strong> Deploys 5 unique minions in a <strong>Spiral Orbit</strong>.<br>
+                    <strong>Trigger:</strong> Launches minions if player is < 400px.<br>
+                        <strong>Enrage:</strong> At 60s, turns Red, launches all in a swarm, and self-destructs.
                 </div>
                 <div class="enemy-stats">
                     <div class="stat-badge"><span class="stat-label">HP</span><span>6.0x</span></div>
@@ -880,7 +890,7 @@
                 <div class="enemy-name">Swarm Missile</div>
                 <div class="enemy-role">Interceptor</div>
                 <div class="enemy-desc">
-                    <strong>Formation:</strong> Holds "Pig's Head" wedge until launched.<br>
+                    <strong>Formation:</strong> Holds "Spiral Orbit" formation until launched.<br>
                     <strong>Attack:</strong> High-speed homing "Snake" pattern.<br>
                     <strong>Damage:</strong> 15% Max HP (Elite Minions: 3% of Mother HP).
                 </div>
@@ -897,9 +907,11 @@
                 <div class="enemy-name" style="color: #facc15;">The Quantum Snitch</div>
                 <div class="enemy-role">Legendary Reward</div>
                 <div class="enemy-desc">
+                    <strong>Visual:</strong> Spike Star Shape.<br>
                     <strong>P1 (Yellow):</strong> Proximity Trigger. <strong>Projectile Immune!</strong><br>
                     <strong>P2 (Orange):</strong> Tactical Avoidance + Barrier Spawning.<br>
-                    <strong>P3 (Red):</strong> Fatal Shift. <strong>Smoke Escape:</strong> Teleports toward center if
+                    <strong>P3 (Red):</strong> Fatal Shift (1.1x Player Speed). <strong>Smoke Escape:</strong> Teleports
+                    if
                     cornered.
                 </div>
                 <div class="enemy-stats">
@@ -967,7 +979,8 @@
                 <div class="enemy-name" style="color: #EF4444;">Elite Hive Mother</div>
                 <div class="enemy-role">Carrier Flagship</div>
                 <div class="enemy-desc">
-                    Commands a massive 15-minion "Pig's Head" formation. Minions are "Strong" types that deal 3% of
+                    Commands a fleet of 15 minions in a massive "Spiral Orbit" formation. Minions are "Strong" types
+                    that deal 3% of
                     Mother's HP on hit.
                     High explosion damage on suicide (30% Max HP).
                 </div>
@@ -980,7 +993,8 @@
                 <div class="enemy-role">Bull Charger</div>
                 <div class="enemy-desc">
                     <strong>Ability: Bull Charge</strong><br>
-                    Locks on player position (0.5s freeze) then executes a massive, high-speed dash with 200px
+                    Locks on player position (0.5s freeze) then executes a massive, high-speed dash (+50% Speed) with
+                    200px
                     overshoot.
                 </div>
             </div>
@@ -992,7 +1006,8 @@
                 <div class="enemy-role">Chaos Striker</div>
                 <div class="enemy-desc">
                     <strong>Ability: Whirlwind</strong><br>
-                    Spins violently and executes a high-speed (2.55x) zigzag dash toward the player for 3.5 seconds.
+                    Spins violently and executes a high-speed zigzag dash toward the player for 3.5 seconds (Speed
+                    reduced by 15% to prevent teleporting).
                 </div>
             </div>
 
@@ -1015,8 +1030,9 @@
                 <div class="enemy-role">Siege Artillery</div>
                 <div class="enemy-desc">
                     <strong>Ability: Hyper Beam</strong><br>
-                    Locks onto player's last known trajectory and fires a persistent, high-damage laser beam for 1.5
-                    seconds.
+                    Locks onto player's position from 1.5 seconds ago (Predictive) and fires a persistent, high-damage
+                    laser beam for 1.5
+                    seconds with visual telegraphing.
                 </div>
             </div>
         </div>
@@ -1265,26 +1281,19 @@
                 ctx.closePath();
             }
             else if (type === 'snitch') {
-                // Winged Circle Design
-                const bodyR = size * 0.7;
-                ctx.arc(cx, cy, bodyR, 0, Math.PI * 2);
-                ctx.closePath();
-
-                // Wings
-                // Left
-                ctx.moveTo(cx - bodyR, cy);
-                ctx.lineTo(cx - size * 1.5, cy - size * 0.5);
-                ctx.lineTo(cx - size * 1.8, cy);
-                ctx.lineTo(cx - size * 1.5, cy + size * 0.5);
-                ctx.lineTo(cx - bodyR, cy);
-                ctx.closePath();
-
-                // Right
-                ctx.moveTo(cx + bodyR, cy);
-                ctx.lineTo(cx + size * 1.5, cy - size * 0.5);
-                ctx.lineTo(cx + size * 1.8, cy);
-                ctx.lineTo(cx + size * 1.5, cy + size * 0.5);
-                ctx.lineTo(cx + bodyR, cy);
+                // Spiked Star Design
+                const spikes = 12;
+                const outerRadius = size * 1.5;
+                const innerRadius = size * 0.6;
+                ctx.beginPath();
+                for (let i = 0; i < spikes * 2; i++) {
+                    const r = i % 2 === 0 ? outerRadius : innerRadius;
+                    const a = (Math.PI * i) / spikes - Math.PI / 2;
+                    const x = cx + Math.cos(a) * r;
+                    const y = cy + Math.sin(a) * r;
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                }
                 ctx.closePath();
             }
 

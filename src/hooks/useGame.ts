@@ -1,4 +1,5 @@
 import { useRef, useEffect, useState } from 'react';
+import gameWorkerUrl from '../logic/gameWorker?worker&url';
 import type { GameState, UpgradeChoice } from '../logic/types';
 import { createInitialGameState } from '../logic/GameState';
 import { updatePlayer } from '../logic/PlayerLogic';
@@ -7,6 +8,7 @@ import { updateProjectiles, spawnBullet } from '../logic/ProjectileLogic';
 import { updateBossBehavior } from '../logic/BossLogic';
 import { spawnUpgrades, applyUpgrade } from '../logic/UpgradeLogic';
 import { calcStat } from '../logic/MathUtils';
+import { updateLoot } from '../logic/LootLogic';
 import { updateParticles } from '../logic/ParticleLogic';
 import { ARENA_CENTERS, ARENA_RADIUS, PORTALS, getHexWallLine } from '../logic/MapLogic';
 import { playSfx, startBGM, updateBGMPhase, duckMusic, restoreMusic, pauseMusic, resumeMusic, startBossAmbience, stopBossAmbience, startPortalAmbience, stopPortalAmbience } from '../logic/AudioLogic';
@@ -20,11 +22,42 @@ export function useGameLoop(gameStarted: boolean) {
     const lastTimeRef = useRef<number>(0);
     const accRef = useRef<number>(0);
     const frameCountRef = useRef<number>(0);
+    const workerRef = useRef<Worker | null>(null);
+    const isTabHidden = useRef<boolean>(false);
 
     // Pause state refs (so loop can check current state without closure issues)
     const showStatsRef = useRef(false);
     const showSettingsRef = useRef(false);
+    const showInventoryRef = useRef(false); // New Ref
+    const showModuleMenuRef = useRef(false);
     const upgradeChoicesRef = useRef<UpgradeChoice[] | null>(null);
+
+    // Image Preloading
+    const meteoriteImagesRef = useRef<Record<string, HTMLImageElement>>({});
+
+    useEffect(() => {
+        const rarities = ['scrap', 'anomalous', 'quantum', 'astral', 'radiant'];
+        rarities.forEach(r => {
+            const img = new Image();
+            img.src = `/assets/meteorites/${r}NoBackgound.png`;
+            meteoriteImagesRef.current[r] = img;
+        });
+
+        // Initialize Background Worker
+        workerRef.current = new Worker(gameWorkerUrl, { type: 'module' });
+        workerRef.current.postMessage({ type: 'start', interval: 1000 / 60 });
+
+        const handleVisibility = () => {
+            isTabHidden.current = document.visibilityState === 'hidden';
+            console.log('Visibility Changed:', document.visibilityState);
+        };
+        document.addEventListener('visibilitychange', handleVisibility);
+
+        return () => {
+            workerRef.current?.terminate();
+            document.removeEventListener('visibilitychange', handleVisibility);
+        };
+    }, []);
 
     // React state for UI overlays
     const [uiState, setUiState] = useState<number>(0);
@@ -33,10 +66,14 @@ export function useGameLoop(gameStarted: boolean) {
     const [bossWarning, setBossWarning] = useState<number | null>(null);
     const [showStats, setShowStats] = useState(false);
     const [showSettings, setShowSettings] = useState(false);
+    const [showInventory, setShowInventory] = useState(false); // New State
+    const [showModuleMenu, setShowModuleMenu] = useState(false);
 
     // Sync refs with state
     showStatsRef.current = showStats;
     showSettingsRef.current = showSettings;
+    showInventoryRef.current = showInventory; // Sync
+    showModuleMenuRef.current = showModuleMenu;
     upgradeChoicesRef.current = upgradeChoices;
 
     // Input Handling
@@ -52,6 +89,33 @@ export function useGameLoop(gameStarted: boolean) {
             // Handle C key for stats toggle
             if (e.key.toLowerCase() === 'c') {
                 setShowStats(prev => !prev);
+                if (!showStats) {
+                    setShowSettings(false);
+                    setShowInventory(false);
+                    setShowModuleMenu(false);
+                }
+            }
+            // Handle I key for inventory toggle
+            if (e.key.toLowerCase() === 'i') {
+                setShowInventory(prev => !prev);
+                gameState.current.isInventoryOpen = !gameState.current.isInventoryOpen;
+                if (!showInventory) {
+                    setShowSettings(false);
+                    setShowStats(false);
+                    setShowModuleMenu(false);
+                }
+            }
+            if (e.key.toLowerCase() === 'm') {
+                setShowModuleMenu(prev => {
+                    const next = !prev;
+                    if (next) {
+                        setShowSettings(false);
+                        setShowStats(false);
+                        setShowInventory(false);
+                    }
+                    return next;
+                });
+                gameState.current.showModuleMenu = !gameState.current.showModuleMenu;
             }
 
             // Track keys regardless of UI state so they don't get 'stuck' if held down while closing menu
@@ -117,7 +181,7 @@ export function useGameLoop(gameStarted: boolean) {
             window.removeEventListener('keyup', handleUp);
             window.removeEventListener('keydown', handleCheat);
         };
-    }, [showSettings, showStats, gameStarted]); // Re-bind if blocking state changes
+    }, [showSettings, showStats, showInventory, showModuleMenu, gameStarted]); // Re-bind if blocking state changes
 
     const restartGame = () => {
         gameState.current = createInitialGameState();
@@ -125,6 +189,8 @@ export function useGameLoop(gameStarted: boolean) {
         setUpgradeChoices(null);
         setBossWarning(null);
         setShowSettings(false);
+        setShowInventory(false);
+        setShowModuleMenu(false);
     };
 
     const handleUpgradeSelect = (choice: UpgradeChoice) => {
@@ -145,6 +211,13 @@ export function useGameLoop(gameStarted: boolean) {
             // Cap dt to prevent spiral of death if tab inactive
             const safeDt = Math.min(dt, 0.1);
 
+            // If tab is hidden, we skip the main loop logic here and let the worker message handle it
+            // This prevents duplicate updates if both rAF and Worker are firing
+            if (isTabHidden.current) {
+                requestRef.current = requestAnimationFrame(loop);
+                return;
+            }
+
             const state = gameState.current;
 
             // If game hasn't started, just render one frame and pause logic
@@ -159,18 +232,24 @@ export function useGameLoop(gameStarted: boolean) {
             }
 
             // Pausing Logic (check refs for current values)
-            const isMenuOpen = showStatsRef.current || showSettingsRef.current || upgradeChoicesRef.current !== null;
+            const isMenuOpen = showStatsRef.current || showSettingsRef.current || showInventoryRef.current || showModuleMenuRef.current || upgradeChoicesRef.current !== null;
             state.isPaused = isMenuOpen;
+            if (state.isPaused) {
+                // Ensure keys are cleared when pausing to prevent stuck movement
+                // keys.current = {}; 
+            }
 
             // Music volume control based on menu state
             const inStats = showStatsRef.current;
             const inSettings = showSettingsRef.current;
+            const inInventory = showInventoryRef.current; // Check inventory
+            const inModuleMenu = showModuleMenuRef.current;
 
             if (inSettings) {
                 pauseMusic(); // ESC menu stops music
-            } else if (inStats) {
+            } else if (inStats || inInventory || inModuleMenu) {
                 resumeMusic(); // Ensure music is playing
-                duckMusic(); // Duck to 70% for stats menu only
+                duckMusic(); // Duck to 70% for stats AND inventory
             } else {
                 resumeMusic(); // Ensure music is playing
                 restoreMusic(); // Restore full volume (including when in upgrade menu)
@@ -189,215 +268,7 @@ export function useGameLoop(gameStarted: boolean) {
                 // Fixed Update Step
                 while (accRef.current >= FIXED_STEP) {
                     // Update Logic
-                    const eventHandler = (event: string, _data?: any) => {
-                        if (event === 'level_up') {
-                            const choices = spawnUpgrades(state, false);
-                            setUpgradeChoices(choices);
-                            playSfx('level');
-                        }
-                        if (event === 'boss_kill') {
-                            state.bossKills = (state.bossKills || 0) + 1;
-                            const choices = spawnUpgrades(state, true);
-                            setUpgradeChoices(choices);
-                            playSfx('level');
-                        }
-                        if (event === 'game_over') {
-                            setGameOver(true);
-                            playSfx('hurt');
-                        }
-                        if (event === 'player_hit') {
-                            // Already handled by component side flashing or explosion logic
-                        }
-                    };
-
-                    updatePlayer(state, keys.current, eventHandler);
-
-                    // Trigger Spawn Sound if just starting (approx check)
-                    // We need a better flag for "sound played", but since timer counts down...
-                    // Let's add a "hasPlayedSpawnSound" to state or just check if timer is > 0.9 and we haven't played it?
-                    // Simpler: Just rely on the fact that restartGame resets state
-                    if (state.spawnTimer > 0.95 && !state.hasPlayedSpawnSound) {
-                        playSfx('spawn');
-                        state.hasPlayedSpawnSound = true;
-                    }
-
-                    state.camera.x = state.player.x;
-                    state.camera.y = state.player.y;
-
-                    updateEnemies(state, eventHandler);
-
-                    updateProjectiles(state, eventHandler);
-
-                    // --- PORTAL LOGIC ---
-                    // 1. Timer & State Management
-                    if (state.portalState !== 'transferring') {
-                        state.portalTimer -= FIXED_STEP;
-
-                        // State Transitions
-                        if (state.portalState === 'closed') {
-                            if (state.portalTimer <= 10) {
-                                state.portalState = 'warn';
-                                playSfx('warning'); // Alert sound
-                            }
-                        } else if (state.portalState === 'warn') {
-                            if (state.portalTimer <= 0) {
-                                state.portalState = 'open';
-                                state.portalTimer = state.portalOpenDuration; // 10s open
-                                startPortalAmbience();
-                                playSfx('spawn'); // Open sound
-                            }
-                        } else if (state.portalState === 'open') {
-                            if (state.portalTimer <= 0) {
-                                state.portalState = 'closed';
-                                state.portalTimer = 240; // Reset cycle (4 mins)
-                                stopPortalAmbience();
-                            } else {
-                                // Check Collisions
-                                const activePortals = PORTALS.filter(p => p.from === state.currentArena);
-                                const currentArenaCenter = ARENA_CENTERS.find(c => c.id === state.currentArena) || ARENA_CENTERS[0];
-
-                                for (const p of activePortals) {
-                                    const wall = getHexWallLine(currentArenaCenter.x, currentArenaCenter.y, ARENA_RADIUS, p.wall);
-
-                                    // Point-Line Distance
-                                    // Line: P1(wall.x1, y1) to P2(wall.x2, y2)
-                                    // Player: P0(state.player.x, y.y)
-                                    // Dist = |(y2-y1)x0 - (x2-x1)y0 + x2y1 - y2x1| / Length
-                                    const num = Math.abs((wall.y2 - wall.y1) * state.player.x - (wall.x2 - wall.x1) * state.player.y + wall.x2 * wall.y1 - wall.y2 * wall.x1);
-                                    const den = Math.hypot(wall.y2 - wall.y1, wall.x2 - wall.x1);
-                                    const dist = num / den;
-
-                                    // If close to line (within 50px) AND within segment bounds (approx check via radius from center of wall)
-                                    // Wall Center
-                                    const wcx = (wall.x1 + wall.x2) / 2;
-                                    const wcy = (wall.y1 + wall.y2) / 2;
-                                    const distToCenter = Math.hypot(state.player.x - wcx, state.player.y - wcy);
-
-                                    // Length of wall segment is approx R (actually R for flat sides?)
-                                    const wallLen = den;
-
-                                    if (dist < 100 && distToCenter < wallLen / 2 + 50) {
-                                        // ENTER PORTAL
-                                        state.portalState = 'transferring';
-                                        state.transferTimer = 3.0;
-                                        state.nextArenaId = p.to;
-                                        playSfx('rare-despawn'); // Warp sound
-                                        stopPortalAmbience();
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-                    } else {
-                        // TRANSFERRING Logic
-                        state.transferTimer -= FIXED_STEP;
-                        if (state.transferTimer <= 0) {
-                            // EXECUTE TRANSFER
-                            if (state.nextArenaId !== null) {
-                                const oldArena = state.currentArena;
-                                const newArena = state.nextArenaId;
-
-                                // 1. Move Player
-                                // Find where to spawn in new arena?
-                                // Let's spawn them at the "Entry" portal (Reverse path)?
-                                const destCenter = ARENA_CENTERS.find(c => c.id === newArena) || ARENA_CENTERS[0];
-                                const reversePortal = PORTALS.find(p => p.from === newArena && p.to === oldArena);
-
-                                if (reversePortal) {
-                                    // Spawn near the "Home" portal of the new arena, slightly inward
-                                    const wall = getHexWallLine(destCenter.x, destCenter.y, ARENA_RADIUS, reversePortal.wall);
-                                    const wcx = (wall.x1 + wall.x2) / 2;
-                                    const wcy = (wall.y1 + wall.y2) / 2;
-
-                                    // Move inward along normal (-nx, -ny) by 300px
-                                    state.player.x = wcx - wall.nx * 300;
-                                    state.player.y = wcy - wall.ny * 300;
-
-                                    // Jump Out Effect (High Decay Knockback)
-                                    state.player.knockback = {
-                                        x: -wall.nx * 80, // Strong impulse inward
-                                        y: -wall.ny * 80
-                                    }
-                                } else {
-                                    // Fallback Center
-                                    state.player.x = destCenter.x;
-                                    state.player.y = destCenter.y;
-                                }
-                                state.currentArena = newArena;
-                                state.nextArenaId = null;
-
-                                // 2. Despawn Enemies
-                                state.enemies = []; // "all enemies on previous arene despans"
-                                state.bullets = []; // Clear bullets too for safety
-                                state.drones.forEach(d => { d.x = state.player.x; d.y = state.player.y; });
-
-                                // 3. Reset Portal State
-                                state.portalState = 'closed';
-                                state.portalTimer = 240;
-                                state.spawnTimer = 3.0; // Re-trigger spawn animation
-
-                                playSfx('spawn'); // Arrival sound
-                            }
-                        }
-                    }
-
-                    // --- COMBAT CLEANUP ---
-                    state.enemies = state.enemies.filter(e => !e.dead);
-
-                    state.enemies.forEach(e => {
-                        updateBossBehavior(e);
-                    });
-
-                    // Shooting Logic
-                    const { player } = state;
-                    const atkScore = Math.min(9999, calcStat(player.atk));
-                    const fireDelay = 200000 / atkScore;
-
-                    if (Date.now() - player.lastShot > fireDelay && state.spawnTimer <= 0) {
-                        const d = calcStat(player.dmg);
-                        for (let i = 0; i < player.multi; i++) {
-                            const offset = (i - (player.multi - 1) / 2) * 0.15;
-                            spawnBullet(state, player.x, player.y, player.targetAngle, d, player.pierce, offset);
-                        }
-                        player.lastShot = Date.now();
-                        playSfx('shoot');
-                    }
-
-                    state.drones.forEach((d, i) => {
-                        d.a += 0.05;
-                        d.x = player.x + Math.cos(d.a + (i * 2)) * 60;
-                        d.y = player.y + Math.sin(d.a + (i * 2)) * 60;
-                        if (Date.now() - d.last > 800) {
-                            const droneDmgMult = player.droneCount > 3 ? Math.pow(2, player.droneCount - 3) : 1;
-                            spawnBullet(state, d.x, d.y, player.targetAngle, calcStat(player.dmg) * droneDmgMult, player.pierce);
-                            d.last = Date.now();
-                        }
-                    });
-
-                    updateParticles(state);
-                    state.gameTime += FIXED_STEP;
-                    state.frameCount++; // Increment for throttling
-
-
-                    // Boss Warning
-                    const timeLeft = state.nextBossSpawnTime - state.gameTime;
-                    if (timeLeft <= 10 && timeLeft > 0) setBossWarning(timeLeft);
-                    else setBossWarning(null);
-
-                    // Smooth Boss Presence Transition
-                    const activeBoss = state.enemies.some(e => e.boss);
-                    const targetPresence = activeBoss ? 1.0 : 0.0;
-                    // Lerp approx 0.01 per frame (60fps) -> ~2-3 seconds transition
-                    // Lerp approx 0.01 per frame (60fps) -> ~2-3 seconds transition
-                    state.bossPresence = state.bossPresence + (targetPresence - state.bossPresence) * 0.02;
-
-                    // Boss Ambience Trigger
-                    if (activeBoss) {
-                        startBossAmbience();
-                    } else {
-                        // Stop immediately when dead (AudioLogic handles fade out)
-                        stopBossAmbience();
-                    }
+                    updateLogic(state, FIXED_STEP);
 
                     accRef.current -= FIXED_STEP;
                 }
@@ -410,7 +281,7 @@ export function useGameLoop(gameStarted: boolean) {
             const ctx = canvasRef.current?.getContext('2d');
             if (ctx) {
                 try {
-                    renderGame(ctx, state);
+                    renderGame(ctx, state, meteoriteImagesRef.current);
                 } catch (e) {
                     console.error("Render Error:", e);
                 }
@@ -421,10 +292,34 @@ export function useGameLoop(gameStarted: boolean) {
             if (frameCountRef.current % 4 === 0) {
                 setUiState(prev => prev + 1);
             }
+
+            // FPS Calculation
+            framesRef.current++;
+            if (now - lastFpsUpdateRef.current >= 1000) {
+                setFps(Math.round(framesRef.current * 1000 / (now - lastFpsUpdateRef.current)));
+                framesRef.current = 0;
+                lastFpsUpdateRef.current = now;
+            }
+
             requestRef.current = requestAnimationFrame(loop);
         };
 
         // Start Loop
+        // Background Worker Message Handler
+        if (workerRef.current) {
+            workerRef.current.onmessage = (e) => {
+                if (e.data.type === 'tick' && isTabHidden.current && gameStarted) {
+                    // Drive logic when hidden
+                    const state = gameState.current;
+                    if (!state.isPaused && !state.gameOver) {
+                        // Use a fixed step for background play
+                        const FIXED_STEP = 1 / 60;
+                        updateLogic(state, FIXED_STEP);
+                    }
+                }
+            };
+        }
+
         requestRef.current = requestAnimationFrame(loop);
 
         return () => {
@@ -432,6 +327,158 @@ export function useGameLoop(gameStarted: boolean) {
             cancelAnimationFrame(requestRef.current!);
         };
     }, [gameStarted]); // Run when gameStarted changes
+
+    // Extracted Logic Update to be reusable for both rAF and Worker
+    const updateLogic = (state: GameState, step: number) => {
+        const eventHandler = (event: string, _data?: any) => {
+            if (event === 'level_up') {
+                const choices = spawnUpgrades(state, false);
+                setUpgradeChoices(choices);
+                playSfx('level');
+            }
+            if (event === 'boss_kill') {
+                state.bossKills = (state.bossKills || 0) + 1;
+                const choices = spawnUpgrades(state, true);
+                setUpgradeChoices(choices);
+                playSfx('level');
+            }
+            if (event === 'game_over') {
+                setGameOver(true);
+                playSfx('hurt');
+            }
+        };
+
+        updatePlayer(state, keys.current, eventHandler);
+
+        if (state.spawnTimer > 0.95 && !state.hasPlayedSpawnSound) {
+            playSfx('spawn');
+            state.hasPlayedSpawnSound = true;
+        }
+
+        state.camera.x = state.player.x;
+        state.camera.y = state.player.y;
+
+        updateEnemies(state, eventHandler);
+        updateProjectiles(state, eventHandler);
+        updateLoot(state);
+
+        // --- PORTAL LOGIC ---
+        if (state.portalState !== 'transferring') {
+            state.portalTimer -= step;
+            if (state.portalState === 'closed' && state.portalTimer <= 10) {
+                state.portalState = 'warn';
+                playSfx('warning');
+            } else if (state.portalState === 'warn' && state.portalTimer <= 0) {
+                state.portalState = 'open';
+                state.portalTimer = state.portalOpenDuration;
+                startPortalAmbience();
+                playSfx('spawn');
+            } else if (state.portalState === 'open') {
+                if (state.portalTimer <= 0) {
+                    state.portalState = 'closed';
+                    state.portalTimer = 240;
+                    stopPortalAmbience();
+                } else {
+                    const activePortals = PORTALS.filter(p => p.from === state.currentArena);
+                    const currentArenaCenter = ARENA_CENTERS.find(c => c.id === state.currentArena) || ARENA_CENTERS[0];
+                    for (const p of activePortals) {
+                        const wall = getHexWallLine(currentArenaCenter.x, currentArenaCenter.y, ARENA_RADIUS, p.wall);
+                        const num = Math.abs((wall.y2 - wall.y1) * state.player.x - (wall.x2 - wall.x1) * state.player.y + wall.x2 * wall.y1 - wall.y2 * wall.x1);
+                        const den = Math.hypot(wall.y2 - wall.y1, wall.x2 - wall.x1);
+                        const dist = num / den;
+                        const wcx = (wall.x1 + wall.x2) / 2;
+                        const wcy = (wall.y1 + wall.y2) / 2;
+                        const distToCenter = Math.hypot(state.player.x - wcx, state.player.y - wcy);
+                        const wallLen = den;
+                        if (dist < 100 && distToCenter < wallLen / 2 + 50) {
+                            state.portalState = 'transferring';
+                            state.transferTimer = 3.0;
+                            state.nextArenaId = p.to;
+                            playSfx('rare-despawn');
+                            stopPortalAmbience();
+                            break;
+                        }
+                    }
+                }
+            }
+        } else {
+            state.transferTimer -= step;
+            if (state.transferTimer <= 0 && state.nextArenaId !== null) {
+                const oldArena = state.currentArena;
+                const newArena = state.nextArenaId;
+                const destCenter = ARENA_CENTERS.find(c => c.id === newArena) || ARENA_CENTERS[0];
+                const reversePortal = PORTALS.find(p => p.from === newArena && p.to === oldArena);
+                if (reversePortal) {
+                    const wall = getHexWallLine(destCenter.x, destCenter.y, ARENA_RADIUS, reversePortal.wall);
+                    const wcx = (wall.x1 + wall.x2) / 2;
+                    const wcy = (wall.y1 + wall.y2) / 2;
+                    state.player.x = wcx - wall.nx * 300;
+                    state.player.y = wcy - wall.ny * 300;
+                    state.player.knockback = { x: -wall.nx * 80, y: -wall.ny * 80 };
+                } else {
+                    state.player.x = destCenter.x;
+                    state.player.y = destCenter.y;
+                }
+                state.currentArena = newArena;
+                state.nextArenaId = null;
+                state.enemies = [];
+                state.bullets = [];
+                state.drones.forEach(d => { d.x = state.player.x; d.y = state.player.y; });
+                state.portalState = 'closed';
+                state.portalTimer = 240;
+                state.spawnTimer = 3.0;
+                playSfx('spawn');
+            }
+        }
+
+        state.enemies = state.enemies.filter(e => !e.dead);
+        state.enemies.forEach(e => updateBossBehavior(e));
+
+        const { player } = state;
+        const atkScore = Math.min(9999, calcStat(player.atk));
+        const fireDelay = 200000 / atkScore;
+
+        if (Date.now() - player.lastShot > fireDelay && state.spawnTimer <= 0) {
+            const d = calcStat(player.dmg);
+            for (let i = 0; i < player.multi; i++) {
+                const offset = (i - (player.multi - 1) / 2) * 0.15;
+                spawnBullet(state, player.x, player.y, player.targetAngle, d, player.pierce, offset);
+            }
+            player.lastShot = Date.now();
+            playSfx('shoot');
+        }
+
+        state.drones.forEach((d, i) => {
+            d.a += 0.05;
+            d.x = player.x + Math.cos(d.a + (i * 2)) * 60;
+            d.y = player.y + Math.sin(d.a + (i * 2)) * 60;
+            if (Date.now() - d.last > 800) {
+                const droneDmgMult = player.droneCount > 3 ? Math.pow(2, player.droneCount - 3) : 1;
+                spawnBullet(state, d.x, d.y, player.targetAngle, calcStat(player.dmg) * droneDmgMult, player.pierce);
+                d.last = Date.now();
+            }
+        });
+
+        updateParticles(state);
+        state.gameTime += step;
+        state.frameCount++;
+
+        const timeLeft = state.nextBossSpawnTime - state.gameTime;
+        if (timeLeft <= 10 && timeLeft > 0) setBossWarning(timeLeft);
+        else setBossWarning(null);
+
+        const activeBoss = state.enemies.some(e => e.boss);
+        const targetPresence = activeBoss ? 1.0 : 0.0;
+        state.bossPresence = state.bossPresence + (targetPresence - state.bossPresence) * 0.02;
+
+        if (activeBoss) startBossAmbience();
+        else stopBossAmbience();
+    };
+
+    // FPS Calculation
+    const [fps, setFps] = useState(60);
+    const framesRef = useRef(0);
+    const lastFpsUpdateRef = useRef(0);
 
     return {
         canvasRef,
@@ -445,17 +492,39 @@ export function useGameLoop(gameStarted: boolean) {
         setShowStats,
         showSettings,
         setShowSettings,
-        uiState
+        showInventory,
+        setShowInventory,
+        showModuleMenu,
+        setShowModuleMenu,
+        handleModuleSocketUpdate: (type: 'hex' | 'diamond', index: number, item: any) => {
+            if (type === 'hex') gameState.current.moduleSockets.hexagons[index] = item;
+            else gameState.current.moduleSockets.diamonds[index] = item;
+            setUiState(prev => prev + 1); // Force re-render
+        },
+        handleInventoryUpdate: (index: number, item: any) => {
+            gameState.current.inventory[index] = item;
+            setUiState(prev => prev + 1);
+        },
+        uiState,
+        fps // Expose FPS
     };
 }
 
-function renderGame(ctx: CanvasRenderingContext2D, state: GameState) {
+function renderGame(ctx: CanvasRenderingContext2D, state: GameState, meteoriteImages: Record<string, HTMLImageElement>) {
     const { width, height } = ctx.canvas;
     const { camera, player, enemies, bullets, enemyBullets, drones, particles } = state;
 
-    // Clear - Reverted to Deep Slate per feedback, but kept dark
+    // High-Quality Smoothing
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+
+    const dpr = window.devicePixelRatio || 1;
+    const logicalWidth = width / dpr;
+    const logicalHeight = height / dpr;
+
+    // Clear
     ctx.fillStyle = '#020617';
-    ctx.fillRect(0, 0, width, height);
+    ctx.fillRect(0, 0, logicalWidth, logicalHeight);
 
     try {
         ctx.save();
@@ -463,8 +532,8 @@ function renderGame(ctx: CanvasRenderingContext2D, state: GameState) {
         // Zoom / Camera Logic
         // 120% Vision = 0.8 scale roughly (1 / 1.25)
         // To keep player centered:
-        // 1. Move origin to center of screen
-        ctx.translate(width / 2, height / 2);
+        // 1. Move origin to center of screen (logical)
+        ctx.translate(logicalWidth / 2, logicalHeight / 2);
         // 2. Apply Scale - Zoom scale reduced by 15% (0.68 -> 0.58)
         ctx.scale(0.58, 0.58);
         // 3. Move origin to camera position (which follows player)
@@ -497,140 +566,116 @@ function renderGame(ctx: CanvasRenderingContext2D, state: GameState) {
             // "slowly darken"
             ctx.fillStyle = `rgba(0, 0, 0, ${state.bossPresence * 0.7})`; // Max 0.7 opacity
             // Draw centered on camera to cover the viewport
-            const vW = width / 0.58; // Reverse scale
-            const vH = height / 0.58;
+            const vW = logicalWidth / 0.58;
+            const vH = logicalHeight / 0.58;
             ctx.fillRect(camera.x - vW, camera.y - vH, vW * 2, vH * 2);
         }
 
         // --- VOID HEX VORTEX BACKGROUND ---
 
         // Helper: Draw Hex Grid
-        const drawHexGrid = (
-            gridSize: number,
-            color: string,
-            alpha: number,
-            lineWidth: number = 1
-        ) => {
-            const r = gridSize;
-            const h = Math.sqrt(3) * r;
+        // BACKGROUND GRID (Hexagons)
+        const drawHexGrid = (r: number) => {
             const hDist = 1.5 * r;
+            const vDist = Math.sqrt(3) * r;
 
             const scale = 0.58;
-            const vW = width / scale;
-            const vH = height / scale;
+            const vW = logicalWidth / scale;
+            const vH = logicalHeight / scale;
             const cX = camera.x;
             const cY = camera.y;
 
-            const startCol = Math.floor((cX - vW / 2) / hDist) - 1;
-            const endCol = Math.floor((cX + vW / 2) / hDist) + 2;
-            const startRow = Math.floor((cY - vH / 2) / h) - 1;
-            const endRow = Math.floor((cY + vH / 2) / h) + 2;
+            const startX = Math.floor((cX - vW / 2) / hDist) - 1;
+            const endX = Math.ceil((cX + vW / 2) / hDist) + 1;
+            const startY = Math.floor((cY - vH / 2) / vDist) - 1;
+            const endY = Math.ceil((cY + vH / 2) / vDist) + 2;
 
-            // 1. Draw Grid Layer with Clipping
-            ctx.save();
+            ctx.strokeStyle = '#1e293b';
+            ctx.lineWidth = 1;
+            ctx.globalAlpha = 0.25; // Retain alpha from original stable layer
 
-            // Define Clipping Mask for Arenas
-            ctx.beginPath();
-            ARENA_CENTERS.forEach(c => {
-                for (let i = 0; i < 6; i++) {
-                    const ang = Math.PI / 3 * i;
-                    const hx = c.x + ARENA_RADIUS * Math.cos(ang);
-                    const hy = c.y + ARENA_RADIUS * Math.sin(ang);
-                    if (i === 0) ctx.moveTo(hx, hy);
-                    else ctx.lineTo(hx, hy);
-                }
-                ctx.closePath();
-            });
-            ctx.clip();
+            for (let i = startX; i <= endX; i++) {
+                for (let j = startY; j <= endY; j++) {
+                    const x = i * hDist;
+                    const y = j * vDist + (i % 2 === 0 ? 0 : vDist / 2);
 
-            // Style for connected grid
-            ctx.strokeStyle = color;
-            ctx.lineWidth = lineWidth;
-            ctx.globalAlpha = alpha;
-            ctx.lineJoin = 'round';
-            ctx.lineCap = 'round';
-
-            ctx.beginPath();
-            for (let col = startCol; col <= endCol; col++) {
-                const colOffset = (col % 2) !== 0 ? h / 2 : 0;
-                const x = col * hDist;
-                for (let row = startRow; row <= endRow; row++) {
-                    const y = row * h + colOffset;
-                    for (let i = 0; i < 6; i++) {
-                        const ang = Math.PI / 3 * i;
-                        const hx = x + r * Math.cos(ang);
-                        const hy = y + r * Math.sin(ang);
-                        if (i === 0) ctx.moveTo(hx, hy);
-                        else ctx.lineTo(hx, hy);
+                    // Simple hexagon draw
+                    ctx.beginPath();
+                    for (let k = 0; k < 6; k++) {
+                        const ang = (Math.PI / 3) * k;
+                        const px = x + r * Math.cos(ang);
+                        const py = y + r * Math.sin(ang);
+                        if (k === 0) ctx.moveTo(px, py);
+                        else ctx.lineTo(px, py);
                     }
                     ctx.closePath();
+                    ctx.stroke();
                 }
             }
-            ctx.stroke();
-            ctx.restore();
-
-            // 2. Draw Arena Boarders (Thick Lines) - Drawn on top
-            ctx.save();
-            ctx.strokeStyle = '#3b82f6';
-            ctx.lineWidth = 30;
-            ctx.globalAlpha = 0.3;
-            ctx.lineCap = 'round';
-            ctx.lineJoin = 'round';
-
-            ARENA_CENTERS.forEach(c => {
-                ctx.beginPath();
-                for (let i = 0; i < 6; i++) {
-                    const ang = Math.PI / 3 * i;
-                    const hx = c.x + ARENA_RADIUS * Math.cos(ang);
-                    const hy = c.y + ARENA_RADIUS * Math.sin(ang);
-                    if (i === 0) ctx.moveTo(hx, hy);
-                    else ctx.lineTo(hx, hy);
-                }
-                ctx.closePath();
-                ctx.stroke();
-            });
-            ctx.restore();
-
-            // --- PORTAL RENDERING ---
-            if (state.portalState !== 'closed') {
-                const activePortals = PORTALS.filter(p => p.from === state.currentArena);
-                const center = ARENA_CENTERS.find(c => c.id === state.currentArena);
-
-                if (center) {
-                    activePortals.forEach(p => {
-                        const wall = getHexWallLine(center.x, center.y, ARENA_RADIUS, p.wall);
-
-                        ctx.save();
-                        // Glow
-                        ctx.shadowBlur = 20;
-                        ctx.shadowColor = p.color;
-                        ctx.strokeStyle = p.color;
-                        ctx.lineWidth = 10;
-                        ctx.lineCap = 'round';
-
-                        // Pulse opacity
-                        if (state.portalState === 'warn') {
-                            ctx.globalAlpha = 0.5 + Math.sin(state.gameTime * 10) * 0.5;
-                            ctx.setLineDash([50, 50]); // Warning Dash
-                        } else {
-                            // OPEN
-                            ctx.globalAlpha = 1.0;
-                            ctx.lineWidth = 15 + Math.sin(state.gameTime * 20) * 5; // Energy pulse breadth
-                        }
-
-                        ctx.beginPath();
-                        ctx.moveTo(wall.x1, wall.y1);
-                        ctx.lineTo(wall.x2, wall.y2);
-                        ctx.stroke();
-
-                        ctx.restore();
-                    });
-                }
-            }
+            ctx.globalAlpha = 1.0; // Reset alpha
         };
 
         // 1. STABLE LAYER (Background)
-        drawHexGrid(200, '#1e293b', 0.25, 2);
+        drawHexGrid(120);
+
+        // 2. Draw Arena Boarders (Thick Lines) - Drawn on top
+        ctx.save();
+        ctx.strokeStyle = '#3b82f6';
+        ctx.lineWidth = 30;
+        ctx.globalAlpha = 0.3;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        ARENA_CENTERS.forEach(c => {
+            ctx.beginPath();
+            for (let i = 0; i < 6; i++) {
+                const ang = Math.PI / 3 * i;
+                const hx = c.x + ARENA_RADIUS * Math.cos(ang);
+                const hy = c.y + ARENA_RADIUS * Math.sin(ang);
+                if (i === 0) ctx.moveTo(hx, hy);
+                else ctx.lineTo(hx, hy);
+            }
+            ctx.closePath();
+            ctx.stroke();
+        });
+        ctx.restore();
+
+        // --- PORTAL RENDERING ---
+        if (state.portalState !== 'closed') {
+            const activePortals = PORTALS.filter(p => p.from === state.currentArena);
+            const center = ARENA_CENTERS.find(c => c.id === state.currentArena);
+
+            if (center) {
+                activePortals.forEach(p => {
+                    const wall = getHexWallLine(center.x, center.y, ARENA_RADIUS, p.wall);
+
+                    ctx.save();
+                    // Glow
+                    ctx.shadowBlur = 20;
+                    ctx.shadowColor = p.color;
+                    ctx.strokeStyle = p.color;
+                    ctx.lineWidth = 10;
+                    ctx.lineCap = 'round';
+
+                    // Pulse opacity
+                    if (state.portalState === 'warn') {
+                        ctx.globalAlpha = 0.5 + Math.sin(state.gameTime * 10) * 0.5;
+                        ctx.setLineDash([50, 50]); // Warning Dash
+                    } else {
+                        // OPEN
+                        ctx.globalAlpha = 1.0;
+                        ctx.lineWidth = 15 + Math.sin(state.gameTime * 20) * 5; // Energy pulse breadth
+                    }
+
+                    ctx.beginPath();
+                    ctx.moveTo(wall.x1, wall.y1);
+                    ctx.lineTo(wall.x2, wall.y2);
+                    ctx.stroke();
+
+                    ctx.restore();
+                });
+            }
+        }
 
         // Void Rifts (Deep Layer) - REMOVED
         // "No remove those balck holes"
@@ -651,6 +696,66 @@ function renderGame(ctx: CanvasRenderingContext2D, state: GameState) {
 
         // Particles moved to post-enemy render for smoke occlusion
 
+
+        // Dropped Meteorites
+        state.meteorites.forEach(m => {
+            ctx.save();
+            ctx.translate(m.x, m.y);
+
+            // Bobbing animation
+            const bob = Math.sin(state.gameTime * 3 + m.id) * 5;
+            ctx.translate(0, bob);
+
+            // Magnetized shake
+            if (m.magnetized) {
+                ctx.translate((Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2);
+            }
+
+            const img = meteoriteImages[m.rarity];
+            if (img && img.complete && img.naturalWidth !== 0) {
+                // Draw high quality image
+                const size = 32; // Standard icon size in world
+                ctx.drawImage(img, -size / 2, -size / 2, size, size);
+
+                // Add a additive glow only for rare ones
+                if (m.rarity !== 'scrap') {
+                    ctx.globalCompositeOperation = 'lighter';
+                    // We avoid shadowBlur here too, just draw the image again semi-transparent
+                    ctx.globalAlpha = 0.4;
+                    ctx.drawImage(img, -size / 2 - 2, -size / 2 - 2, size + 4, size + 4);
+                    ctx.globalAlpha = 1.0;
+                    ctx.globalCompositeOperation = 'source-over';
+                }
+            } else {
+                // Fallback to jagged rock shape if not loaded
+                let color = '#9ca3af'; // Scrap
+                if (m.rarity === 'anomalous') color = '#14b8a6';
+                else if (m.rarity === 'quantum') color = '#06b6d4';
+                else if (m.rarity === 'astral') color = '#a855f7';
+                else if (m.rarity === 'radiant') color = '#eab308'; // Gold
+
+                ctx.shadowColor = color;
+                ctx.shadowBlur = 10;
+                ctx.fillStyle = color;
+
+                // Draw jagged rock shape (Scaled up 50%)
+                ctx.beginPath();
+                ctx.moveTo(0, -12);
+                ctx.lineTo(9, -6);
+                ctx.lineTo(12, 6);
+                ctx.lineTo(0, 12);
+                ctx.lineTo(-10.5, 7.5);
+                ctx.lineTo(-9, -7.5);
+                ctx.closePath();
+                ctx.fill();
+
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+            }
+
+            ctx.restore();
+        });
 
         // Player Bullets (Drawn Under Player)
         bullets.forEach(b => {
@@ -1206,9 +1311,13 @@ function renderGame(ctx: CanvasRenderingContext2D, state: GameState) {
             // Offset 5-10% outward -> size * 1.1
             ctx.strokeStyle = outerColor;
             ctx.lineWidth = 1.5;
-            // Subtle glow bloom
-            ctx.shadowBlur = 8;
-            ctx.shadowColor = outerColor;
+
+            // Only Bosses get shadowBlur for outline
+            if (e.boss) {
+                ctx.shadowBlur = 8;
+                ctx.shadowColor = outerColor;
+            }
+
             drawShape(e.size * 1.1, true); // Warp active for boss
             ctx.stroke();
 
@@ -1355,16 +1464,16 @@ function renderGame(ctx: CanvasRenderingContext2D, state: GameState) {
         // --- BOSS OFF-SCREEN INDICATOR (Skull Icon) ---
         enemies.filter(e => e.boss && !e.dead).forEach(e => {
             const scale = 0.58;
-            const screenX = (e.x - camera.x) * scale + width / 2;
-            const screenY = (e.y - camera.y) * scale + height / 2;
+            const screenX = (e.x - camera.x) * scale + logicalWidth / 2;
+            const screenY = (e.y - camera.y) * scale + logicalHeight / 2;
 
             const pad = 40;
-            const isOffscreen = screenX < pad || screenX > width - pad || screenY < pad || screenY > height - pad;
+            const isOffscreen = screenX < pad || screenX > logicalWidth - pad || screenY < pad || screenY > logicalHeight - pad;
 
             if (isOffscreen) {
                 // Clamp to screen edges
-                const ix = Math.max(pad, Math.min(width - pad, screenX));
-                const iy = Math.max(pad, Math.min(height - pad, screenY));
+                const ix = Math.max(pad, Math.min(logicalWidth - pad, screenX));
+                const iy = Math.max(pad, Math.min(logicalHeight - pad, screenY));
 
                 ctx.save();
                 ctx.translate(ix, iy);

@@ -12,8 +12,22 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ hook }) => {
     useEffect(() => {
         const resize = () => {
             if (canvasRef.current) {
-                canvasRef.current.width = window.innerWidth;
-                canvasRef.current.height = window.innerHeight;
+                const dpr = window.devicePixelRatio || 1;
+                const width = window.innerWidth;
+                const height = window.innerHeight;
+
+                // Buffer size
+                canvasRef.current.width = width * dpr;
+                canvasRef.current.height = height * dpr;
+
+                // CSS size
+                canvasRef.current.style.width = `${width}px`;
+                canvasRef.current.style.height = `${height}px`;
+
+                const ctx = canvasRef.current.getContext('2d');
+                if (ctx) {
+                    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+                }
             }
         };
         window.addEventListener('resize', resize);

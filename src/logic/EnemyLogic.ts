@@ -124,23 +124,30 @@ export function updateEnemies(state: GameState, onEvent?: (event: string, data?:
         let pushX = 0;
         let pushY = 0;
 
-        // Optimized Push Logic
-        const nearbyEnemies = state.spatialGrid.query(e.x, e.y, e.size * 3);
+        // Optimized Push Logic - Only run for enemies near player and stagger checks
+        const shouldCheckPush = dist < 1000 && (e.id + state.frameCount) % 2 === 0;
 
-        nearbyEnemies.forEach(other => {
-            if (e === other) return;
-            const odx = e.x - other.x;
-            const ody = e.y - other.y;
-            const odist = Math.hypot(odx, ody);
-            // Push radius usually 2*size
-            if (odist < e.size + other.size) {
-                const pushDist = (e.size + other.size) - odist;
-                if (odist > 0.001) { // Avoid div by zero
-                    pushX += (odx / odist) * pushDist * 0.005; // Minimal separation
-                    pushY += (ody / odist) * pushDist * 0.005;
+        if (shouldCheckPush) {
+            const nearbyEnemies = state.spatialGrid.query(e.x, e.y, e.size * 3);
+
+            nearbyEnemies.forEach(other => {
+                if (e === other) return;
+                const odx = e.x - other.x;
+                const ody = e.y - other.y;
+                // Quick box check before expensive hypot
+                if (Math.abs(odx) < e.size + other.size && Math.abs(ody) < e.size + other.size) {
+                    const odist = Math.sqrt(odx * odx + ody * ody);
+                    // Push radius usually 2*size
+                    if (odist < e.size + other.size) {
+                        const pushDist = (e.size + other.size) - odist;
+                        if (odist > 0.001) { // Avoid div by zero
+                            pushX += (odx / odist) * pushDist * 0.01; // Slightly increased for staggered frames
+                            pushY += (ody / odist) * pushDist * 0.01;
+                        }
+                    }
                 }
-            }
-        });
+            });
+        }
 
         // Basic Tracking (Overridden by behaviors below)
         let vx = (dx / dist) * speed + pushX;

@@ -15,9 +15,10 @@ interface HUDProps {
     gameOver: boolean;
     onRestart: () => void;
     bossWarning: number | null;
+    fps: number;
 }
 
-export const HUD: React.FC<HUDProps> = ({ gameState, upgradeChoices, onUpgradeSelect, gameOver, bossWarning }) => {
+export const HUD: React.FC<HUDProps> = ({ gameState, upgradeChoices, onUpgradeSelect, gameOver, bossWarning, fps }) => {
     const { player, score, gameTime } = gameState;
     const { xp } = player;
     const maxHp = calcStat(player.hp);
@@ -79,7 +80,7 @@ export const HUD: React.FC<HUDProps> = ({ gameState, upgradeChoices, onUpgradeSe
         <>
             {!gameOver && (
                 <>
-                    {/* Top UI */}
+                    {/* Top Left UI Group */}
                     <div style={{ position: 'absolute', top: 15, left: 15, pointerEvents: 'none', zIndex: 10 }}>
                         <div className="kills" style={{ color: '#22d3ee', textShadow: '0 0 10px rgba(34, 211, 238, 0.5)', fontSize: 24, fontWeight: 800 }}>
                             {score.toString().padStart(4, '0')}
@@ -115,7 +116,7 @@ export const HUD: React.FC<HUDProps> = ({ gameState, upgradeChoices, onUpgradeSe
                             </div>
                         )}
 
-                        {/* STUN INDICATOR (Top Left Stack) */}
+                        {/* STUN INDICATOR */}
                         {player.stunnedUntil && Date.now() < player.stunnedUntil && (
                             <div style={{
                                 marginTop: 10,
@@ -140,62 +141,79 @@ export const HUD: React.FC<HUDProps> = ({ gameState, upgradeChoices, onUpgradeSe
                         )}
                     </div>
 
-                    {/* Boss Warning */}
-                    {bossWarning !== null && (
-                        <div id="boss-warning" className="glitch-text" style={{
-                            position: 'absolute', top: 15, right: 15, textAlign: 'right',
-                            color: '#ef4444', fontWeight: 900, letterSpacing: 1, fontSize: 24
+                    {/* FPS Counter - Bottom Right Independent Overlay */}
+                    <div style={{
+                        position: 'absolute', bottom: 10, right: 10,
+                        pointerEvents: 'none',
+                        zIndex: 100
+                    }}>
+                        <span style={{
+                            color: fps >= 50 ? '#4ade80' : fps >= 30 ? '#facc15' : '#ef4444',
+                            fontFamily: 'monospace',
+                            fontSize: 14,
+                            fontWeight: 900,
+                            letterSpacing: '1px',
+                            textShadow: '0 0 5px rgba(0,0,0,0.8)'
                         }}>
-                            ANOMALY DETECTED: {Math.ceil(bossWarning)}s
-                        </div>
-                    )}
+                            {fps}
+                        </span>
+                    </div>
 
-                    {showSnitchAlert && (
-                        <div className="glitch-text" style={{
-                            position: 'absolute', top: 45, right: 15, textAlign: 'right',
-                            animation: 'pulse 0.5s infinite alternate'
-                        }}>
-                            <div style={{ color: '#facc15', fontWeight: 900, letterSpacing: 1, fontSize: 24 }}>
-                                ANOMALY DETECTED
+                    {/* Right Side Alerts Group */}
+                    <div style={{ position: 'absolute', top: 0, right: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 10 }}>
+                        {bossWarning !== null && (
+                            <div id="boss-warning" className="glitch-text" style={{
+                                position: 'absolute', top: 15, right: 15, textAlign: 'right',
+                                color: '#ef4444', fontWeight: 900, letterSpacing: 1, fontSize: 24
+                            }}>
+                                ANOMALY DETECTED: {Math.ceil(bossWarning)}s
                             </div>
-                            <div style={{ color: '#fef08a', fontWeight: 700, letterSpacing: 2, fontSize: 16, marginTop: 4 }}>
-                                SEARCH SURROUNDINGS
-                            </div>
-                        </div>
-                    )}
+                        )}
 
-                    {/* Portal Alerts */}
-                    {gameState.portalState === 'warn' && (
-                        <div className="glitch-text" style={{
-                            position: 'absolute', top: 85, right: 15, textAlign: 'right',
-                            animation: 'pulse 0.5s infinite alternate'
-                        }}>
-                            <div style={{ color: '#00FFFF', fontWeight: 900, letterSpacing: 1, fontSize: 20 }}>
-                                DIMENSIONAL RIFT OPENING
+                        {showSnitchAlert && (
+                            <div className="glitch-text" style={{
+                                position: 'absolute', top: 45, right: 15, textAlign: 'right',
+                                animation: 'pulse 0.5s infinite alternate'
+                            }}>
+                                <div style={{ color: '#facc15', fontWeight: 900, letterSpacing: 1, fontSize: 24 }}>
+                                    ANOMALY DETECTED
+                                </div>
+                                <div style={{ color: '#fef08a', fontWeight: 700, letterSpacing: 2, fontSize: 16, marginTop: 4 }}>
+                                    SEARCH SURROUNDINGS
+                                </div>
                             </div>
-                            <div style={{ color: '#fff', fontWeight: 700, letterSpacing: 2, fontSize: 14, marginTop: 2 }}>
-                                T-MINUS {Math.ceil(gameState.portalTimer)}s
-                            </div>
-                        </div>
-                    )}
-                    {gameState.portalState === 'open' && (
-                        <div className="glitch-text" style={{
-                            position: 'absolute', top: 85, right: 15, textAlign: 'right',
-                            animation: gameState.portalTimer <= 5 ? 'pulse 0.2s infinite' : 'pulse 1s infinite'
-                        }}>
-                            <div style={{ color: gameState.portalTimer <= 5 ? '#FF0000' : '#00FF00', fontWeight: 900, letterSpacing: 1, fontSize: 20 }}>
-                                {gameState.portalTimer <= 5 ? "PORTAL CLOSING" : "PORTAL ACTIVE"}
-                            </div>
-                            <div style={{ color: '#fff', fontWeight: 700, letterSpacing: 2, fontSize: 14, marginTop: 2 }}>
-                                CLOSING IN {Math.ceil(gameState.portalTimer)}s
-                            </div>
-                        </div>
-                    )}
+                        )}
 
-
+                        {gameState.portalState === 'warn' && (
+                            <div className="glitch-text" style={{
+                                position: 'absolute', top: 85, right: 15, textAlign: 'right',
+                                animation: 'pulse 0.5s infinite alternate'
+                            }}>
+                                <div style={{ color: '#00FFFF', fontWeight: 900, letterSpacing: 1, fontSize: 20 }}>
+                                    DIMENSIONAL RIFT OPENING
+                                </div>
+                                <div style={{ color: '#fff', fontWeight: 700, letterSpacing: 2, fontSize: 14, marginTop: 2 }}>
+                                    T-MINUS {Math.ceil(gameState.portalTimer)}s
+                                </div>
+                            </div>
+                        )}
+                        {gameState.portalState === 'open' && (
+                            <div className="glitch-text" style={{
+                                position: 'absolute', top: 85, right: 15, textAlign: 'right',
+                                animation: gameState.portalTimer <= 5 ? 'pulse 0.2s infinite' : 'pulse 1s infinite'
+                            }}>
+                                <div style={{ color: gameState.portalTimer <= 5 ? '#FF0000' : '#00FF00', fontWeight: 900, letterSpacing: 1, fontSize: 20 }}>
+                                    {gameState.portalTimer <= 5 ? "PORTAL CLOSING" : "PORTAL ACTIVE"}
+                                </div>
+                                <div style={{ color: '#fff', fontWeight: 700, letterSpacing: 2, fontSize: 14, marginTop: 2 }}>
+                                    CLOSING IN {Math.ceil(gameState.portalTimer)}s
+                                </div>
+                            </div>
+                        )}
+                    </div>
 
                     {/* XP Bar */}
-                    <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: 6, background: '#000' }}>
+                    <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: 6, background: '#000', zIndex: 100 }}>
                         <div style={{
                             width: `${(xp.current / xp.needed) * 100}%`,
                             height: '100%',
@@ -240,7 +258,7 @@ export const HUD: React.FC<HUDProps> = ({ gameState, upgradeChoices, onUpgradeSe
                                 {/* SECTOR NAME INDICATOR */}
                                 <div style={{
                                     position: 'absolute',
-                                    top: hasBoss ? 45 : 20, // Move down if boss bar is present
+                                    top: hasBoss ? 45 : 20,
                                     left: '50%', transform: 'translateX(-50%)',
                                     zIndex: 90,
                                     transition: 'top 0.5s ease-in-out',
@@ -279,14 +297,14 @@ export const HUD: React.FC<HUDProps> = ({ gameState, upgradeChoices, onUpgradeSe
                     <div style={{
                         position: 'absolute', bottom: 30, left: '50%', transform: 'translateX(-50%)',
                         width: Math.min(CANVAS_WIDTH * 0.8, 250), height: 16, background: 'rgba(15, 23, 42, 0.8)',
-                        border: '1px solid #334155', borderRadius: 20, overflow: 'hidden'
+                        border: '1px solid #334155', borderRadius: 20, overflow: 'hidden', zIndex: 100
                     }}>
                         <div style={{
                             width: `${(player.curHp / maxHp) * 100}%`,
                             height: '100%',
                             background: 'linear-gradient(90deg, #ef4444, #f87171)',
                             boxShadow: 'none',
-                            transition: isHealing ? 'width 0.3s' : 'width 0s' // Instant drop on damage, slow growth on regen
+                            transition: isHealing ? 'width 0.3s' : 'width 0s'
                         }} />
                         <div style={{
                             position: 'absolute', width: '100%', textAlign: 'center', top: 0,
@@ -296,12 +314,12 @@ export const HUD: React.FC<HUDProps> = ({ gameState, upgradeChoices, onUpgradeSe
                         </div>
                     </div>
 
-                    {/* Minimap (New) */}
+                    {/* Minimap */}
                     <Minimap gameState={gameState} />
 
+                    {/* Upgrade Menu */}
                     {upgradeChoices && (
-                        <div className="upgrade-menu-overlay">
-                            {/* Background Layers */}
+                        <div className="upgrade-menu-overlay" style={{ zIndex: 1000 }}>
                             <div className="fog-layer" />
                             <div className="fog-pulse" />
                             <div className="honeycomb-layer">
@@ -309,8 +327,6 @@ export const HUD: React.FC<HUDProps> = ({ gameState, upgradeChoices, onUpgradeSe
                                 <div className="honeycomb-cluster" style={{ bottom: '20%', right: '15%' }} />
                             </div>
 
-
-                            {/* Cards Container */}
                             <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', zIndex: 20, perspective: '1000px', gap: '60px' }}>
                                 {upgradeChoices.map((c, i) => (
                                     <div key={i} className="upgrade-card-container">
@@ -329,7 +345,6 @@ export const HUD: React.FC<HUDProps> = ({ gameState, upgradeChoices, onUpgradeSe
                                 ))}
                             </div>
 
-                            {/* Title (Moved to Bottom) */}
                             <h2 style={{
                                 marginTop: 40,
                                 color: '#FFFFFF',
@@ -346,7 +361,6 @@ export const HUD: React.FC<HUDProps> = ({ gameState, upgradeChoices, onUpgradeSe
                                 {upgradeChoices[0].isSpecial ? "VOID TECHNOLOGY DETECTED" : "SELECT AUGMENTATION"}
                             </h2>
 
-                            {/* Rarity Boost Notification */}
                             {gameState.rareRewardActive && (
                                 <div className="glitch-text" style={{
                                     color: '#FACC15',

@@ -60,5 +60,17 @@ export const createInitialGameState = (): GameState => ({
     portalTimer: 240, // 240s = 4 minutes (Cycle)
     portalOpenDuration: 10, // 10 seconds open
     transferTimer: 0,
-    nextArenaId: null
+    nextArenaId: null,
+
+    // Inventory Defaults
+    meteorites: [],
+    inventory: Array(30).fill(null),
+    isInventoryOpen: false,
+
+    // Module Menu Defaults
+    showModuleMenu: false,
+    moduleSockets: {
+        hexagons: Array(6).fill(null),
+        diamonds: Array(12).fill(null)
+    }
 });

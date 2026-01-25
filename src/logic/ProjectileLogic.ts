@@ -3,6 +3,7 @@ import { playSfx } from './AudioLogic';
 import { calcStat } from './MathUtils';
 import type { GameState } from './types';
 import { spawnParticles } from './ParticleLogic';
+import { trySpawnMeteorite } from './LootLogic';
 
 export function spawnBullet(state: GameState, x: number, y: number, angle: number, dmg: number, pierce: number, offsetAngle: number = 0) {
     const spd = 12;
@@ -144,6 +145,7 @@ export function updateProjectiles(state: GameState, onEvent?: (event: string, da
                     state.killCount++;
                     state.score += 1;
                     spawnParticles(state, e.x, e.y, e.palette[0], 12);
+                    trySpawnMeteorite(state, e.x, e.y);
 
                     if (e.isRare && e.rareReal) {
                         playSfx('rare-kill');
