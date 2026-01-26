@@ -24,15 +24,7 @@ function getRandomRarity(): MeteoriteRarity {
     return 'scrap';
 }
 
-export function trySpawnMeteorite(state: GameState, x: number, y: number) {
-    if (Math.random() > DROP_CHANCE) return;
-
-    const rarity = getRandomRarity();
-
-    // Spread drop slightly
-    const dropX = x + (Math.random() - 0.5) * 20;
-    const dropY = y + (Math.random() - 0.5) * 20;
-
+export function createMeteorite(rarity: MeteoriteRarity, x: number = 0, y: number = 0): Meteorite {
     const stats: Meteorite['stats'] = {};
 
     // Perk 1: Core Surge (5-40%) - Available to all rarities
@@ -58,17 +50,26 @@ export function trySpawnMeteorite(state: GameState, x: number, y: number) {
         stats.hexType = 1 + Math.floor(Math.random() * 10);
     }
 
-    const meteorite: Meteorite = {
+    return {
         id: Math.random(),
-        x: dropX,
-        y: dropY,
+        x,
+        y,
         rarity,
-        vx: (Math.random() - 0.5) * 2, // Initial scattering bounce
+        vx: (Math.random() - 0.5) * 2,
         vy: (Math.random() - 0.5) * 2,
         magnetized: false,
         stats
     };
+}
 
+export function trySpawnMeteorite(state: GameState, x: number, y: number) {
+    if (Math.random() > DROP_CHANCE) return;
+
+    const rarity = getRandomRarity();
+    const dropX = x + (Math.random() - 0.5) * 20;
+    const dropY = y + (Math.random() - 0.5) * 20;
+
+    const meteorite = createMeteorite(rarity, dropX, dropY);
     state.meteorites.push(meteorite);
 }
 

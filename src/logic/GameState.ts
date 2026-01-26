@@ -69,6 +69,9 @@ export const createInitialGameState = (): GameState => ({
 
     // Module Menu Defaults
     showModuleMenu: false,
+    showLegendarySelection: false,
+    legendaryOptions: null,
+    pendingLegendaryHex: null,
     moduleSockets: {
         hexagons: Array(6).fill(null),
         diamonds: Array(12).fill(null)

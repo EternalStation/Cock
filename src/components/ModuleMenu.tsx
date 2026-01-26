@@ -39,7 +39,6 @@ export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClo
     const outerRadius = 260;
     const edgeRadius = 350;
 
-    // Helper for Hexagon Points
     const getHexPoints = (x: number, y: number, r: number) => {
         const points = [];
         for (let i = 0; i < 6; i++) {
@@ -49,11 +48,9 @@ export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClo
         return points.join(' ');
     };
 
-    // Outer Hexagons (Legendary Sockets)
     const hexPositions = Array.from({ length: 6 }).map((_, i) => {
         const angle = (Math.PI / 3) * i;
         const pos = { x: centerX + outerRadius * Math.cos(angle), y: centerY + outerRadius * Math.sin(angle) };
-        // Vertex data for connections (6 corners)
         const vertices = Array.from({ length: 6 }).map((_, vIdx) => {
             const vAngle = (Math.PI / 3) * vIdx;
             return { x: pos.x + 60 * Math.cos(vAngle), y: pos.y + 60 * Math.sin(vAngle) };
@@ -61,11 +58,9 @@ export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClo
         return { ...pos, vertices };
     });
 
-    // Inner Diamonds (Meteorite Sockets 0-5)
     const innerDiamondPositions = Array.from({ length: 6 }).map((_, i) => {
         const angle = (Math.PI / 3) * i + Math.PI / 6;
         const pos = { x: centerX + innerRadius * Math.cos(angle), y: centerY + innerRadius * Math.sin(angle) };
-        // Vertex data (rotated such that vertex[2] points towards center)
         const vertices = [
             { x: 40, y: 0 },
             { x: 0, y: 40 },
@@ -82,7 +77,6 @@ export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClo
         return { ...pos, vertices, angle };
     });
 
-    // Outer Edge Diamonds (Meteorite Sockets 6-11)
     const edgeDiamondPositions = Array.from({ length: 6 }).map((_, i) => {
         const angle = (Math.PI / 3) * i + Math.PI / 6;
         const pos = { x: centerX + edgeRadius * Math.cos(angle), y: centerY + edgeRadius * Math.sin(angle) };
@@ -102,19 +96,14 @@ export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClo
         return { ...pos, vertices, angle };
     });
 
-    // Central Hexagon Midpoints (for 90 degree perpendicular connections)
-    // Vertices are at 0, 60, 120... Midpoints are at 30, 90, 150...
-    // Apothem = R * cos(30) = 80 * 0.866 = 69.28
     const centerSideMidpoints = Array.from({ length: 6 }).map((_, i) => {
         const angle = (Math.PI / 3) * i + Math.PI / 6;
         return { x: centerX + 69.28 * Math.cos(angle), y: centerY + 69.28 * Math.sin(angle) };
     });
 
     const allDiamondPositions = [...innerDiamondPositions, ...edgeDiamondPositions];
-
     const INACTIVE_STROKE = "rgba(74, 85, 104, 0.2)";
 
-    // Helper for Crater Points (Vertex approximation for circles)
     const getCraterVertices = (x: number, y: number, r: number) => {
         return Array.from({ length: 12 }).map((_, i) => {
             const a = (Math.PI / 6) * i;
@@ -122,7 +111,6 @@ export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClo
         });
     };
 
-    // Helper to find the closest pair of vertices between two sets
     const findClosestVertices = (v1s: { x: number, y: number }[], v2s: { x: number, y: number }[]) => {
         let minVal = Infinity;
         let bestPair = { v1: v1s[0], v2: v2s[0] };
@@ -138,6 +126,17 @@ export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClo
         return bestPair;
     };
 
+    const getLegendaryInfo = (type: string) => {
+        switch (type) {
+            case 'hp_per_kill': return { icon: '✚', color: '#f87171', label: 'HP' };
+            case 'ats_per_kill': return { icon: '⚡', color: '#fbbf24', label: 'ATS' };
+            case 'xp_per_kill': return { icon: '✨', color: '#c084fc', label: 'XP' };
+            case 'dmg_per_kill': return { icon: '⚔', color: '#fb7185', label: 'DMG' };
+            case 'reg_per_kill': return { icon: '❤', color: '#4ade80', label: 'REG' };
+            default: return { icon: '★', color: '#fbbf24', label: '??' };
+        }
+    };
+
     return (
         <div style={{
             position: 'absolute', top: 0, left: 0, width: '100vw', height: '100vh',
@@ -145,60 +144,30 @@ export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClo
             zIndex: 2000, color: 'white', fontFamily: 'Orbitron, sans-serif',
             overflow: 'hidden'
         }}>
-
             <svg width="100%" height="100%" viewBox="0 0 1920 1080">
-                {/* Header for Module Grid */}
                 <text x={centerX} y={centerY - 480} textAnchor="middle" fill="#22d3ee" fontSize="32" fontWeight="900" style={{ letterSpacing: '8px', opacity: 0.8 }}>MODULE MATRIX</text>
                 <text x={centerX} y={centerY - 440} textAnchor="middle" fill="#94a3b8" fontSize="12" style={{ letterSpacing: '2px', opacity: 0.6 }}>CONSTRUCT SYNERGIES BY SLOTTING METEORITES AND RECOVERED MODULES</text>
                 <line x1={centerX - 250} y1={centerY - 425} x2={centerX + 250} y2={centerY - 425} stroke="#22d3ee" strokeWidth="1" opacity="0.2" />
-                {/* Central Body */}
-                <polygon
-                    points={getHexPoints(centerX, centerY, 80)}
-                    fill="rgba(34, 211, 238, 0.1)"
-                    stroke="#22d3ee"
-                    strokeWidth="4"
-                    className="glow-cyan"
-                />
-
-                {/* INACTIVE LINE STYLE BASE */}
-                {/* All inactive lines use the same color and opacity */}
 
                 {/* 1. XS LINES (Hex-Hex, 6 connections) */}
                 {hexPositions.map((pos, i) => {
                     const nextPos = hexPositions[(i + 1) % 6];
                     const active = moduleSockets.hexagons[i] && moduleSockets.hexagons[(i + 1) % 6];
                     const { v1, v2 } = findClosestVertices(pos.vertices, nextPos.vertices);
-
                     return (
                         <g key={`xs-group-${i}`}>
-                            <line
-                                x1={v1.x} y1={v1.y} x2={v2.x} y2={v2.y}
-                                stroke={active ? "#A855F7" : INACTIVE_STROKE}
-                                strokeWidth={active ? "3" : "2"}
-                                opacity={active ? 0.3 : 1}
-                                className={active ? "pulse-purple" : ""}
-                            />
+                            <line x1={v1.x} y1={v1.y} x2={v2.x} y2={v2.y} stroke={active ? "#A855F7" : INACTIVE_STROKE} strokeWidth={active ? "3" : "2"} opacity={active ? 0.3 : 1} className={active ? "pulse-purple" : ""} />
                             {active && (
                                 <>
-                                    <line
-                                        x1={v1.x} y1={v1.y} x2={v2.x} y2={v2.y}
-                                        stroke="#D8B4FE" strokeWidth="5" strokeLinecap="round"
-                                        strokeDasharray="2, 120"
-                                        className="energy-dot-forward"
-                                    />
-                                    <line
-                                        x1={v1.x} y1={v1.y} x2={v2.x} y2={v2.y}
-                                        stroke="#D8B4FE" strokeWidth="5" strokeLinecap="round"
-                                        strokeDasharray="2, 120"
-                                        className="energy-dot-reverse"
-                                    />
+                                    <line x1={v1.x} y1={v1.y} x2={v2.x} y2={v2.y} stroke="#D8B4FE" strokeWidth="5" strokeLinecap="round" strokeDasharray="2, 120" className="energy-dot-forward" />
+                                    <line x1={v1.x} y1={v1.y} x2={v2.x} y2={v2.y} stroke="#D8B4FE" strokeWidth="5" strokeLinecap="round" strokeDasharray="2, 120" className="energy-dot-reverse" />
                                 </>
                             )}
                         </g>
                     );
                 })}
 
-                {/* 2. MS LINES (Met-Met, 15 connections total) */}
+                {/* 2. MS LINES (Met-Met) */}
                 {/* 2.1 Inner-Inner Adjacent (6) */}
                 {innerDiamondPositions.map((pos, i) => {
                     const nextPos = innerDiamondPositions[(i + 1) % 6];
@@ -206,27 +175,11 @@ export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClo
                     const { v1, v2 } = findClosestVertices(getCraterVertices(pos.x, pos.y, 35), getCraterVertices(nextPos.x, nextPos.y, 35));
                     return (
                         <g key={`ms-ii-adj-group-${i}`}>
-                            <line
-                                x1={v1.x} y1={v1.y} x2={v2.x} y2={v2.y}
-                                stroke={active ? "#EF4444" : INACTIVE_STROKE}
-                                strokeWidth={active ? "3" : "2"}
-                                opacity={active ? 0.3 : 1}
-                                className={active ? "pulse-crimson" : ""}
-                            />
+                            <line x1={v1.x} y1={v1.y} x2={v2.x} y2={v2.y} stroke={active ? "#EF4444" : INACTIVE_STROKE} strokeWidth={active ? "3" : "2"} opacity={active ? 0.3 : 1} className={active ? "pulse-crimson" : ""} />
                             {active && (
                                 <>
-                                    <line
-                                        x1={v1.x} y1={v1.y} x2={v2.x} y2={v2.y}
-                                        stroke="#F87171" strokeWidth="5" strokeLinecap="round"
-                                        strokeDasharray="2, 120"
-                                        className="energy-dot-forward"
-                                    />
-                                    <line
-                                        x1={v1.x} y1={v1.y} x2={v2.x} y2={v2.y}
-                                        stroke="#F87171" strokeWidth="5" strokeLinecap="round"
-                                        strokeDasharray="2, 120"
-                                        className="energy-dot-reverse"
-                                    />
+                                    <line x1={v1.x} y1={v1.y} x2={v2.x} y2={v2.y} stroke="#F87171" strokeWidth="5" strokeLinecap="round" strokeDasharray="2, 120" className="energy-dot-forward" />
+                                    <line x1={v1.x} y1={v1.y} x2={v2.x} y2={v2.y} stroke="#F87171" strokeWidth="5" strokeLinecap="round" strokeDasharray="2, 120" className="energy-dot-reverse" />
                                 </>
                             )}
                         </g>
@@ -240,27 +193,11 @@ export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClo
                     const { v1, v2 } = findClosestVertices(getCraterVertices(pos.x, pos.y, 35), getCraterVertices(oppPos.x, oppPos.y, 35));
                     return (
                         <g key={`ms-ii-opp-group-${i}`}>
-                            <line
-                                x1={v1.x} y1={v1.y} x2={v2.x} y2={v2.y}
-                                stroke={active ? "#EF4444" : INACTIVE_STROKE}
-                                strokeWidth={active ? "3" : "2"}
-                                opacity={active ? 0.3 : 1}
-                                className={active ? "pulse-crimson" : ""}
-                            />
+                            <line x1={v1.x} y1={v1.y} x2={v2.x} y2={v2.y} stroke={active ? "#EF4444" : INACTIVE_STROKE} strokeWidth={active ? "3" : "2"} opacity={active ? 0.3 : 1} className={active ? "pulse-crimson" : ""} />
                             {active && (
                                 <>
-                                    <line
-                                        x1={v1.x} y1={v1.y} x2={v2.x} y2={v2.y}
-                                        stroke="#F87171" strokeWidth="5" strokeLinecap="round"
-                                        strokeDasharray="2, 120"
-                                        className="energy-dot-forward"
-                                    />
-                                    <line
-                                        x1={v1.x} y1={v1.y} x2={v2.x} y2={v2.y}
-                                        stroke="#F87171" strokeWidth="5" strokeLinecap="round"
-                                        strokeDasharray="2, 120"
-                                        className="energy-dot-reverse"
-                                    />
+                                    <line x1={v1.x} y1={v1.y} x2={v2.x} y2={v2.y} stroke="#F87171" strokeWidth="5" strokeLinecap="round" strokeDasharray="2, 120" className="energy-dot-forward" />
+                                    <line x1={v1.x} y1={v1.y} x2={v2.x} y2={v2.y} stroke="#F87171" strokeWidth="5" strokeLinecap="round" strokeDasharray="2, 120" className="energy-dot-reverse" />
                                 </>
                             )}
                         </g>
@@ -284,7 +221,7 @@ export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClo
                     );
                 })}
 
-                {/* 3. XMS LINES (Hex-Met, 30 connections total) */}
+                {/* 3. XMS LINES (Hex-Met) */}
                 {/* 3.1 Center-Inner Perpendicular (6) */}
                 {innerDiamondPositions.map((pos, i) => {
                     const active = moduleSockets.diamonds[i];
@@ -303,7 +240,7 @@ export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClo
                         </g>
                     );
                 })}
-                {/* 3.2 OuterHex-InnerMet (12) - Each Inner gets 2 from adjacent Hexes */}
+                {/* 3.2 OuterHex-InnerMet (12) */}
                 {hexPositions.map((hPos, i) => {
                     const dIdx1 = i;
                     const dIdx2 = (i + 5) % 6;
@@ -324,7 +261,7 @@ export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClo
                             )}
                         </g>,
                         <g key={`xms-hi-group-${i}-2`}>
-                            <line x1={pair2.v1.x} y1={pair2.v1.y} x2={pair2.v2.x} y2={pair2.v2.y} stroke={active2 ? "#6366F1" : INACTIVE_STROKE} strokeWidth={active2 ? "2" : "1"} opacity={active2 ? "0.3" : 1} className={active2 ? "synergy-trail" : ""} />
+                            <line x1={pair2.v1.x} y1={pair2.v1.y} x2={pair2.v2.x} y2={pair2.v2.y} stroke={active2 ? "#6366F1" : INACTIVE_STROKE} strokeWidth={active2 ? "2" : "1"} opacity={active2 ? 0.3 : 1} className={active2 ? "synergy-trail" : ""} />
                             {active2 && (
                                 <>
                                     <line x1={pair2.v1.x} y1={pair2.v1.y} x2={pair2.v2.x} y2={pair2.v2.y} stroke="#818CF8" strokeWidth="3" strokeLinecap="round" strokeDasharray="2, 120" className="energy-dot-forward" />
@@ -334,7 +271,7 @@ export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClo
                         </g>
                     ];
                 })}
-                {/* 3.3 OuterHex-EdgeMet (12) - Each Edge gets 2 from adjacent Hexes */}
+                {/* 3.3 OuterHex-EdgeMet (12) */}
                 {hexPositions.map((hPos, i) => {
                     const eIdx1 = i;
                     const eIdx2 = (i + 5) % 6;
@@ -355,7 +292,7 @@ export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClo
                             )}
                         </g>,
                         <g key={`xms-he-group-${i}-2`}>
-                            <line x1={pair2.v1.x} y1={pair2.v1.y} x2={pair2.v2.x} y2={pair2.v2.y} stroke={active2 ? "#6366F1" : INACTIVE_STROKE} strokeWidth={active2 ? "2" : "1"} opacity={active2 ? 0.4 : 1} className={active2 ? "synergy-trail" : ""} />
+                            <line x1={pair2.v1.x} y1={pair2.v1.y} x2={pair2.v2.x} y2={pair2.v2.y} stroke={active2 ? "#6366F1" : INACTIVE_STROKE} strokeWidth={active2 ? "2" : "1"} opacity={active2 ? "0.4" : 1} className={active2 ? "synergy-trail" : ""} />
                             {active2 && (
                                 <>
                                     <line x1={pair2.v1.x} y1={pair2.v1.y} x2={pair2.v2.x} y2={pair2.v2.y} stroke="#818CF8" strokeWidth="3" strokeLinecap="round" strokeDasharray="2, 120" className="energy-dot-forward" />
@@ -366,8 +303,11 @@ export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClo
                     ];
                 })}
 
-                {/* SOCKETS DRAWN LAST TO BE IN FRONT */}
                 <defs>
+                    <radialGradient id="hp-grad" cx="50%" cy="50%" r="50%">
+                        <stop offset="0%" stopColor="#ef4444" />
+                        <stop offset="100%" stopColor="#7f1d1d" />
+                    </radialGradient>
                     <radialGradient id="socket-grad" cx="50%" cy="50%" r="50%">
                         <stop offset="0%" stopColor="rgba(2, 6, 23, 0.95)" />
                         <stop offset="70%" stopColor="rgba(15, 23, 42, 0.6)" />
@@ -387,102 +327,154 @@ export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClo
                     className="glow-cyan"
                 />
 
-                {hexPositions.map((pos, i) => (
-                    <g key={`hex-socket-${i}`}>
-                        <polygon
-                            points={getHexPoints(pos.x, pos.y, 60)}
-                            fill="url(#socket-grad)"
-                            stroke="rgba(250, 204, 21, 0.5)"
-                            strokeWidth="2"
-                            className="glow-yellow"
-                        />
-                    </g>
-                ))}
+                {hexPositions.map((pos, i) => {
+                    const hex = gameState.moduleSockets.hexagons[i];
+                    const info = hex ? getLegendaryInfo(hex.type) : null;
+                    return (
+                        <g key={`hex-socket-${i}`}
+                            onClick={() => {
+                                if (gameState.pendingLegendaryHex) {
+                                    onSocketUpdate('hex', i, { ...gameState.pendingLegendaryHex });
+                                }
+                            }}
+                            style={{ cursor: gameState.pendingLegendaryHex ? 'copy' : 'default' }}
+                        >
+                            <polygon
+                                points={getHexPoints(pos.x, pos.y, 60)}
+                                fill="url(#socket-grad)"
+                                stroke={hex ? "#fbbf24" : "rgba(250, 204, 21, 0.5)"}
+                                strokeWidth={hex ? "4" : "2"}
+                                className={hex ? "glow-gold" : "glow-yellow"}
+                            />
+                            {hex && (
+                                <g pointerEvents="none">
+                                    {/* --- 3D THEMATIC OVERLAYS --- */}
+                                    {hex.type === 'hp_per_kill' && (
+                                        <g className="pulse-slow">
+                                            {/* Pulsing Bio-Vessels */}
+                                            {Array.from({ length: 3 }).map((_, j) => {
+                                                const a = (Math.PI * 2 / 3) * j + (gameState.gameTime * 0.5);
+                                                return <circle key={j} cx={pos.x + 45 * Math.cos(a)} cy={pos.y + 45 * Math.sin(a)} r="8" fill="url(#hp-grad)" filter="blur(2px)" />;
+                                            })}
+                                            <path d={`M ${pos.x - 30} ${pos.y} Q ${pos.x} ${pos.y - 40} ${pos.x + 30} ${pos.y}`} fill="none" stroke="#ef4444" strokeWidth="2" opacity="0.4" />
+                                        </g>
+                                    )}
+
+                                    {hex.type === 'ats_per_kill' && (
+                                        <g className="rotate-fast">
+                                            {/* Turbine Vanes */}
+                                            {Array.from({ length: 6 }).map((_, j) => {
+                                                const a = (Math.PI / 3) * j;
+                                                return <rect key={j} x={pos.x + 40} y={pos.y - 4} width="20" height="8" fill="#fbbf24" rx="2" transform={`rotate(${a * 180 / Math.PI}, ${pos.x}, ${pos.y})`} className="glow-gold" />;
+                                            })}
+                                        </g>
+                                    )}
+
+                                    {hex.type === 'xp_per_kill' && (
+                                        <g>
+                                            {/* External Shards */}
+                                            {Array.from({ length: 6 }).map((_, j) => {
+                                                const a = (Math.PI / 3) * j;
+                                                const px = pos.x + 60 * Math.cos(a);
+                                                const py = pos.y + 60 * Math.sin(a);
+                                                const ox = pos.x + 80 * Math.cos(a);
+                                                const oy = pos.y + 80 * Math.sin(a);
+                                                return <line key={j} x1={px} y1={py} x2={ox} y2={oy} stroke="#c084fc" strokeWidth="3" strokeLinecap="round" className="glow-purple" />;
+                                            })}
+                                            <polygon points={getHexPoints(pos.x, pos.y, 30)} fill="rgba(192, 132, 252, 0.1)" stroke="#c084fc" strokeWidth="1" />
+                                        </g>
+                                    )}
+
+                                    {hex.type === 'dmg_per_kill' && (
+                                        <g>
+                                            {/* Sharp Corner Spikes */}
+                                            {Array.from({ length: 6 }).map((_, j) => {
+                                                const a = (Math.PI / 3) * j + (Math.PI / 6);
+                                                const x1 = pos.x + 55 * Math.cos(a);
+                                                const y1 = pos.y + 55 * Math.sin(a);
+                                                const x2 = pos.x + 75 * Math.cos(a);
+                                                const y2 = pos.y + 75 * Math.sin(a);
+                                                return <path key={j} d={`M ${x1} ${y1} L ${x2} ${y2} L ${pos.x + 65 * Math.cos(a + 0.1)} ${pos.y + 65 * Math.sin(a + 0.1)} Z`} fill="#fb7185" className="glow-rose" />;
+                                            })}
+                                        </g>
+                                    )}
+
+                                    {hex.type === 'reg_per_kill' && (
+                                        <g>
+                                            {/* Wrapping Bio-Tubes */}
+                                            {Array.from({ length: 6 }).map((_, j) => {
+                                                const a1 = (Math.PI / 3) * j;
+                                                const a2 = (Math.PI / 3) * (j + 1);
+                                                const r = 62;
+                                                return <path key={j} d={`M ${pos.x + r * Math.cos(a1)} ${pos.y + r * Math.sin(a1)} A ${r} ${r} 0 0 1 ${pos.x + r * Math.cos(a2)} ${pos.y + r * Math.sin(a2)}`} fill="none" stroke="#4ade80" strokeWidth="4" strokeLinecap="round" opacity="0.6" />;
+                                            })}
+                                            <circle cx={pos.x} cy={pos.y} r="25" fill="rgba(74, 222, 128, 0.05)" className="pulse-slow" />
+                                        </g>
+                                    )}
+
+                                    {/* Stat Icon */}
+                                    <text x={pos.x} y={pos.y - 12} textAnchor="middle" fill={info?.color} fontSize="24" style={{ filter: `drop-shadow(0 0 5px ${info?.color})`, fontWeight: 900 }} pointerEvents="none">
+                                        {info?.icon}
+                                    </text>
+
+                                    {/* Category Label */}
+                                    <text x={pos.x} y={pos.y + 6} textAnchor="middle" fill="#94a3b8" fontSize="8" fontWeight="bold" style={{ letterSpacing: '1px' }} pointerEvents="none">
+                                        {hex.category.toUpperCase()}
+                                    </text>
+
+                                    {/* Level Badge */}
+                                    <rect x={pos.x - 20} y={pos.y + 15} width="40" height="12" rx="4" fill="rgba(15, 23, 42, 0.8)" stroke={info?.color} strokeWidth="1" pointerEvents="none" />
+                                    <text x={pos.x} y={pos.y + 24} textAnchor="middle" fill={info?.color} fontSize="9" fontWeight="900" pointerEvents="none">
+                                        LVL {hex.level}
+                                    </text>
+                                </g>
+                            )}
+                            {gameState.pendingLegendaryHex && !hex && (
+                                <polygon points={getHexPoints(pos.x, pos.y, 50)} fill="rgba(251, 191, 36, 0.2)" style={{ pointerEvents: 'none' }} className="pulse-gold" />
+                            )}
+                        </g>
+                    );
+                })}
 
                 {allDiamondPositions.map((pos, i) => (
                     <g key={`diamond-socket-${i}`}
                         onDragOver={(e) => e.preventDefault()}
                         onDrop={() => {
                             if (draggedItem) {
-                                const targetIdx = i;
-                                const item = draggedItem.item;
-
                                 if (draggedItem.source === 'inventory') {
-                                    const existing = moduleSockets.diamonds[targetIdx];
-                                    onSocketUpdate('diamond', targetIdx, item);
-                                    onInventoryUpdate(draggedItem.index, existing);
-                                } else if (draggedItem.source === 'diamond') {
-                                    if (draggedItem.index !== targetIdx) {
-                                        const existing = moduleSockets.diamonds[targetIdx];
-                                        onSocketUpdate('diamond', targetIdx, item);
-                                        onSocketUpdate('diamond', draggedItem.index, existing);
-                                    }
+                                    const itemAtTarget = moduleSockets.diamonds[i];
+                                    onSocketUpdate('diamond', i, draggedItem.item);
+                                    onInventoryUpdate(draggedItem.index, itemAtTarget);
+                                } else if (draggedItem.source === 'diamond' && draggedItem.index !== i) {
+                                    const itemAtSource = moduleSockets.diamonds[draggedItem.index];
+                                    const itemAtTarget = moduleSockets.diamonds[i];
+                                    onSocketUpdate('diamond', i, itemAtSource);
+                                    onSocketUpdate('diamond', draggedItem.index, itemAtTarget);
                                 }
                                 setDraggedItem(null);
                             }
                         }}
                     >
-                        {/* Outer Rim */}
-                        <circle
-                            cx={pos.x} cy={pos.y} r="40"
-                            fill="none"
-                            stroke="rgba(236, 72, 153, 0.4)"
-                            strokeWidth="2"
-                            filter="url(#rugged-rim)"
-                            className="glow-pink"
-                        />
-                        {/* Crater Body */}
-                        <circle
-                            cx={pos.x} cy={pos.y} r="35"
-                            fill="url(#socket-grad)"
-                            stroke="rgba(236, 72, 153, 0.25)"
-                            strokeWidth="1"
-                            filter="url(#rugged-rim)"
-                        />
-                        {/* Inner pit */}
-                        <circle
-                            cx={pos.x} cy={pos.y} r="25"
-                            fill="rgba(0,0,0,0.3)"
-                        />
+                        <circle cx={pos.x} cy={pos.y} r="40" fill="none" stroke="rgba(236, 72, 153, 0.4)" strokeWidth="2" filter="url(#rugged-rim)" className="glow-pink" />
+                        <circle cx={pos.x} cy={pos.y} r="35" fill="url(#socket-grad)" stroke="rgba(236, 72, 153, 0.25)" strokeWidth="1" filter="url(#rugged-rim)" />
+                        <circle cx={pos.x} cy={pos.y} r="25" fill="rgba(0,0,0,0.3)" />
 
                         {moduleSockets.diamonds[i] && (
-                            <foreignObject x={pos.x - 35} y={pos.y - 35} width="70" height="70" style={{ pointerEvents: 'auto' }}>
+                            <foreignObject x={pos.x - 35} y={pos.y - 35} width="70" height="70">
                                 <div
-                                    style={{
-                                        width: '100%',
-                                        height: '100%',
-                                        cursor: draggedItem?.source === 'diamond' && draggedItem?.index === i ? 'grabbing' : 'grab',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        opacity: draggedItem?.source === 'diamond' && draggedItem?.index === i ? 0.5 : 1
-                                    }}
+                                    style={{ width: '100%', height: '100%', cursor: 'grab', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                                     draggable="true"
-                                    onDragStart={(e) => {
+                                    onDragStart={() => {
                                         const item = moduleSockets.diamonds[i];
-                                        if (item) {
-                                            setDraggedItem({ item, source: 'diamond', index: i });
-                                            setHoveredItem(null);
-                                            e.dataTransfer.effectAllowed = 'move';
-                                            e.dataTransfer.setData('text/plain', 'meteorite');
-                                        }
-                                    }}
-                                    onDragEnd={() => {
-                                        setDraggedItem(null);
+                                        if (item) setDraggedItem({ item, source: 'diamond', index: i });
                                     }}
                                     onMouseMove={(e) => {
                                         const item = moduleSockets.diamonds[i];
-                                        if (item && !draggedItem) {
-                                            setHoveredItem({ item, x: e.clientX, y: e.clientY });
-                                        }
+                                        if (item) setHoveredItem({ item, x: e.clientX, y: e.clientY });
                                     }}
                                     onMouseLeave={() => setHoveredItem(null)}
                                 >
-                                    <img
-                                        src={RARITY_IMAGES[moduleSockets.diamonds[i]!.rarity]}
-                                        style={{ width: '100%', height: '100%', objectFit: 'contain', pointerEvents: 'none' }}
-                                        alt="meteorite"
-                                    />
+                                    <img src={RARITY_IMAGES[moduleSockets.diamonds[i]!.rarity]} style={{ width: '100%', height: '100%', objectFit: 'contain', pointerEvents: 'none' }} alt="meteorite" />
                                 </div>
                             </foreignObject>
                         )}
@@ -490,163 +482,81 @@ export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClo
                 ))}
             </svg>
 
-            {/* Right Side Inventory Panel */}
             <div style={{
-                position: 'absolute', right: 0, top: 0, height: '100%', width: '560px',
+                position: 'absolute', right: 0, top: 0, height: '100%', width: '450px',
                 background: 'rgba(5, 5, 15, 0.98)', borderLeft: '4px solid #3b82f6',
-                padding: '50px', display: 'flex', flexDirection: 'column', gap: '20px',
+                padding: '30px', display: 'flex', flexDirection: 'column', gap: '20px',
                 backdropFilter: 'blur(30px)', boxShadow: '-30px 0 60px rgba(0,0,0,0.9)'
             }}>
                 <h2 style={{ color: '#22d3ee', margin: '0 0 10px 0', fontSize: '1.5rem', letterSpacing: '4px', textAlign: 'center' }}>INVENTORY</h2>
-                <div style={{
-                    display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '12px',
-                    flex: 1, alignContent: 'start'
-                }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', flex: 1, alignContent: 'start' }}>
                     {inventory.map((item, idx) => (
                         <div key={idx}
                             draggable={!!item}
-                            onDragStart={(e) => {
-                                if (item) {
-                                    setDraggedItem({ item, source: 'inventory', index: idx });
-                                    setHoveredItem(null);
-
-                                    // Create custom drag image - just the meteorite, no card border
-                                    const dragImg = document.createElement('img');
-                                    dragImg.src = RARITY_IMAGES[item.rarity];
-                                    dragImg.style.width = '60px';
-                                    dragImg.style.height = '60px';
-                                    dragImg.style.position = 'absolute';
-                                    dragImg.style.top = '-1000px'; // Hide it offscreen
-                                    document.body.appendChild(dragImg);
-
-                                    // Set the custom drag image
-                                    e.dataTransfer.setDragImage(dragImg, 30, 30);
-                                    e.dataTransfer.effectAllowed = 'move';
-
-                                    // Clean up after drag starts
-                                    setTimeout(() => {
-                                        document.body.removeChild(dragImg);
-                                    }, 0);
-                                }
-                            }}
-                            onDragEnd={() => setDraggedItem(null)}
-                            onMouseMove={(e) => {
-                                if (item && !draggedItem) {
-                                    setHoveredItem({ item, x: e.clientX, y: e.clientY });
-                                }
-                            }}
+                            onDragStart={() => item && setDraggedItem({ item, source: 'inventory', index: idx })}
+                            onMouseMove={(e) => item && setHoveredItem({ item, x: e.clientX, y: e.clientY })}
                             onMouseLeave={() => setHoveredItem(null)}
-                            onDragOver={(ev) => ev.preventDefault()}
+                            onDragOver={(e) => e.preventDefault()}
                             onDrop={() => {
-                                if (draggedItem) {
-                                    if (draggedItem.source === 'diamond') {
-                                        const existingInInv = inventory[idx];
-                                        onInventoryUpdate(idx, draggedItem.item);
-                                        onSocketUpdate('diamond', draggedItem.index, existingInInv);
-                                    } else {
-                                        const fromIdx = draggedItem.index;
-                                        const toIdx = idx;
-                                        if (fromIdx !== toIdx) {
-                                            const item1 = inventory[fromIdx];
-                                            const item2 = inventory[toIdx];
-                                            onInventoryUpdate(toIdx, item1);
-                                            onInventoryUpdate(fromIdx, item2);
-                                        }
-                                    }
+                                if (draggedItem && draggedItem.source === 'diamond') {
+                                    const itemAtTarget = inventory[idx];
+                                    onInventoryUpdate(idx, draggedItem.item);
+                                    onSocketUpdate('diamond', draggedItem.index, itemAtTarget);
                                     setDraggedItem(null);
                                 }
                             }}
                             style={{
                                 width: '100%', height: '80px', background: '#0f172a',
                                 border: `2px solid ${item ? RARITY_COLORS[item.rarity] : '#1e293b'}`,
-                                borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                cursor: item ? 'grab' : 'default', position: 'relative',
-                                boxShadow: item ? `0 0 15px ${RARITY_COLORS[item.rarity]}66` : 'none',
-                                transition: 'all 0.2s ease',
-                                opacity: draggedItem?.source === 'inventory' && draggedItem?.index === idx ? 0.5 : 1
+                                borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center'
                             }}>
-                            {item ? (
-                                <>
-                                    <img
-                                        src={RARITY_IMAGES[item.rarity]}
-                                        style={{ width: '90%', height: '90%', objectFit: 'contain', pointerEvents: 'none', filter: 'drop-shadow(0 0 5px rgba(255,255,255,0.3))' }}
-                                        alt="meteorite"
-                                    />
-                                    <div style={{
-                                        position: 'absolute',
-                                        bottom: '2px',
-                                        width: '100%',
-                                        textAlign: 'center',
-                                        fontSize: '0.6rem',
-                                        color: RARITY_COLORS[item.rarity],
-                                        fontWeight: 900,
-                                        textShadow: '0 0 2px black',
-                                        pointerEvents: 'none'
-                                    }}>
-                                        {item.rarity.toUpperCase().slice(0, 3)}
-                                    </div>
-                                </>
-                            ) : (
-                                <div style={{
-                                    width: '100%',
-                                    height: '100%',
-                                    opacity: 0.1,
-                                    backgroundImage: 'radial-gradient(circle, #334155 1px, transparent 1px)',
-                                    backgroundSize: '8px 8px'
-                                }} />
-                            )}
+                            {item && <img src={RARITY_IMAGES[item.rarity]} style={{ width: '80%', height: '80%', objectFit: 'contain' }} alt="meteorite" />}
                         </div>
                     ))}
                 </div>
-                <div style={{ fontSize: '0.8rem', color: '#64748b', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span>Press <span style={{ color: 'white' }}>M</span> to return</span>
-                    <button
-                        onClick={onClose}
-                        style={{
-                            background: '#3b82f6', border: 'none', color: 'white', padding: '5px 15px',
-                            borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontFamily: 'inherit'
-                        }}
-                    >
-                        CLOSE
-                    </button>
-                </div>
+                <button onClick={onClose} style={{ background: '#3b82f6', border: 'none', color: 'white', padding: '10px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>CLOSE (M)</button>
             </div>
 
-            {hoveredItem && (
-                <MeteoriteTooltip
-                    meteorite={hoveredItem.item}
-                    x={hoveredItem.x}
-                    y={hoveredItem.y}
-                />
-            )}
+            {hoveredItem && <MeteoriteTooltip meteorite={hoveredItem.item} x={hoveredItem.x} y={hoveredItem.y} />}
 
-            {/* Custom Styles */}
             <style>{`
                 .glow-cyan { filter: drop-shadow(0 0 10px #22d3ee); }
                 .glow-yellow { filter: drop-shadow(0 0 7px rgba(250, 204, 21, 0.7)); }
+                .glow-gold { filter: drop-shadow(0 0 15px #fbbf24); }
                 .glow-pink { filter: drop-shadow(0 0 15px rgba(236, 72, 153, 0.9)); }
                 
+                .pulse-gold { animation: pulseGold 1.5s infinite; }
+                @keyframes pulseGold {
+                    0% { opacity: 0.2; transform: scale(1); }
+                    50% { opacity: 0.5; transform: scale(1.05); }
+                    100% { opacity: 0.2; transform: scale(1); }
+                }
+
                 .pulse-purple { animation: pulsePurple 3s infinite ease-in-out; }
                 .pulse-crimson { animation: pulseCrimson 3s infinite ease-in-out; }
                 .synergy-trail { animation: trailPulse 3s infinite ease-in-out; }
+
+                .pulse-slow { animation: pulseSlow 4s infinite ease-in-out; }
+                .rotate-fast { animation: rotateFast 2s infinite linear; transform-origin: center; }
                 
-                .energy-dot-forward { 
-                    animation: moveDotForward 10s infinite linear;
-                    filter: drop-shadow(0 0 4px currentColor);
+                .glow-purple { filter: drop-shadow(0 0 8px #c084fc); }
+                .glow-rose { filter: drop-shadow(0 0 8px #fb7185); }
+                .glow-gold { filter: drop-shadow(0 0 8px #fbbf24); }
+
+                @keyframes pulseSlow {
+                    0%, 100% { opacity: 0.5; transform: scale(1); }
+                    50% { opacity: 1; transform: scale(1.1); }
                 }
-                .energy-dot-reverse { 
-                    animation: moveDotReverse 10s infinite linear;
-                    filter: drop-shadow(0 0 4px currentColor);
+                @keyframes rotateFast {
+                    from { transform: rotate(0deg); }
+                    to { transform: rotate(360deg); }
                 }
 
-                @keyframes moveDotForward {
-                    0% { stroke-dashoffset: 1000; }
-                    100% { stroke-dashoffset: 0; }
-                }
-                @keyframes moveDotReverse {
-                    0% { stroke-dashoffset: 0; }
-                    100% { stroke-dashoffset: 1000; }
-                }
+                .energy-dot-forward { animation: moveDotForward 10s infinite linear; }
+                .energy-dot-reverse { animation: moveDotReverse 10s infinite linear; }
+                
+                @keyframes moveDotForward { 0% { stroke-dashoffset: 1000; } 100% { stroke-dashoffset: 0; } }
+                @keyframes moveDotReverse { 0% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: 1000; } }
 
                 @keyframes pulsePurple {
                     0%, 100% { stroke: #A855F7; filter: drop-shadow(0 0 5px #A855F7); }

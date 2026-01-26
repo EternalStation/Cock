@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState } from 'react';
 import gameWorkerUrl from '../logic/gameWorker?worker&url';
-import type { GameState, UpgradeChoice } from '../logic/types';
+import type { GameState, UpgradeChoice, LegendaryHex, MeteoriteRarity } from '../logic/types';
 import { createInitialGameState } from '../logic/GameState';
 import { updatePlayer } from '../logic/PlayerLogic';
 import { updateEnemies, spawnRareEnemy, spawnEnemy } from '../logic/EnemyLogic';
@@ -8,10 +8,11 @@ import { updateProjectiles, spawnBullet } from '../logic/ProjectileLogic';
 import { updateBossBehavior } from '../logic/BossLogic';
 import { spawnUpgrades, applyUpgrade } from '../logic/UpgradeLogic';
 import { calcStat } from '../logic/MathUtils';
-import { updateLoot } from '../logic/LootLogic';
+import { updateLoot, createMeteorite } from '../logic/LootLogic';
 import { updateParticles } from '../logic/ParticleLogic';
 import { ARENA_CENTERS, ARENA_RADIUS, PORTALS, getHexWallLine } from '../logic/MapLogic';
 import { playSfx, startBGM, updateBGMPhase, duckMusic, restoreMusic, pauseMusic, resumeMusic, startBossAmbience, stopBossAmbience, startPortalAmbience, stopPortalAmbience } from '../logic/AudioLogic';
+import { calculateLegendaryBonus } from '../logic/LegendaryLogic';
 
 export function useGameLoop(gameStarted: boolean) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -68,6 +69,7 @@ export function useGameLoop(gameStarted: boolean) {
     const [showSettings, setShowSettings] = useState(false);
     const [showInventory, setShowInventory] = useState(false); // New State
     const [showModuleMenu, setShowModuleMenu] = useState(false);
+    const [showLegendarySelection, setShowLegendarySelection] = useState(false);
 
     // Sync refs with state
     showStatsRef.current = showStats;
@@ -154,37 +156,59 @@ export function useGameLoop(gameStarted: boolean) {
             cheatBuffer += key;
             if (cheatBuffer.length > 10) cheatBuffer = cheatBuffer.slice(-10);
 
-            if (cheatBuffer.endsWith('die')) {
+            // K1 - Kill Player
+            if (cheatBuffer.endsWith('k1')) {
                 setGameOver(true);
                 playSfx('hurt');
-                cheatBuffer = ''; // Reset
+                cheatBuffer = '';
             }
 
-            if (cheatBuffer.endsWith('sni')) {
+            // L1 - Level Up
+            if (cheatBuffer.endsWith('l1')) {
+                gameState.current.player.xp.current = gameState.current.player.xp.needed;
+                cheatBuffer = '';
+            }
+
+            // E1-E5 - Spawn 5 Enemies
+            const shapes: Record<string, any> = { '1': 'circle', '2': 'triangle', '3': 'square', '4': 'diamond', '5': 'pentagon' };
+            for (const [num, shape] of Object.entries(shapes)) {
+                if (cheatBuffer.endsWith(`e${num}`)) {
+                    const p = gameState.current.player;
+                    for (let i = 0; i < 5; i++) {
+                        const a = (i / 5) * Math.PI * 2;
+                        spawnEnemy(gameState.current, p.x + Math.cos(a) * 400, p.y + Math.sin(a) * 400, shape);
+                    }
+                    cheatBuffer = '';
+                }
+            }
+
+            // B1-B5 - Spawn 1 Boss
+            for (const [num, shape] of Object.entries(shapes)) {
+                if (cheatBuffer.endsWith(`b${num}`)) {
+                    const p = gameState.current.player;
+                    spawnEnemy(gameState.current, p.x + 500, p.y + 500, shape, true);
+                    cheatBuffer = '';
+                }
+            }
+
+            // E6 - Snitch
+            if (cheatBuffer.endsWith('e6')) {
                 spawnRareEnemy(gameState.current);
                 cheatBuffer = '';
             }
 
-            if (cheatBuffer.endsWith('dia')) {
-                // Spawn 15 diamond enemies around the player
-                const player = gameState.current.player;
-                for (let i = 0; i < 15; i++) {
-                    const angle = (i / 15) * Math.PI * 2;
-                    const dist = 300 + Math.random() * 200;
-                    spawnEnemy(gameState.current, player.x + Math.cos(angle) * dist, player.y + Math.sin(angle) * dist, 'diamond');
+            // M1-M5 - Spawn Meteorite
+            const rarities: MeteoriteRarity[] = ['scrap', 'anomalous', 'quantum', 'astral', 'radiant'];
+            for (let i = 1; i <= 5; i++) {
+                if (cheatBuffer.endsWith(`m${i}`)) {
+                    const met = createMeteorite(rarities[i - 1]);
+                    const emptyIdx = gameState.current.inventory.findIndex(s => s === null);
+                    if (emptyIdx !== -1) {
+                        gameState.current.inventory[emptyIdx] = met;
+                        setUiState(prev => prev + 1);
+                    }
+                    cheatBuffer = '';
                 }
-                cheatBuffer = '';
-            }
-
-            if (cheatBuffer.endsWith('pen')) {
-                // Spawn 5 pentagons around the player
-                const player = gameState.current.player;
-                for (let i = 0; i < 5; i++) {
-                    const angle = (i / 5) * Math.PI * 2;
-                    const dist = 400 + Math.random() * 100;
-                    spawnEnemy(gameState.current, player.x + Math.cos(angle) * dist, player.y + Math.sin(angle) * dist, 'pentagon');
-                }
-                cheatBuffer = '';
             }
 
             if (cheatBuffer.endsWith('por')) {
@@ -193,8 +217,6 @@ export function useGameLoop(gameStarted: boolean) {
                 gameState.current.portalTimer = 10.1; // Slightly above 10 to ensure clean transition
                 cheatBuffer = '';
             }
-
-
         };
 
         window.addEventListener('keydown', handleDown);
@@ -220,6 +242,16 @@ export function useGameLoop(gameStarted: boolean) {
     const handleUpgradeSelect = (choice: UpgradeChoice) => {
         applyUpgrade(gameState.current, choice);
         setUpgradeChoices(null);
+    };
+
+    const handleLegendarySelect = (selection: LegendaryHex) => {
+        gameState.current.pendingLegendaryHex = selection;
+        gameState.current.showLegendarySelection = false;
+        setShowLegendarySelection(false);
+        setShowModuleMenu(true);
+        gameState.current.showModuleMenu = true;
+        gameState.current.isPaused = true;
+        playSfx('merge-complete');
     };
 
     // Game Loop
@@ -256,7 +288,7 @@ export function useGameLoop(gameStarted: boolean) {
             }
 
             // Pausing Logic (check refs for current values)
-            const isMenuOpen = showStatsRef.current || showSettingsRef.current || showInventoryRef.current || showModuleMenuRef.current || upgradeChoicesRef.current !== null;
+            const isMenuOpen = showStatsRef.current || showSettingsRef.current || showInventoryRef.current || showModuleMenuRef.current || upgradeChoicesRef.current !== null || state.showLegendarySelection;
             state.isPaused = isMenuOpen;
             if (state.isPaused) {
                 // Ensure keys are cleared when pausing to prevent stuck movement
@@ -309,6 +341,11 @@ export function useGameLoop(gameStarted: boolean) {
                 } catch (e) {
                     console.error("Render Error:", e);
                 }
+            }
+
+            // Sync Legendary Selection state
+            if (state.showLegendarySelection && !showLegendarySelection) {
+                setShowLegendarySelection(true);
             }
 
             // Force Re-render for UI updates (Throttled to ~15 FPS)
@@ -459,11 +496,11 @@ export function useGameLoop(gameStarted: boolean) {
         state.enemies.forEach(e => updateBossBehavior(e));
 
         const { player } = state;
-        const atkScore = Math.min(9999, calcStat(player.atk));
+        const atkScore = Math.min(9999, calcStat(player.atk) + calculateLegendaryBonus(state, 'ats_per_kill'));
         const fireDelay = 200000 / atkScore;
 
         if (Date.now() - player.lastShot > fireDelay && state.spawnTimer <= 0) {
-            const d = calcStat(player.dmg);
+            const d = calcStat(player.dmg) + calculateLegendaryBonus(state, 'dmg_per_kill');
             for (let i = 0; i < player.multi; i++) {
                 const offset = (i - (player.multi - 1) / 2) * 0.15;
                 spawnBullet(state, player.x, player.y, player.targetAngle, d, player.pierce, offset);
@@ -520,8 +557,13 @@ export function useGameLoop(gameStarted: boolean) {
         setShowInventory,
         showModuleMenu,
         setShowModuleMenu,
+        showLegendarySelection,
+        handleLegendarySelect,
         handleModuleSocketUpdate: (type: 'hex' | 'diamond', index: number, item: any) => {
-            if (type === 'hex') gameState.current.moduleSockets.hexagons[index] = item;
+            if (type === 'hex') {
+                gameState.current.moduleSockets.hexagons[index] = item;
+                gameState.current.pendingLegendaryHex = null; // Clear after placement
+            }
             else gameState.current.moduleSockets.diamonds[index] = item;
             setUiState(prev => prev + 1); // Force re-render
         },

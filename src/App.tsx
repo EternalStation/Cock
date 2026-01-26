@@ -8,6 +8,7 @@ import { DeathScreen } from './components/DeathScreen';
 
 import { Inventory } from './components/Inventory';
 import { ModuleMenu } from './components/ModuleMenu';
+import { LegendarySelectionMenu } from './components/LegendarySelectionMenu';
 
 import { useGameLoop } from './hooks/useGame';
 import { startBGM } from './logic/AudioLogic';
@@ -103,6 +104,14 @@ function App() {
             onSocketUpdate={hook.handleModuleSocketUpdate}
             onInventoryUpdate={hook.updateInventorySlot}
           />
+
+          {/* Legendary Selection Menu */}
+          {hook.showLegendarySelection && hook.gameState.legendaryOptions && (
+            <LegendarySelectionMenu
+              options={hook.gameState.legendaryOptions}
+              onSelect={hook.handleLegendarySelect}
+            />
+          )}
 
           {/* Death Screen */}
           {hook.gameOver && (

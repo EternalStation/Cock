@@ -212,6 +212,18 @@ export interface Upgrade {
     isSpecial?: boolean;
 }
 
+export type LegendaryCategory = 'Economic' | 'Combat' | 'Defensive';
+
+export interface LegendaryHex {
+    id: string;
+    name: string;
+    desc: string;
+    category: LegendaryCategory;
+    type: 'hp_per_kill' | 'ats_per_kill' | 'xp_per_kill' | 'dmg_per_kill' | 'reg_per_kill';
+    level: number;
+    killsAtAcquisition: number;
+}
+
 export interface UpgradeChoice {
     type: Upgrade;
     rarity: Rarity;
@@ -267,8 +279,11 @@ export interface GameState {
 
     // Module Menu System
     showModuleMenu: boolean;
+    showLegendarySelection: boolean;
+    legendaryOptions: LegendaryHex[] | null;
+    pendingLegendaryHex: LegendaryHex | null; // Hex waiting to be placed
     moduleSockets: {
-        hexagons: (UpgradeChoice | null)[];   // 6 outer sockets
+        hexagons: (LegendaryHex | null)[];   // 6 outer sockets
         diamonds: (Meteorite | null)[];       // 6 inner sockets
     };
 }

@@ -3,6 +3,9 @@ import { isInMap, ARENA_CENTERS, PORTALS, getHexWallLine, ARENA_RADIUS } from '.
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from './constants';
 import { calcStat } from './MathUtils';
 import { playSfx } from './AudioLogic';
+import { calculateLegendaryBonus, getLegendaryOptions } from './LegendaryLogic';
+import { spawnParticles } from './ParticleLogic';
+import { trySpawnMeteorite } from './LootLogic';
 
 export function updatePlayer(state: GameState, keys: Record<string, boolean>, onEvent?: (type: string, data?: any) => void) {
     const { player } = state;
@@ -128,8 +131,8 @@ export function updatePlayer(state: GameState, keys: Record<string, boolean>, on
     state.camera.y = player.y - CANVAS_HEIGHT / 2;
 
     // Regen
-    const maxHp = calcStat(player.hp);
-    const regenAmount = calcStat(player.reg) / 60;
+    const maxHp = calcStat(player.hp) + calculateLegendaryBonus(state, 'hp_per_kill');
+    const regenAmount = (calcStat(player.reg) + calculateLegendaryBonus(state, 'reg_per_kill')) / 60;
     player.curHp = Math.min(maxHp, player.curHp + regenAmount);
 
     // Auto-Aim Logic (skip barrels - they're neutral)
@@ -194,14 +197,36 @@ export function updatePlayer(state: GameState, keys: Record<string, boolean>, on
                 state.killCount++;
                 state.score += 1;
 
-                // XP Reward - 12x for elites
-                let xpGain = player.xp_per_kill.base;
-                if (e.xpRewardMult !== undefined) {
-                    xpGain *= e.xpRewardMult;
-                } else if (e.isElite) {
-                    xpGain *= 12; // Elite = 12x XP
+                // Visual & Loot
+                spawnParticles(state, e.x, e.y, e.palette ? e.palette[0] : '#FFFFFF', 12);
+                trySpawnMeteorite(state, e.x, e.y);
+
+                // Boss Reward
+                if (e.boss) {
+                    state.legendaryOptions = getLegendaryOptions(state);
+                    state.showLegendarySelection = true;
+                    state.isPaused = true;
+                    playSfx('rare-spawn');
                 }
-                player.xp.current += xpGain;
+
+                // Rare Reward
+                if (e.isRare && e.rareReal) {
+                    playSfx('rare-kill');
+                    state.rareRewardActive = true;
+                    state.rareSpawnActive = false;
+                    player.xp.current += player.xp.needed;
+                } else {
+                    // Standard XP Reward
+                    let xpGain = player.xp_per_kill.base;
+                    if (e.xpRewardMult !== undefined) {
+                        xpGain *= e.xpRewardMult;
+                    } else if (e.isElite) {
+                        xpGain *= 12; // Elite = 12x XP
+                    }
+                    player.xp.current += xpGain;
+                }
+
+                // Level Up Loop
                 while (player.xp.current >= player.xp.needed) {
                     player.xp.current -= player.xp.needed;
                     player.level++;

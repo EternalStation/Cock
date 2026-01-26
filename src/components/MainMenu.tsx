@@ -7,11 +7,23 @@ interface MainMenuProps {
 
 export const MainMenu: React.FC<MainMenuProps> = ({ onStart }) => {
     const [fading, setFading] = useState(false);
+    const [showBlueprint, setShowBlueprint] = useState(false);
 
     // Start Menu Music on mount
     useEffect(() => {
         startMenuMusic();
     }, []);
+
+    // Handle ESC key to close blueprint
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape' && showBlueprint) {
+                setShowBlueprint(false);
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [showBlueprint]);
 
     const handleStart = () => {
         setFading(true);
@@ -131,6 +143,23 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onStart }) => {
                 <div className="menu-title">NEON SURVIVOR</div>
 
                 <button className="btn-start" onClick={handleStart}>START</button>
+                <button className="btn-logic" onClick={() => setShowBlueprint(true)}>GAME LOGIC</button>
+
+                {showBlueprint && (
+                    <div className="blueprint-modal" onClick={() => setShowBlueprint(false)}>
+                        <div className="blueprint-container" onClick={(e) => e.stopPropagation()}>
+                            <div className="blueprint-header">
+                                <div className="blueprint-title">NEON SURVIVOR - BLUEPRINT & LOGIC</div>
+                                <button className="btn-close-blueprint" onClick={() => setShowBlueprint(false)}>CLOSE [ESC]</button>
+                            </div>
+                            <iframe
+                                src="/blueprint.html"
+                                className="blueprint-iframe"
+                                title="Game Blueprint"
+                            />
+                        </div>
+                    </div>
+                )}
 
                 <div className="controls-hint-container">
                     {/* WASD - Movement & Scroll */}

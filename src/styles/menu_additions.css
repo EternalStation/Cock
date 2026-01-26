@@ -192,8 +192,8 @@ body {
     letter-spacing: 6px;
     text-transform: uppercase;
     backdrop-filter: blur(8px);
-    margin-bottom: 120px;
-    /* Space for controls */
+    margin-bottom: 20px;
+    /* Space for logic button */
 }
 
 .btn-start:hover {
@@ -203,6 +203,101 @@ body {
     letter-spacing: 10px;
     box-shadow: 0 0 40px rgba(255, 255, 255, 0.2);
     transform: scale(1.05);
+}
+
+/* Game Logic Button - Sub-Main Menu */
+.btn-logic {
+    width: 280px;
+    height: 50px;
+    background: rgba(15, 23, 42, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    color: rgba(255, 255, 255, 0.4);
+    font-family: 'Orbitron', monospace;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    backdrop-filter: blur(4px);
+    margin-bottom: 120px;
+    /* Space for controls */
+}
+
+.btn-logic:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    border-color: rgba(255, 255, 255, 0.3);
+    letter-spacing: 6px;
+}
+
+/* Blueprint Modal */
+.blueprint-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(2, 6, 23, 0.95);
+    z-index: 5000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(15px);
+    animation: fadeIn 0.3s ease-out;
+}
+
+.blueprint-container {
+    width: 90%;
+    max-width: 1200px;
+    height: 80%;
+    background: #0f172a;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+}
+
+.blueprint-header {
+    height: 50px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    background: rgba(0, 0, 0, 0.2);
+}
+
+.blueprint-title {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 12px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+}
+
+.btn-close-blueprint {
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.3);
+    font-family: 'Orbitron', monospace;
+    font-size: 12px;
+    cursor: pointer;
+    letter-spacing: 2px;
+    transition: color 0.2s;
+}
+
+.btn-close-blueprint:hover {
+    color: #fff;
+}
+
+.blueprint-iframe {
+    flex-grow: 1;
+    width: 100%;
+    border: none;
+    background: white;
+    /* The HTML file has its own background, but fallback */
 }
 
 /* Controls Container - Strict Alignment */

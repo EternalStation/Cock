@@ -3,15 +3,16 @@ import { RadarChart } from './RadarChart';
 export { RadarChart };
 import type { GameState, PlayerStats } from '../logic/types';
 import { calcStat } from '../logic/MathUtils';
-import { getArenaIndex } from '../logic/MapLogic';
+import { calculateLegendaryBonus } from '../logic/LegendaryLogic';
 
 
 interface StatsMenuProps {
     gameState: GameState;
 }
 
-export const StatRow: React.FC<{ label: string; stat: PlayerStats; isPercent?: boolean; inverse?: boolean; extraInfo?: string }> = ({ label, stat, isPercent, inverse, extraInfo }) => {
-    const total = calcStat(stat);
+export const StatRow: React.FC<{ label: string; stat: PlayerStats; isPercent?: boolean; inverse?: boolean; extraInfo?: string; legendaryBonus?: number }> = ({ label, stat, isPercent, inverse, extraInfo, legendaryBonus = 0 }) => {
+    const baseTotal = calcStat(stat);
+    const total = baseTotal + legendaryBonus;
     const displayTotal = isPercent ? `${Math.round(total)}% ` : Math.round(total * 10) / 10;
     const baseFlatSum = Math.round((stat.base + stat.flat) * 10) / 10;
     const mult = Math.round(stat.mult);
@@ -31,6 +32,11 @@ export const StatRow: React.FC<{ label: string; stat: PlayerStats; isPercent?: b
                 </span>
                 <span style={{ color: totalColor, fontSize: 12, fontWeight: 900, minWidth: 40, textAlign: 'right' }}>
                     {displayTotal}
+                    {legendaryBonus > 0 && (
+                        <span style={{ color: '#fbbf24', fontSize: 10, marginLeft: 4 }}>
+                            (+{isPercent ? `${Math.round(legendaryBonus)}%` : Math.round(legendaryBonus * 10) / 10})
+                        </span>
+                    )}
                 </span>
             </div>
         </div>
@@ -211,14 +217,15 @@ export const StatsMenu: React.FC<StatsMenuProps> = ({ gameState }) => {
 
                         {/* Left: Table */}
                         <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 4 }}>
-                            <StatRow label="Health" stat={player.hp} />
-                            <StatRow label="Damage" stat={player.dmg} />
+                            <StatRow label="Health" stat={player.hp} legendaryBonus={calculateLegendaryBonus(gameState, 'hp_per_kill')} />
+                            <StatRow label="Damage" stat={player.dmg} legendaryBonus={calculateLegendaryBonus(gameState, 'dmg_per_kill')} />
                             <StatRow
                                 label="Attack Speed"
                                 stat={player.atk}
-                                extraInfo={`${(Math.min(9999, calcStat(player.atk)) / 200).toFixed(1)}/s`}
+                                legendaryBonus={calculateLegendaryBonus(gameState, 'ats_per_kill')}
+                                extraInfo={`${((calcStat(player.atk) + calculateLegendaryBonus(gameState, 'ats_per_kill')) / 200).toFixed(1)}/s`}
                             />
-                            <StatRow label="Regeneration" stat={player.reg} />
+                            <StatRow label="Regeneration" stat={player.reg} legendaryBonus={calculateLegendaryBonus(gameState, 'reg_per_kill')} />
                             <StatRow label="Armor" stat={player.arm} extraInfo={`(${(0.95 * (calcStat(player.arm) / (calcStat(player.arm) + 5263)) * 100).toFixed(1)}%)`} />
                             {/* XP Display: Explicit Breakdown */}
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', borderBottom: '1px solid #1e293b' }}>
@@ -226,10 +233,14 @@ export const StatsMenu: React.FC<StatsMenuProps> = ({ gameState }) => {
                                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                                     <span style={{ color: '#64748b', fontSize: 10 }}>
                                         ({40 + (player.level * 3)} + {player.xp_per_kill.flat}) x {100 + player.xp_per_kill.mult}%
-                                        {getArenaIndex(player.x, player.y) === 0 && <span style={{ color: '#22d3ee', marginLeft: 4 }}>(+15% Econ Hex)</span>}
+                                        {calculateLegendaryBonus(gameState, 'xp_per_kill') > 0 && (
+                                            <span style={{ color: '#fbbf24', marginLeft: 4 }}>
+                                                (+{calculateLegendaryBonus(gameState, 'xp_per_kill').toFixed(1)} Legendary)
+                                            </span>
+                                        )}
                                     </span>
                                     <span style={{ color: '#4ade80', fontSize: 12, fontWeight: 900, minWidth: 40, textAlign: 'right' }}>
-                                        {Math.round((40 + (player.level * 3) + player.xp_per_kill.flat) * (1 + player.xp_per_kill.mult / 100) * (getArenaIndex(player.x, player.y) === 0 ? 1.15 : 1))}
+                                        {Math.round(((40 + (player.level * 3) + player.xp_per_kill.flat) * (1 + player.xp_per_kill.mult / 100)) + calculateLegendaryBonus(gameState, 'xp_per_kill'))}
                                     </span>
                                 </div>
                             </div>

@@ -5,6 +5,7 @@ import { spawnEnemyBullet } from './ProjectileLogic';
 import { playSfx } from './AudioLogic';
 import { spawnParticles } from './ParticleLogic';
 import { calcStat } from './MathUtils';
+import { getLegendaryOptions } from './LegendaryLogic';
 
 
 // Helper to determine current game era params
@@ -932,6 +933,13 @@ export function updateEnemies(state: GameState, onEvent?: (event: string, data?:
                 state.killCount++;
                 state.score += 1;
                 spawnParticles(state, e.x, e.y, e.palette[0], 20);
+
+                if (e.boss) {
+                    state.legendaryOptions = getLegendaryOptions(state);
+                    state.showLegendarySelection = true;
+                    state.isPaused = true;
+                    playSfx('rare-spawn'); // Legendary drop sound
+                }
 
                 if (e.isRare && e.rareReal) {
                     playSfx('rare-kill');
