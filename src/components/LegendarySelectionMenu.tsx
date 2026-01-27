@@ -7,15 +7,31 @@ interface LegendarySelectionMenuProps {
 }
 
 export const LegendarySelectionMenu: React.FC<LegendarySelectionMenuProps> = ({ options, onSelect }) => {
-    const getLegendaryInfo = (type: string) => {
-        switch (type) {
-            case 'hp_per_kill': return { icon: '✚', color: '#f87171', label: 'HEALTH' };
-            case 'ats_per_kill': return { icon: '⚡', color: '#fbbf24', label: 'ATK SPEED' };
-            case 'xp_per_kill': return { icon: '✨', color: '#c084fc', label: 'EXPERIENCE' };
-            case 'dmg_per_kill': return { icon: '⚔', color: '#fb7185', label: 'DAMAGE' };
-            case 'reg_per_kill': return { icon: '❤', color: '#4ade80', label: 'REGEN' };
-            default: return { icon: '★', color: '#fbbf24', label: '??' };
-        }
+    const [selectedIndex, setSelectedIndex] = React.useState(0);
+
+    React.useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            const key = e.key.toLowerCase();
+            if (key === 'a' || e.key === 'ArrowLeft') {
+                setSelectedIndex(prev => (prev - 1 + options.length) % options.length);
+            } else if (key === 'd' || e.key === 'ArrowRight') {
+                setSelectedIndex(prev => (prev + 1) % options.length);
+            } else if (key === 'enter' || key === ' ') {
+                onSelect(options[selectedIndex]);
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [options, selectedIndex, onSelect]);
+
+    const getLegendaryInfo = (category: string) => {
+        const categories: Record<string, { color: string, label: string }> = {
+            Economic: { color: '#fbbf24', label: 'ECONOMIC' },
+            Combat: { color: '#f87171', label: 'COMBAT' },
+            Defensive: { color: '#60a5fa', label: 'DEFENCE' }
+        };
+        return categories[category] || { color: '#fbbf24', label: 'TECH' };
     };
 
     return (
@@ -29,69 +45,105 @@ export const LegendarySelectionMenu: React.FC<LegendarySelectionMenuProps> = ({ 
                 fontSize: '3rem', color: '#fbbf24', textShadow: '0 0 20px #fbbf24',
                 letterSpacing: '10px', marginBottom: '50px'
             }}>
-                LEGENDARY RECOVERY
+                LEGENDARY UPGRADE
             </h1>
 
             <div style={{ display: 'flex', gap: '30px' }}>
                 {options.map((opt, i) => {
-                    const info = getLegendaryInfo(opt.type);
+                    const info = getLegendaryInfo(opt.category);
+                    const isSelected = i === selectedIndex;
+
                     return (
                         <div
                             key={i}
                             onClick={() => onSelect(opt)}
                             style={{
-                                width: '300px', height: '450px',
+                                width: '320px', height: '480px',
                                 background: 'linear-gradient(135deg, rgba(30, 30, 50, 0.95) 0%, rgba(10, 10, 20, 0.98) 100%)',
-                                border: `3px solid ${info.color}`,
+                                border: isSelected ? `4px solid #fff` : `3px solid ${info.color}`,
                                 borderRadius: '15px',
                                 padding: '30px',
                                 cursor: 'pointer',
                                 display: 'flex', flexDirection: 'column', alignItems: 'center',
-                                transition: 'all 0.3s ease',
-                                boxShadow: `0 0 15px ${info.color}44`,
+                                transition: 'all 0.2s ease-out',
+                                boxShadow: isSelected ? `0 0 50px ${info.color}, 0 0 20px #fff` : `0 0 15px ${info.color}44`,
+                                transform: isSelected ? 'translateY(-15px) scale(1.05)' : 'translateY(0) scale(1)',
                                 position: 'relative',
-                                overflow: 'hidden'
+                                overflow: 'hidden',
+                                zIndex: isSelected ? 10 : 1
                             }}
-                            onMouseEnter={(e) => {
-                                e.currentTarget.style.transform = 'translateY(-10px) scale(1.05)';
-                                e.currentTarget.style.boxShadow = `0 0 40px ${info.color}88`;
-                            }}
-                            onMouseLeave={(e) => {
-                                e.currentTarget.style.transform = 'translateY(0) scale(1)';
-                                e.currentTarget.style.boxShadow = `0 0 15px ${info.color}44`;
-                            }}
+                            onMouseEnter={() => setSelectedIndex(i)}
                         >
                             <div style={{
                                 position: 'absolute', top: '10px', right: '10px',
                                 color: info.color, fontSize: '0.8rem', fontWeight: 'bold'
                             }}>
-                                {opt.level > 1 ? `UPGRADE (LVL ${opt.level})` : 'NEW MODULE'}
+                                {opt.level > 1 ? `LEVEL ${opt.level}` : 'NEW MODULE'}
                             </div>
 
                             <div style={{
-                                width: '120px', height: '120px', border: `2px solid ${info.color}`,
-                                borderRadius: '50%', marginBottom: '30px', display: 'flex',
-                                alignItems: 'center', justifyContent: 'center', fontSize: '3.5rem',
-                                color: info.color, background: `${info.color}11`,
-                                boxShadow: `inset 0 0 20px ${info.color}22, 0 0 15px ${info.color}44`
+                                width: '220px', height: '220px',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                marginBottom: '20px',
+                                position: 'relative',
+                                filter: `drop-shadow(0 0 15px ${info.color})`
                             }}>
-                                {info.icon}
+                                {opt.customIcon ? (
+                                    <img
+                                        src={opt.customIcon}
+                                        alt={opt.name}
+                                        style={{
+                                            width: '100%', height: '100%',
+                                            objectFit: 'contain',
+                                            imageRendering: 'pixelated'
+                                        }}
+                                    />
+                                ) : (
+                                    <span style={{ fontSize: '3rem' }}>★</span>
+                                )}
                             </div>
 
                             <h2 style={{ color: info.color, fontSize: '1.4rem', textAlign: 'center', marginBottom: '15px', textShadow: `0 0 10px ${info.color}aa` }}>
                                 {opt.name}
                             </h2>
 
-                            <p style={{ color: '#94a3b8', fontSize: '1rem', textAlign: 'center', lineHeight: '1.6', fontWeight: 500 }}>
-                                {opt.desc}
-                            </p>
+                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', padding: '0 10px', overflowY: 'auto' }}>
+                                {opt.perks?.map((perk, idx) => {
+                                    const isNew = idx === opt.level - 1;
+                                    return (
+                                        <div key={idx} style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            gap: '8px',
+                                            color: isNew ? '#fbbf24' : '#64748b',
+                                            fontSize: '0.85rem',
+                                            fontWeight: isNew ? '900' : '500',
+                                            padding: '6px 12px',
+                                            background: isNew ? 'rgba(251, 191, 36, 0.15)' : 'rgba(0,0,0,0.2)',
+                                            borderRadius: '6px',
+                                            border: isNew ? '1px solid rgba(251, 191, 36, 0.4)' : '1px solid rgba(255,255,255,0.05)',
+                                            textShadow: isNew ? '0 0 8px rgba(251, 191, 36, 0.5)' : 'none'
+                                        }}>
+                                            {isNew && <span style={{
+                                                fontSize: '9px',
+                                                background: '#fbbf24',
+                                                color: '#0f172a',
+                                                padding: '2px 5px',
+                                                borderRadius: '3px',
+                                                fontWeight: '900',
+                                                textShadow: 'none',
+                                                boxShadow: '0 0 10px #fbbf24'
+                                            }}>NEW</span>}
+                                            {perk}
+                                        </div>
+                                    );
+                                })}
+                            </div>
 
                             <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px' }}>
                                 <div style={{ color: '#22d3ee', fontSize: '0.8rem', letterSpacing: '2px', fontWeight: 'bold' }}>
-                                    {opt.category.toUpperCase()} ARENA
-                                </div>
-                                <div style={{ color: info.color, fontSize: '0.7rem', opacity: 0.6 }}>
-                                    ID: {opt.id.split('_')[1].toUpperCase()}-X99
+                                    {opt.category.toUpperCase()} SECTOR
                                 </div>
                             </div>
 

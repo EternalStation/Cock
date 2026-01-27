@@ -16,6 +16,8 @@ export interface PlayerStats {
     base: number;
     flat: number;
     mult: number;
+    hexFlat?: number;
+    hexMult?: number;
 }
 
 export interface Player {
@@ -214,14 +216,21 @@ export interface Upgrade {
 
 export type LegendaryCategory = 'Economic' | 'Combat' | 'Defensive';
 
+export type LegendaryType =
+    | 'EcoDMG' | 'EcoXP' | 'EcoHP'
+    | 'hp_per_kill' | 'ats_per_kill' | 'xp_per_kill' | 'dmg_per_kill' | 'reg_per_kill'
+    | 'shockwave' | 'shield_passive' | 'dash_boost' | 'lifesteal' | 'orbital_strike' | 'drone_overdrive';
+
 export interface LegendaryHex {
     id: string;
     name: string;
     desc: string;
     category: LegendaryCategory;
-    type: 'hp_per_kill' | 'ats_per_kill' | 'xp_per_kill' | 'dmg_per_kill' | 'reg_per_kill';
+    type: LegendaryType;
     level: number;
     killsAtAcquisition: number;
+    customIcon?: string;
+    perks?: string[];
 }
 
 export interface UpgradeChoice {
@@ -275,29 +284,44 @@ export interface GameState {
     // Inventory System
     meteorites: Meteorite[]; // Dropped items in the world
     inventory: (Meteorite | null)[];  // Collected items (30 slots)
-    isInventoryOpen: boolean;
 
     // Module Menu System
     showModuleMenu: boolean;
     showLegendarySelection: boolean;
     legendaryOptions: LegendaryHex[] | null;
     pendingLegendaryHex: LegendaryHex | null; // Hex waiting to be placed
+    upgradingHexIndex: number | null; // For auto-upgrade animation
+    upgradingHexTimer: number; // Duration of animation
+    unseenMeteorites: number;
     moduleSockets: {
         hexagons: (LegendaryHex | null)[];   // 6 outer sockets
         diamonds: (Meteorite | null)[];       // 6 inner sockets
     };
 }
 
-export type MeteoriteRarity = 'scrap' | 'anomalous' | 'quantum' | 'astral' | 'radiant';
+export type MeteoriteRarity = 'scrap' | 'anomalous' | 'quantum' | 'astral' | 'radiant' | 'void' | 'eternal';
+export type MeteoriteQuality = 'Broken' | 'Damaged' | 'New';
+
+export interface MeteoritePerk {
+    id: string;
+    description: string;
+    value: number;
+    range: { min: number, max: number };
+}
 
 export interface Meteorite {
     id: number;
     x: number;
     y: number;
     rarity: MeteoriteRarity;
+    quality: MeteoriteQuality;
+    visualIndex: number; // 1-7
     vx: number;
     vy: number;
     magnetized: boolean; // Is it being pulled to player?
+    isNew?: boolean; // track if player has seen this meteorite
+    discoveredIn: string; // The arena where it was found
+    perks: MeteoritePerk[];
     stats: {
         coreSurge?: number;
         neighbor?: number;

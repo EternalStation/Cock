@@ -16,12 +16,18 @@ interface HUDProps {
     onRestart: () => void;
     bossWarning: number | null;
     fps: number;
+    onInventoryToggle: () => void;
 }
 
-export const HUD: React.FC<HUDProps> = ({ gameState, upgradeChoices, onUpgradeSelect, gameOver, bossWarning, fps }) => {
+export const HUD: React.FC<HUDProps> = ({ gameState, upgradeChoices, onUpgradeSelect, gameOver, bossWarning, fps, onInventoryToggle }) => {
     const { player, score, gameTime } = gameState;
     const { xp } = player;
-    const maxHp = calcStat(player.hp);
+
+    // Dynamic Max HP calculation for HUD (matches logic in PlayerLogic)
+    let maxHp = calcStat(player.hp);
+    if (getArenaIndex(player.x, player.y) === 2) {
+        maxHp *= 1.2; // +20% Max HP in Defence Hex
+    }
 
     // Upgrade Nav
     const [selectedIndex, setSelectedIndex] = useState(0);
@@ -87,36 +93,80 @@ export const HUD: React.FC<HUDProps> = ({ gameState, upgradeChoices, onUpgradeSe
                         <div className="kills" style={{ color: '#22d3ee', textShadow: '0 0 10px rgba(34, 211, 238, 0.5)', fontSize: 24, fontWeight: 800 }}>
                             {score.toString().padStart(4, '0')}
                         </div>
-                        <div className="stat-row" style={{ fontSize: 11, fontWeight: 800, color: '#64748b', letterSpacing: 1 }}>
+                        <div className="stat-row" style={{ fontSize: 10, fontWeight: 800, color: '#64748b', letterSpacing: 1 }}>
                             LVL {player.level}
                         </div>
-                        <div className="stat-row" style={{ fontSize: 11, fontWeight: 800, color: '#64748b', letterSpacing: 1 }}>
+                        <div className="stat-row" style={{ fontSize: 10, fontWeight: 800, color: '#64748b', letterSpacing: 1 }}>
                             {Math.floor(gameTime / 60)}:{Math.floor(gameTime % 60).toString().padStart(2, '0')}
                         </div>
 
-                        {/* ECONOMIC ZONE INDICATOR */}
-                        {getArenaIndex(player.x, player.y) === 0 && (
-                            <div style={{
-                                marginTop: 10,
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: 6,
-                                padding: '2px 8px',
-                                background: 'rgba(34, 211, 238, 0.1)',
-                                border: '1px solid rgba(34, 211, 238, 0.5)',
-                                borderRadius: 4,
-                                animation: 'pulse 3s infinite ease-in-out',
-                                boxShadow: '0 0 10px rgba(34, 211, 238, 0.2)'
-                            }}>
+                        <style>{`
+                            @keyframes hud-breath {
+                                0% { transform: scale(1); opacity: 0.85; filter: brightness(1); }
+                                50% { transform: scale(1.1); opacity: 1; filter: brightness(1.5); }
+                                100% { transform: scale(1); opacity: 0.85; filter: brightness(1); }
+                            }
+                        `}</style>
+                        {(() => {
+                            const arenaIdx = getArenaIndex(player.x, player.y);
+
+                            const PulseLabel = ({ title, buff, color, duration }: { title: string, buff: string, color: string, duration: string }) => (
                                 <div style={{
-                                    width: 8, height: 8, background: '#22d3ee',
-                                    borderRadius: '50%', boxShadow: '0 0 8px #22d3ee'
-                                }} />
-                                <span style={{ color: '#22d3ee', fontSize: 10, fontWeight: 900, letterSpacing: 1 }}>
-                                    ECON HEX: +15% XP
-                                </span>
-                            </div>
-                        )}
+                                    marginTop: 6, display: 'flex', alignItems: 'center', gap: 8,
+                                    padding: '5px 12px', background: `${color}1A`,
+                                    border: `1px solid ${color}80`,
+                                    borderRadius: 6,
+                                    animation: `hud-breath ${duration} infinite ease-in-out`,
+                                    boxShadow: `0 0 15px ${color}22`,
+                                    width: 'fit-content',
+                                    pointerEvents: 'none',
+                                    backdropFilter: 'blur(2px)',
+                                    transformOrigin: 'left center'
+                                }}>
+                                    <div style={{
+                                        width: 10, height: 10, background: color, borderRadius: '50%',
+                                        boxShadow: `0 0 10px ${color}`
+                                    }} />
+                                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                                        <span style={{
+                                            color, fontSize: 10, fontWeight: 950, letterSpacing: 1,
+                                            textTransform: 'uppercase', textShadow: `0 0 8px ${color}66`
+                                        }}>{title}:</span>
+                                        <span style={{
+                                            color: '#fff', fontSize: 10, fontWeight: 800
+                                        }}>{buff}</span>
+                                    </div>
+                                </div>
+                            );
+
+                            if (arenaIdx === 0) {
+                                return (
+                                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                        <PulseLabel title="Econ Hex" buff="+15% XP Gain" color="#22d3ee" duration="2.5s" />
+                                        <PulseLabel title="Econ Hex" buff="+15% Meteorite Chance" color="#22d3ee" duration="2.5s" />
+                                    </div>
+                                );
+                            } else if (arenaIdx === 1) {
+                                return (
+                                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                        <PulseLabel title="Combat Hex" buff="+15% Spawn Rate" color="#ef4444" duration="2.0s" />
+                                        <PulseLabel title="Combat Hex" buff="+15% Collision Dmg" color="#ef4444" duration="2.0s" />
+                                    </div>
+                                );
+                            } else if (arenaIdx === 2) {
+                                return (
+                                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                        <PulseLabel title="Defence Hex" buff="+20% Max HP" color="#3b82f6" duration="3.0s" />
+                                        <PulseLabel title="Defence Hex" buff="+20% HP Regen" color="#3b82f6" duration="3.0s" />
+                                    </div>
+                                );
+                            }
+                            return null;
+                        })()}
+
+
+
+
 
                         {/* STUN INDICATOR */}
                         {player.stunnedUntil && Date.now() < player.stunnedUntil && (
@@ -143,19 +193,100 @@ export const HUD: React.FC<HUDProps> = ({ gameState, upgradeChoices, onUpgradeSe
                         )}
                     </div>
 
-                    {/* FPS Counter - Bottom Right Independent Overlay */}
+                    {/* Bottom Right UI Group */}
                     <div style={{
-                        position: 'absolute', bottom: 10, right: 10,
-                        pointerEvents: 'none',
-                        zIndex: 100
+                        position: 'absolute', bottom: 15, right: 15,
+                        zIndex: 100,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'flex-end',
+                        gap: 12
                     }}>
+                        {/* INVENTORY / METEORITE INDICATOR (Moved to bottom right, clickable) */}
+                        <div
+                            onClick={onInventoryToggle}
+                            style={{
+                                position: 'relative',
+                                width: 52,
+                                height: 52,
+                                background: 'rgba(15, 23, 42, 0.7)',
+                                border: '2px solid rgba(148, 163, 184, 0.4)',
+                                borderRadius: '14px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                boxShadow: '0 0 20px rgba(0,0,0,0.5), inset 0 0 10px rgba(125, 211, 252, 0.1)',
+                                backdropFilter: 'blur(8px)',
+                                pointerEvents: 'auto',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
+                            }}
+                            onMouseEnter={(e) => {
+                                e.currentTarget.style.transform = 'scale(1.1) translateY(-4px)';
+                                e.currentTarget.style.borderColor = 'rgba(125, 211, 252, 0.6)';
+                                e.currentTarget.style.boxShadow = '0 10px 25px rgba(0,0,0,0.6), 0 0 15px rgba(125, 211, 252, 0.2)';
+                            }}
+                            onMouseLeave={(e) => {
+                                e.currentTarget.style.transform = 'scale(1) translateY(0)';
+                                e.currentTarget.style.borderColor = 'rgba(148, 163, 184, 0.4)';
+                                e.currentTarget.style.boxShadow = '0 0 20px rgba(0,0,0,0.5), inset 0 0 10px rgba(125, 211, 252, 0.1)';
+                            }}
+                        >
+                            {/* Meteorite Icon (SVG) - Jagged Rock Shape */}
+                            <svg viewBox="0 0 100 100" width="34" height="34" style={{ filter: 'drop-shadow(0 0 8px #7dd3fc)' }}>
+                                <path
+                                    d="M30 20 L75 15 L90 40 L80 80 L50 90 L20 75 L10 45 Z"
+                                    fill="none"
+                                    stroke="#7dd3fc"
+                                    strokeWidth="6"
+                                    strokeLinejoin="round"
+                                />
+                                <path
+                                    d="M40 35 L65 30 L80 45 L70 70 L45 75 L30 60 Z"
+                                    fill="#7dd3fc"
+                                    opacity="0.6"
+                                />
+                                {/* Small craters/details */}
+                                <circle cx="45" cy="45" r="4.5" fill="#7dd3fc" opacity="0.8" />
+                                <circle cx="65" cy="62" r="3.5" fill="#7dd3fc" opacity="0.8" />
+                                <circle cx="35" cy="65" r="2.5" fill="#7dd3fc" opacity="0.8" />
+                            </svg>
+
+                            {/* Unseen Badge */}
+                            {gameState.unseenMeteorites > 0 && (
+                                <div style={{
+                                    position: 'absolute',
+                                    top: -10,
+                                    right: -10,
+                                    background: '#ef4444',
+                                    color: '#fff',
+                                    fontSize: 11,
+                                    fontWeight: 900,
+                                    minWidth: 20,
+                                    height: 20,
+                                    borderRadius: 10,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    padding: '0 5px',
+                                    border: '2px solid #020617',
+                                    boxShadow: '0 0 15px rgba(239, 68, 68, 0.7)',
+                                    animation: 'pulse 1s infinite'
+                                }}>
+                                    {gameState.unseenMeteorites}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* FPS Counter */}
                         <span style={{
                             color: fps >= 50 ? '#4ade80' : fps >= 30 ? '#facc15' : '#ef4444',
                             fontFamily: 'monospace',
                             fontSize: 14,
                             fontWeight: 900,
                             letterSpacing: '1px',
-                            textShadow: '0 0 5px rgba(0,0,0,0.8)'
+                            textShadow: '0 0 5px rgba(0,0,0,0.8)',
+                            pointerEvents: 'none'
                         }}>
                             {fps}
                         </span>
@@ -383,7 +514,8 @@ export const HUD: React.FC<HUDProps> = ({ gameState, upgradeChoices, onUpgradeSe
                         </div>
                     )}
                 </>
-            )}
+            )
+            }
         </>
     );
 };

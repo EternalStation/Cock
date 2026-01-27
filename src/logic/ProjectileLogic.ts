@@ -153,6 +153,7 @@ export function updateProjectiles(state: GameState, onEvent?: (event: string, da
                         state.showLegendarySelection = true;
                         state.isPaused = true;
                         playSfx('rare-spawn'); // Legendary drop sound
+                        if (onEvent) onEvent('boss_kill');
                     }
 
                     if (e.isRare && e.rareReal) {

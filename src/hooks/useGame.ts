@@ -12,7 +12,7 @@ import { updateLoot, createMeteorite } from '../logic/LootLogic';
 import { updateParticles } from '../logic/ParticleLogic';
 import { ARENA_CENTERS, ARENA_RADIUS, PORTALS, getHexWallLine } from '../logic/MapLogic';
 import { playSfx, startBGM, updateBGMPhase, duckMusic, restoreMusic, pauseMusic, resumeMusic, startBossAmbience, stopBossAmbience, startPortalAmbience, stopPortalAmbience } from '../logic/AudioLogic';
-import { calculateLegendaryBonus } from '../logic/LegendaryLogic';
+import { calculateLegendaryBonus, syncLegendaryHex } from '../logic/LegendaryLogic';
 
 export function useGameLoop(gameStarted: boolean) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -29,7 +29,6 @@ export function useGameLoop(gameStarted: boolean) {
     // Pause state refs (so loop can check current state without closure issues)
     const showStatsRef = useRef(false);
     const showSettingsRef = useRef(false);
-    const showInventoryRef = useRef(false); // New Ref
     const showModuleMenuRef = useRef(false);
     const upgradeChoicesRef = useRef<UpgradeChoice[] | null>(null);
 
@@ -37,12 +36,15 @@ export function useGameLoop(gameStarted: boolean) {
     const meteoriteImagesRef = useRef<Record<string, HTMLImageElement>>({});
 
     useEffect(() => {
-        const rarities = ['scrap', 'anomalous', 'quantum', 'astral', 'radiant'];
-        rarities.forEach(r => {
-            const img = new Image();
-            img.src = `/assets/meteorites/${r}NoBackgound.png`;
-            meteoriteImagesRef.current[r] = img;
-        });
+        const qualities = ['Broken', 'Damaged', 'New'];
+        for (let i = 1; i <= 9; i++) {
+            qualities.forEach(q => {
+                const key = `M${i}${q}`;
+                const img = new Image();
+                img.src = `/assets/meteorites/${key}.png`;
+                meteoriteImagesRef.current[key] = img;
+            });
+        }
 
         // Initialize Background Worker
         workerRef.current = new Worker(gameWorkerUrl, { type: 'module' });
@@ -67,14 +69,12 @@ export function useGameLoop(gameStarted: boolean) {
     const [bossWarning, setBossWarning] = useState<number | null>(null);
     const [showStats, setShowStats] = useState(false);
     const [showSettings, setShowSettings] = useState(false);
-    const [showInventory, setShowInventory] = useState(false); // New State
     const [showModuleMenu, setShowModuleMenu] = useState(false);
     const [showLegendarySelection, setShowLegendarySelection] = useState(false);
 
     // Sync refs with state
     showStatsRef.current = showStats;
     showSettingsRef.current = showSettings;
-    showInventoryRef.current = showInventory; // Sync
     showModuleMenuRef.current = showModuleMenu;
     upgradeChoicesRef.current = upgradeChoices;
 
@@ -98,35 +98,20 @@ export function useGameLoop(gameStarted: boolean) {
                     const next = !prev;
                     if (next) {
                         setShowSettings(false);
-                        setShowInventory(false);
                         setShowModuleMenu(false);
                     }
                     return next;
                 });
             }
 
-            // Handle I key for inventory toggle
-            if (key === 'i') {
-                setShowInventory(prev => {
-                    const next = !prev;
-                    if (next) {
-                        setShowSettings(false);
-                        setShowStats(false);
-                        setShowModuleMenu(false);
-                    }
-                    return next;
-                });
-                gameState.current.isInventoryOpen = !gameState.current.isInventoryOpen;
-            }
-
-            // Handle M key for module matrix toggle
-            if (key === 'm') {
+            // Handle X key for module matrix toggle
+            if (key === 'x') {
                 setShowModuleMenu(prev => {
                     const next = !prev;
                     if (next) {
                         setShowSettings(false);
                         setShowStats(false);
-                        setShowInventory(false);
+                        gameState.current.unseenMeteorites = 0;
                     }
                     return next;
                 });
@@ -201,7 +186,7 @@ export function useGameLoop(gameStarted: boolean) {
             const rarities: MeteoriteRarity[] = ['scrap', 'anomalous', 'quantum', 'astral', 'radiant'];
             for (let i = 1; i <= 5; i++) {
                 if (cheatBuffer.endsWith(`m${i}`)) {
-                    const met = createMeteorite(rarities[i - 1]);
+                    const met = createMeteorite(gameState.current, rarities[i - 1]);
                     const emptyIdx = gameState.current.inventory.findIndex(s => s === null);
                     if (emptyIdx !== -1) {
                         gameState.current.inventory[emptyIdx] = met;
@@ -227,7 +212,7 @@ export function useGameLoop(gameStarted: boolean) {
             window.removeEventListener('keyup', handleUp);
             window.removeEventListener('keydown', handleCheat);
         };
-    }, [showSettings, showStats, showInventory, showModuleMenu]); // GameStarted removed from dependency to keep listeners active in Main Menu
+    }, [showSettings, showStats, showModuleMenu]); // GameStarted removed from dependency to keep listeners active in Main Menu
 
     const restartGame = () => {
         gameState.current = createInitialGameState();
@@ -235,7 +220,6 @@ export function useGameLoop(gameStarted: boolean) {
         setUpgradeChoices(null);
         setBossWarning(null);
         setShowSettings(false);
-        setShowInventory(false);
         setShowModuleMenu(false);
     };
 
@@ -245,13 +229,33 @@ export function useGameLoop(gameStarted: boolean) {
     };
 
     const handleLegendarySelect = (selection: LegendaryHex) => {
-        gameState.current.pendingLegendaryHex = selection;
-        gameState.current.showLegendarySelection = false;
-        setShowLegendarySelection(false);
-        setShowModuleMenu(true);
-        gameState.current.showModuleMenu = true;
-        gameState.current.isPaused = true;
-        playSfx('merge-complete');
+        const state = gameState.current;
+        const existingIdx = state.moduleSockets.hexagons.findIndex(h => h && h.type === selection.type);
+
+        if (existingIdx !== -1) {
+            // AUTO-UPGRADE
+            const existing = state.moduleSockets.hexagons[existingIdx]!;
+            existing.level = Math.min(5, existing.level + 1);
+            syncLegendaryHex(existing);
+            state.upgradingHexIndex = existingIdx;
+            state.upgradingHexTimer = 3.0; // 3 seconds of animation
+            state.showLegendarySelection = false;
+            setShowLegendarySelection(false);
+            setShowModuleMenu(true);
+            state.showModuleMenu = true;
+            state.isPaused = true;
+            playSfx('merge-complete');
+        } else {
+            // MANUAL PLACEMENT (Default)
+            syncLegendaryHex(selection);
+            state.pendingLegendaryHex = selection;
+            state.showLegendarySelection = false;
+            setShowLegendarySelection(false);
+            setShowModuleMenu(true);
+            state.showModuleMenu = true;
+            state.isPaused = true;
+            playSfx('merge-complete');
+        }
     };
 
     // Game Loop
@@ -288,7 +292,7 @@ export function useGameLoop(gameStarted: boolean) {
             }
 
             // Pausing Logic (check refs for current values)
-            const isMenuOpen = showStatsRef.current || showSettingsRef.current || showInventoryRef.current || showModuleMenuRef.current || upgradeChoicesRef.current !== null || state.showLegendarySelection;
+            const isMenuOpen = showStatsRef.current || showSettingsRef.current || showModuleMenuRef.current || upgradeChoicesRef.current !== null || state.showLegendarySelection;
             state.isPaused = isMenuOpen;
             if (state.isPaused) {
                 // Ensure keys are cleared when pausing to prevent stuck movement
@@ -298,14 +302,13 @@ export function useGameLoop(gameStarted: boolean) {
             // Music volume control based on menu state
             const inStats = showStatsRef.current;
             const inSettings = showSettingsRef.current;
-            const inInventory = showInventoryRef.current; // Check inventory
             const inModuleMenu = showModuleMenuRef.current;
 
             if (inSettings) {
                 pauseMusic(); // ESC menu stops music
-            } else if (inStats || inInventory || inModuleMenu) {
+            } else if (inStats || inModuleMenu) {
                 resumeMusic(); // Ensure music is playing
-                duckMusic(); // Duck to 70% for stats AND inventory
+                duckMusic(); // Duck to 70% for stats AND matrix
             } else {
                 resumeMusic(); // Ensure music is playing
                 restoreMusic(); // Restore full volume (including when in upgrade menu)
@@ -340,6 +343,15 @@ export function useGameLoop(gameStarted: boolean) {
                     renderGame(ctx, state, meteoriteImagesRef.current);
                 } catch (e) {
                     console.error("Render Error:", e);
+                }
+            }
+
+            // Decrement auto-upgrade animation timer
+            if (state.upgradingHexTimer > 0) {
+                state.upgradingHexTimer -= safeDt;
+                if (state.upgradingHexTimer <= 0) {
+                    state.upgradingHexTimer = 0;
+                    state.upgradingHexIndex = null;
                 }
             }
 
@@ -399,9 +411,9 @@ export function useGameLoop(gameStarted: boolean) {
             }
             if (event === 'boss_kill') {
                 state.bossKills = (state.bossKills || 0) + 1;
-                const choices = spawnUpgrades(state, true);
-                setUpgradeChoices(choices);
-                playSfx('level');
+                // Legendary selection is handled in logic files (PlayerLogic/ProjectileLogic),
+                // but we trigger the React UI here.
+                setShowLegendarySelection(true);
             }
             if (event === 'game_over') {
                 setGameOver(true);
@@ -455,6 +467,13 @@ export function useGameLoop(gameStarted: boolean) {
                             state.portalState = 'transferring';
                             state.transferTimer = 3.0;
                             state.nextArenaId = p.to;
+
+                            // Immediate Despawn to prevent interaction during animation
+                            state.enemies = [];
+                            state.bullets = [];
+                            state.enemyBullets = [];
+                            state.spatialGrid.clear();
+
                             playSfx('rare-despawn');
                             stopPortalAmbience();
                             break;
@@ -496,11 +515,13 @@ export function useGameLoop(gameStarted: boolean) {
         state.enemies.forEach(e => updateBossBehavior(e));
 
         const { player } = state;
-        const atkScore = Math.min(9999, calcStat(player.atk) + calculateLegendaryBonus(state, 'ats_per_kill'));
+        const atsBonusPct = calculateLegendaryBonus(state, 'ats_pct_per_kill');
+        const atkScore = Math.min(9999, (calcStat(player.atk) + calculateLegendaryBonus(state, 'ats_per_kill')) * (1 + atsBonusPct / 100));
         const fireDelay = 200000 / atkScore;
 
-        if (Date.now() - player.lastShot > fireDelay && state.spawnTimer <= 0) {
-            const d = calcStat(player.dmg) + calculateLegendaryBonus(state, 'dmg_per_kill');
+        if (Date.now() - player.lastShot > fireDelay && state.spawnTimer <= 0 && state.portalState !== 'transferring') {
+            const dmgBonusPct = calculateLegendaryBonus(state, 'dmg_pct_per_kill');
+            const d = (calcStat(player.dmg) + calculateLegendaryBonus(state, 'dmg_per_kill')) * (1 + dmgBonusPct / 100);
             for (let i = 0; i < player.multi; i++) {
                 const offset = (i - (player.multi - 1) / 2) * 0.15;
                 spawnBullet(state, player.x, player.y, player.targetAngle, d, player.pierce, offset);
@@ -553,8 +574,6 @@ export function useGameLoop(gameStarted: boolean) {
         setShowStats,
         showSettings,
         setShowSettings,
-        showInventory,
-        setShowInventory,
         showModuleMenu,
         setShowModuleMenu,
         showLegendarySelection,
@@ -570,6 +589,17 @@ export function useGameLoop(gameStarted: boolean) {
         updateInventorySlot: (index: number, item: any) => {
             gameState.current.inventory[index] = item;
             setUiState(prev => prev + 1);
+        },
+        toggleModuleMenu: () => {
+            setShowModuleMenu(prev => {
+                const next = !prev;
+                if (next) {
+                    setShowSettings(false);
+                    setShowStats(false);
+                    gameState.current.unseenMeteorites = 0;
+                }
+                return next;
+            });
         },
         uiState,
         fps // Expose FPS
@@ -708,39 +738,43 @@ function renderGame(ctx: CanvasRenderingContext2D, state: GameState, meteoriteIm
 
         // --- PORTAL RENDERING ---
         if (state.portalState !== 'closed') {
-            const activePortals = PORTALS.filter(p => p.from === state.currentArena);
-            const center = ARENA_CENTERS.find(c => c.id === state.currentArena);
+            // Draw portals that either START in our arena OR END in our arena (entry and exit points)
+            PORTALS.forEach(p => {
+                const isFrom = p.from === state.currentArena;
+                const isTo = p.to === state.currentArena;
 
-            if (center) {
-                activePortals.forEach(p => {
-                    const wall = getHexWallLine(center.x, center.y, ARENA_RADIUS, p.wall);
+                if (!isFrom && !isTo) return;
 
-                    ctx.save();
-                    // Glow
-                    ctx.shadowBlur = 20;
-                    ctx.shadowColor = p.color;
-                    ctx.strokeStyle = p.color;
-                    ctx.lineWidth = 10;
-                    ctx.lineCap = 'round';
+                const center = ARENA_CENTERS.find(c => c.id === (isFrom ? p.from : p.to));
+                if (!center) return;
 
-                    // Pulse opacity
-                    if (state.portalState === 'warn') {
-                        ctx.globalAlpha = 0.5 + Math.sin(state.gameTime * 10) * 0.5;
-                        ctx.setLineDash([50, 50]); // Warning Dash
-                    } else {
-                        // OPEN
-                        ctx.globalAlpha = 1.0;
-                        ctx.lineWidth = 15 + Math.sin(state.gameTime * 20) * 5; // Energy pulse breadth
-                    }
+                const wall = getHexWallLine(center.x, center.y, ARENA_RADIUS, p.wall);
 
-                    ctx.beginPath();
-                    ctx.moveTo(wall.x1, wall.y1);
-                    ctx.lineTo(wall.x2, wall.y2);
-                    ctx.stroke();
+                ctx.save();
+                // Glow
+                ctx.shadowBlur = 20;
+                ctx.shadowColor = p.color;
+                ctx.strokeStyle = p.color;
+                ctx.lineWidth = 10;
+                ctx.lineCap = 'round';
 
-                    ctx.restore();
-                });
-            }
+                // Pulse opacity
+                if (state.portalState === 'warn') {
+                    ctx.globalAlpha = 0.5 + Math.sin(state.gameTime * 10) * 0.5;
+                    ctx.setLineDash([50, 50]); // Warning Dash
+                } else {
+                    // OPEN or TRANSFERRING
+                    ctx.globalAlpha = 1.0;
+                    ctx.lineWidth = 15 + Math.sin(state.gameTime * 20) * 5; // Energy pulse breadth
+                }
+
+                ctx.beginPath();
+                ctx.moveTo(wall.x1, wall.y1);
+                ctx.lineTo(wall.x2, wall.y2);
+                ctx.stroke();
+
+                ctx.restore();
+            });
         }
 
         // Void Rifts (Deep Layer) - REMOVED
@@ -777,7 +811,8 @@ function renderGame(ctx: CanvasRenderingContext2D, state: GameState, meteoriteIm
                 ctx.translate((Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2);
             }
 
-            const img = meteoriteImages[m.rarity];
+            const imgKey = `M${m.visualIndex}${m.quality}`;
+            const img = meteoriteImages[imgKey];
             if (img && img.complete && img.naturalWidth !== 0) {
                 // Draw high quality image
                 const size = 32; // Standard icon size in world

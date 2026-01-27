@@ -6,7 +6,7 @@ import { SettingsMenu } from './components/SettingsMenu';
 import { MainMenu } from './components/MainMenu';
 import { DeathScreen } from './components/DeathScreen';
 
-import { Inventory } from './components/Inventory';
+
 import { ModuleMenu } from './components/ModuleMenu';
 import { LegendarySelectionMenu } from './components/LegendarySelectionMenu';
 
@@ -21,10 +21,10 @@ function App() {
 
   // Auto-focus logic
   useEffect(() => {
-    if (gameStarted && !hook.showStats && !hook.showSettings && !hook.showInventory && !hook.showModuleMenu) {
+    if (gameStarted && !hook.showStats && !hook.showSettings && !hook.showModuleMenu) {
       appRef.current?.focus();
     }
-  }, [gameStarted, hook.showStats, hook.showSettings, hook.showInventory, hook.showModuleMenu]);
+  }, [gameStarted, hook.showStats, hook.showSettings, hook.showModuleMenu]);
 
   // Reset logic when quitting to main menu
   const handleQuit = () => {
@@ -76,6 +76,7 @@ function App() {
                 onRestart={hook.restartGame}
                 bossWarning={hook.bossWarning}
                 fps={hook.fps}
+                onInventoryToggle={hook.toggleModuleMenu}
               />
             </div>
           )}
@@ -83,13 +84,7 @@ function App() {
           {/* Stats Menu */}
           {hook.showStats && <StatsMenu gameState={hook.gameState} />}
 
-          {/* Inventory Menu */}
-          <Inventory
-            inventory={hook.gameState.inventory}
-            isOpen={hook.showInventory}
-            onClose={() => hook.setShowInventory(false)}
-            onInventoryUpdate={hook.updateInventorySlot}
-          />
+
 
           {/* Settings Menu */}
           {hook.showSettings && <SettingsMenu onClose={() => hook.setShowSettings(false)} onRestart={hook.restartGame} onQuit={handleQuit} />}

@@ -50,17 +50,20 @@ export function updateEnemies(state: GameState, onEvent?: (event: string, data?:
     // Spawning Logic
     const minutes = gameTime / 60;
     const baseSpawnRate = 1.4 + (minutes * 0.1);
-    const actualRate = baseSpawnRate * shapeDef.spawnWeight;
+    let actualRate = baseSpawnRate * shapeDef.spawnWeight;
+    if (state.currentArena === 1) actualRate *= 1.15; // +15% Spawn Rate in Combat Hex
 
-    if (Math.random() < actualRate / 60) {
+    if (Math.random() < actualRate / 60 && state.portalState !== 'transferring') {
         spawnEnemy(state);
     }
 
     // Rare Spawning Logic
-    manageRareSpawnCycles(state);
+    if (state.portalState !== 'transferring') {
+        manageRareSpawnCycles(state);
+    }
 
     // Boss Spawning
-    if (gameTime >= state.nextBossSpawnTime) {
+    if (gameTime >= state.nextBossSpawnTime && state.portalState !== 'transferring') {
         // Fix: Pass arguments correctly (x, y, shape, isBoss)
         spawnEnemy(state, undefined, undefined, undefined, true);
         state.nextBossSpawnTime += 120; // 2 Minutes
@@ -520,74 +523,7 @@ export function updateEnemies(state: GameState, onEvent?: (event: string, data?:
                 }
                 break;
             case 'pentagon':
-                const motherAge = state.gameTime - (e.spawnedAt || 0);
-                const myMinions = state.enemies.filter(m => m.parentId === e.id && !m.dead);
-                const maxMinions = e.isElite ? 15 : 9;
-
-                // 1. Summoning Logic (Stops after 60s)
-                if (motherAge < 60 && myMinions.length < maxMinions) {
-                    const timeSinceLastSummon = Math.floor((Date.now() - (e.lastAttack || 0)) / 1000);
-                    if (timeSinceLastSummon >= 12) {
-                        e.summonState = 2; // Cast
-                        e.timer = (e.timer || 0) + 1;
-                        e.pulsePhase = (e.pulsePhase + 0.3) % (Math.PI * 2);
-                        vx = 0; vy = 0;
-                        if (e.timer >= 180) {
-                            const toSpawn = Math.min(3, maxMinions - myMinions.length);
-                            for (let i = 0; i < toSpawn; i++) {
-                                spawnMinion(state, e, !!e.isElite);
-                            }
-                            e.lastAttack = Date.now();
-                            e.timer = 0;
-                            e.summonState = 0;
-                        }
-                    }
-                }
-
-                // 2. Launch Trigger Logic (Resets when clear)
-                const inRange = dist < 400;
-                if (dist > 410) e.triggeredLaunchTime = undefined;
-
-                // Only trigger if minions exist (they need to see the entry)
-                if (inRange && myMinions.some(m => m.minionState === 0)) {
-                    if (e.triggeredLaunchTime === undefined) {
-                        e.triggeredLaunchTime = state.gameTime;
-                        e.angryUntil = Date.now() + 2000;
-                        e.originalPalette = [...e.palette];
-                    }
-                }
-
-                // 3. Execution of Launch
-                if (e.triggeredLaunchTime !== undefined) {
-                    // Proximity: Staggered 0.3s launch for ALL
-                    const elapsed = state.gameTime - e.triggeredLaunchTime;
-                    myMinions.forEach((m, idx) => {
-                        if (m.minionState === 0 && elapsed > idx * 0.3) {
-                            m.minionState = 1;
-                            m.spawnedAt = state.gameTime;
-                        }
-                    });
-                } else if (motherAge >= 60) {
-                    // Enrage: Slow 3s launch for ONE
-                    if (!e.lastLaunchTime || state.gameTime - e.lastLaunchTime >= 3.0) {
-                        const nextMinion = myMinions.find(m => m.minionState === 0);
-                        if (nextMinion) {
-                            nextMinion.minionState = 1;
-                            nextMinion.spawnedAt = state.gameTime;
-                            e.lastLaunchTime = state.gameTime;
-                        }
-                    }
-                }
-
-                // Apply Red Flash if angry
-                if (e.angryUntil && Date.now() < e.angryUntil) {
-                    e.palette = ['#FF4444', '#990000', '#660000'];
-                } else if (e.originalPalette && motherAge < 60) {
-                    e.palette = e.originalPalette;
-                }
-
-                // 4. Mother Movement & Suicide
-                if (motherAge < 60) {
+                {
                     const angleToPlayerP = Math.atan2(dy, dx);
                     if (dist < 700) {
                         vx = -Math.cos(angleToPlayerP) * currentSpd;
@@ -598,44 +534,6 @@ export function updateEnemies(state: GameState, onEvent?: (event: string, data?:
                     } else {
                         vx = Math.cos(angleToPlayerP + Math.PI / 2) * currentSpd * 0.5;
                         vy = Math.sin(angleToPlayerP + Math.PI / 2) * currentSpd * 0.5;
-                    }
-                } else {
-                    // Enraged/Suicide Phase: Stop moving completely
-                    vx = 0; vy = 0;
-                    e.palette = ['#FF4444', '#990000', '#660000'];
-
-                    // Force red pulse during enrage
-                    e.pulsePhase = (e.pulsePhase || 0) + 0.2;
-
-                    if (myMinions.length === 0) {
-                        if (e.suicideTimer === undefined) {
-                            e.suicideTimer = state.gameTime;
-                            playSfx('warning'); // Pre-explosion warning
-                        }
-
-                        const timeInSuicide = state.gameTime - e.suicideTimer;
-
-                        // Increasing pulse frequency
-                        e.pulsePhase = (e.pulsePhase || 0) + (0.1 + timeInSuicide * 0.1);
-
-                        if (timeInSuicide >= 5.0) {
-                            // Explosion Damage to Player
-                            const explosionRadius = e.size * 2.0; // 200% of body size
-                            if (dist < explosionRadius) {
-                                const rawExpDmg = e.maxHp * 0.30; // 30% of Mother HP
-                                const armor = calcStat(player.arm);
-                                const finalExpDmg = Math.max(0, rawExpDmg - armor);
-                                player.curHp -= finalExpDmg;
-                                player.damageTaken += finalExpDmg;
-                                if (onEvent) onEvent('player_hit', { dmg: finalExpDmg });
-                            }
-
-                            e.hp = -100; // Trigger death
-                            e.dead = true;
-                            playSfx('boss-fire'); // Use a heavy impact sound
-                            // High-impact fragmentation effect
-                            spawnParticles(state, e.x, e.y, ['#FF0000', '#FF9900', '#FFFFFF'], 50, 4, 60, 'shard');
-                        }
                     }
                 }
                 break;
@@ -950,6 +848,9 @@ export function updateEnemies(state: GameState, onEvent?: (event: string, data?:
                     let xpGain = state.player.xp_per_kill.base;
                     if (e.xpRewardMult !== undefined) xpGain *= e.xpRewardMult;
                     else if (e.isElite) xpGain *= 12;
+
+                    if (state.currentArena === 0) xpGain *= 1.15; // +15% XP in Economic Hex
+
                     state.player.xp.current += xpGain;
                 }
 
@@ -1105,47 +1006,6 @@ function manageRareSpawnCycles(state: GameState) {
 }
 
 // Updated signature to support Strong Minions
-function spawnMinion(state: GameState, parent: Enemy, isStrong: boolean = false) {
-    // Normal Minion: 5% of Mother HP
-    // Strong Minion: 10% of Mother HP
-    const hpRatio = isStrong ? 0.10 : 0.05;
-    const minionHp = parent.maxHp * hpRatio;
-
-    // XP: 15% of Mother's XP
-    const motherMult = parent.xpRewardMult || (parent.isElite ? 12 : 1);
-    const minionXpMult = motherMult * 0.15;
-
-    const newMinion: Enemy = {
-        id: Math.random(),
-        type: 'minion',
-        x: parent.x, y: parent.y,
-        size: 12,
-        hp: minionHp,
-        maxHp: minionHp,
-        spd: 5.5, // Rocket speed
-        boss: false, bossType: 0, bossAttackPattern: 0, lastAttack: 0, dead: false,
-        shape: 'minion',
-        shellStage: 0,
-        palette: parent.palette,
-        pulsePhase: 0,
-        rotationPhase: Math.random() * 6.28,
-        spawnedAt: state.gameTime,
-        knockback: { x: 0, y: 0 },
-        isRare: false,
-
-        // Guard behavior
-        parentId: parent.id,
-        minionState: 0, // Orbit
-        orbitAngle: Math.random() * Math.PI * 2,
-        orbitDistance: 160 + Math.random() * 80,
-
-        // Custom Stats
-        stunOnHit: isStrong,
-        xpRewardMult: minionXpMult,
-        customCollisionDmg: isStrong ? (parent.maxHp * 0.03) : (parent.maxHp * 0.15)
-    };
-    state.enemies.push(newMinion);
-}
 
 export function spawnShield(state: GameState, x: number, y: number) {
     const shield: Enemy = {

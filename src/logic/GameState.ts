@@ -65,13 +65,15 @@ export const createInitialGameState = (): GameState => ({
     // Inventory Defaults
     meteorites: [],
     inventory: Array(30).fill(null),
-    isInventoryOpen: false,
 
     // Module Menu Defaults
     showModuleMenu: false,
     showLegendarySelection: false,
     legendaryOptions: null,
     pendingLegendaryHex: null,
+    upgradingHexIndex: null,
+    upgradingHexTimer: 0,
+    unseenMeteorites: 0,
     moduleSockets: {
         hexagons: Array(6).fill(null),
         diamonds: Array(12).fill(null)

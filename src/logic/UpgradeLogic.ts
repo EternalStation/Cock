@@ -1,6 +1,7 @@
 import type { GameState, UpgradeChoice } from './types';
 import { UPGRADE_TYPES, RARITIES, BASE_UPGRADE_VALUES } from './constants';
 import { calcStat } from './MathUtils';
+import { calculateLegendaryBonus } from './LegendaryLogic';
 
 // [Start Minute, End Minute, Probabilities {rarityId: percent}]
 // Note: End Minute is exclusive. 90+ handles everything after.
@@ -48,7 +49,8 @@ const BOOSTED_RARITY_TABLE: { range: [number, number], weights: Record<string, n
     { range: [90, 999], weights: { scrap: 0, anomalous: 0, quantum: 0, astral: 0, radiant: 0, abyss: 22, eternal: 34, divine: 25, singularity: 19 } }
 ];
 
-function getRarityForTime(gameTime: number, isRareBoost: boolean): string {
+function getRarityForTime(state: GameState, isRareBoost: boolean): string {
+    const { gameTime } = state;
     const minutes = gameTime / 60;
 
     // Select correct table
@@ -57,14 +59,19 @@ function getRarityForTime(gameTime: number, isRareBoost: boolean): string {
     // Find matching bracket
     const bracket = table.find(b => minutes >= b.range[0] && minutes < b.range[1]) || table[table.length - 1];
 
-    const rand = Math.random() * 100;
+    const rarityBoost = calculateLegendaryBonus(state, 'rarity_boost_per_kill');
+    // Each 1% rarity boost reduces the effective roll, making better items likely.
+    // Limit to 50% shift to avoid completely breaking progression early.
+    const effectiveBoost = Math.min(50, rarityBoost * 100);
+    const rand = Math.max(0, Math.random() * 100 - effectiveBoost);
+
     let cumulative = 0;
-    for (const [id, weight] of Object.entries(bracket.weights)) {
+    const weights = Object.entries(bracket.weights);
+    for (const [id, weight] of weights) {
         cumulative += weight;
         if (rand < cumulative) return id;
     }
-    return 'scrap'; // Fallback
-
+    return weights[weights.length - 1][0]; // Fallback to highest
 }
 
 export function spawnUpgrades(state: GameState, isBoss: boolean = false): UpgradeChoice[] {
@@ -100,7 +107,7 @@ export function spawnUpgrades(state: GameState, isBoss: boolean = false): Upgrad
             // Note: We might want slightly different rarities for each card?
             // Currently it uses the same time seed, so Math.random() in getRarityForTime is key.
             // getRarityForTime uses Math.random(), so it's fine.
-            const rarityId = getRarityForTime(state.gameTime, state.rareRewardActive || false);
+            const rarityId = getRarityForTime(state, state.rareRewardActive || false);
             const rarity = RARITIES.find(r => r.id === rarityId) || RARITIES[0];
 
             choices.push({ type, rarity });

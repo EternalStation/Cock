@@ -130,9 +130,28 @@ export function updatePlayer(state: GameState, keys: Record<string, boolean>, on
     state.camera.x = player.x - CANVAS_WIDTH / 2;
     state.camera.y = player.y - CANVAS_HEIGHT / 2;
 
+    // --- STAT UPDATE & SYNC ---
+    // Calculate and assign Hex bonuses to player stats for this frame
+    player.hp.hexFlat = calculateLegendaryBonus(state, 'hp_per_kill');
+    player.hp.hexMult = calculateLegendaryBonus(state, 'hp_pct_per_kill');
+    player.reg.hexFlat = calculateLegendaryBonus(state, 'reg_per_kill');
+    player.reg.hexMult = calculateLegendaryBonus(state, 'reg_pct_per_kill');
+    player.arm.hexFlat = calculateLegendaryBonus(state, 'arm_per_kill'); // Assuming arm hex exists? If not, 0 is fine.
+    player.arm.hexMult = calculateLegendaryBonus(state, 'arm_pct_per_kill');
+    player.dmg.hexFlat = calculateLegendaryBonus(state, 'dmg_per_kill');
+    player.dmg.hexMult = calculateLegendaryBonus(state, 'dmg_pct_per_kill');
+    player.atk.hexFlat = calculateLegendaryBonus(state, 'ats_per_kill');
+    player.atk.hexMult = calculateLegendaryBonus(state, 'ats_pct_per_kill');
+
     // Regen
-    const maxHp = calcStat(player.hp) + calculateLegendaryBonus(state, 'hp_per_kill');
-    const regenAmount = (calcStat(player.reg) + calculateLegendaryBonus(state, 'reg_per_kill')) / 60;
+    let maxHp = calcStat(player.hp);
+    let regenAmount = calcStat(player.reg) / 60;
+
+    if (state.currentArena === 2) {
+        maxHp *= 1.2; // +20% Max HP in Defence Hex
+        regenAmount *= 1.2; // +20% Regen in Defence Hex
+    }
+
     player.curHp = Math.min(maxHp, player.curHp + regenAmount);
 
     // Auto-Aim Logic (skip barrels - they're neutral)
@@ -166,7 +185,24 @@ export function updatePlayer(state: GameState, keys: Record<string, boolean>, on
             const now = Date.now();
             // Apply Contact Damage to Player
             // Default: 15% of enemy max HP, or custom if set. Neutral objects (barrels) deal 0 dmg.
-            const rawDmg = e.isNeutral ? 0 : (e.customCollisionDmg !== undefined ? e.customCollisionDmg : e.maxHp * 0.15);
+            let rawDmg = 0;
+            if (!e.isNeutral) {
+                if (e.shape === 'minion' && e.parentId !== undefined) {
+                    const mother = state.enemies.find(m => m.id === e.parentId);
+                    const ratio = e.stunOnHit ? 0.03 : 0.15;
+                    rawDmg = (mother ? mother.hp : e.hp) * ratio;
+                } else if (e.customCollisionDmg !== undefined) {
+                    // Scale custom damage by current health percentage if it was originally based on maxHp
+                    rawDmg = (e.hp / e.maxHp) * e.customCollisionDmg;
+                } else {
+                    rawDmg = e.hp * 0.15;
+                }
+            }
+
+            if (state.currentArena === 1 && !e.isNeutral) {
+                rawDmg *= 1.15; // +15% Collision Damage in Combat Hex
+            }
+
             const armor = calcStat(player.arm);
             const finalDmg = Math.max(1, rawDmg - armor);
 
@@ -207,6 +243,7 @@ export function updatePlayer(state: GameState, keys: Record<string, boolean>, on
                     state.showLegendarySelection = true;
                     state.isPaused = true;
                     playSfx('rare-spawn');
+                    if (onEvent) onEvent('boss_kill');
                 }
 
                 // Rare Reward
@@ -217,13 +254,31 @@ export function updatePlayer(state: GameState, keys: Record<string, boolean>, on
                     player.xp.current += player.xp.needed;
                 } else {
                     // Standard XP Reward
-                    let xpGain = player.xp_per_kill.base;
+                    let xpBase = player.xp_per_kill.base;
+                    // Note: base is usually 40 + level scaling from somewhere else, or fixed here?
+                    // In StatsMenu it says 40 + level*3. Let's adhere to player.xp_per_kill values if possible or use the formula.
+                    // Actually, let's use the local logic but updated:
+
                     if (e.xpRewardMult !== undefined) {
-                        xpGain *= e.xpRewardMult;
+                        xpBase *= e.xpRewardMult;
                     } else if (e.isElite) {
-                        xpGain *= 12; // Elite = 12x XP
+                        xpBase *= 12; // Elite = 12x XP
                     }
-                    player.xp.current += xpGain;
+
+                    if (state.currentArena === 0) xpBase *= 1.15; // +15% XP in Economic Hex
+
+                    // Legendary XP Bonuses
+                    const hexFlat = calculateLegendaryBonus(state, 'xp_per_kill');
+                    const hexPct = calculateLegendaryBonus(state, 'xp_pct_per_kill');
+
+                    // Formula: (Base + Flat + HexFlat) * (1 + NormalMult) * (1 + HexMult)
+                    const totalFlat = xpBase + player.xp_per_kill.flat + hexFlat;
+                    const normalMult = 1 + (player.xp_per_kill.mult / 100);
+                    const hexMult = 1 + (hexPct / 100);
+
+                    const finalXp = totalFlat * normalMult * hexMult;
+
+                    player.xp.current += finalXp;
                 }
 
                 // Level Up Loop

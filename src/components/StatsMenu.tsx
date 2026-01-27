@@ -4,39 +4,64 @@ export { RadarChart };
 import type { GameState, PlayerStats } from '../logic/types';
 import { calcStat } from '../logic/MathUtils';
 import { calculateLegendaryBonus } from '../logic/LegendaryLogic';
+import { getArenaIndex } from '../logic/MapLogic';
 
 
 interface StatsMenuProps {
     gameState: GameState;
 }
 
-export const StatRow: React.FC<{ label: string; stat: PlayerStats; isPercent?: boolean; inverse?: boolean; extraInfo?: string; legendaryBonus?: number }> = ({ label, stat, isPercent, inverse, extraInfo, legendaryBonus = 0 }) => {
-    const baseTotal = calcStat(stat);
-    const total = baseTotal + legendaryBonus;
-    const displayTotal = isPercent ? `${Math.round(total)}% ` : Math.round(total * 10) / 10;
-    const baseFlatSum = Math.round((stat.base + stat.flat) * 10) / 10;
-    const mult = Math.round(stat.mult);
+export const StatRow: React.FC<{ label: string; stat: PlayerStats; isPercent?: boolean; inverse?: boolean; extraInfo?: string; legendaryBonusFlat?: number; legendaryBonusPct?: number; arenaMult?: number }> = ({ label, stat, isPercent, inverse, extraInfo, legendaryBonusFlat = 0, legendaryBonusPct = 0, arenaMult = 1 }) => {
+    // Formula: (Base + Flat + HexFlat) * (1 + NormalMult%) * (1 + HexMult%)
+    const baseSum = stat.base + stat.flat + legendaryBonusFlat;
+    const upgradeMult = 1 + (stat.mult || 0) / 100;
+    const hexScaling = 1 + legendaryBonusPct / 100;
+
+    const total = baseSum * upgradeMult * hexScaling * arenaMult;
+
+    const displayTotal = isPercent ? `${Math.round(total)}%` : Math.round(total * 10) / 10;
 
     // Color logic
-    const totalColor = inverse
+    const isBuffed = arenaMult > 1;
+    const totalColor = isBuffed ? '#3b82f6' : (inverse
         ? (total < stat.base ? '#4ade80' : '#ef4444') // Lower is better (cooldown)
-        : (total > stat.base ? '#4ade80' : '#ef4444'); // Higher is better
+        : (total > stat.base ? '#4ade80' : '#ef4444')); // Higher is better
 
     return (
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', borderBottom: '1px solid #1e293b' }}>
             <span style={{ color: '#94a3b8', fontSize: 12, fontWeight: 700 }}>{label}</span>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                {extraInfo && <span style={{ color: '#64748b', fontSize: 10 }}>{extraInfo}</span>}
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center', justifyContent: 'flex-end' }}>
+                {extraInfo && <span style={{ color: '#64748b', fontSize: 10, marginRight: 4 }}>{extraInfo} | </span>}
+
+                {/* 1. Base (Sum of Base + Flat + HexFlat) */}
                 <span style={{ color: '#64748b', fontSize: 10 }}>
-                    {baseFlatSum} x {100 + mult}%
+                    {Math.round(baseSum * 10) / 10}
                 </span>
-                <span style={{ color: totalColor, fontSize: 12, fontWeight: 900, minWidth: 40, textAlign: 'right' }}>
+
+                {/* 2. Upgrade Mult */}
+                <span style={{ color: '#64748b', fontSize: 10 }}> x </span>
+                <span style={{ color: '#94a3b8', fontSize: 10 }}>{Math.round(upgradeMult * 100)}%</span>
+
+                {/* 3. Hex Mult (Only if > 0% boost, i.e. > 100% scale) */}
+                {legendaryBonusPct > 0 && (
+                    <>
+                        <span style={{ color: '#64748b', fontSize: 10 }}> x </span>
+                        <span style={{ color: '#fbbf24', fontSize: 10 }}>{Math.round(hexScaling * 100)}%</span>
+                    </>
+                )}
+
+                {/* 4. Arena Mult (Only if != 1) */}
+                {arenaMult !== 1 && (
+                    <>
+                        <span style={{ color: '#64748b', fontSize: 10 }}> x </span>
+                        <span style={{ color: '#3b82f6', fontSize: 10 }}>{Math.round(arenaMult * 100)}%</span>
+                    </>
+                )}
+
+                {/* 5. Equals Total */}
+                <span style={{ color: '#64748b', fontSize: 10 }}> = </span>
+                <span style={{ color: totalColor, fontSize: 12, fontWeight: 900, minWidth: 30, textAlign: 'right' }}>
                     {displayTotal}
-                    {legendaryBonus > 0 && (
-                        <span style={{ color: '#fbbf24', fontSize: 10, marginLeft: 4 }}>
-                            (+{isPercent ? `${Math.round(legendaryBonus)}%` : Math.round(legendaryBonus * 10) / 10})
-                        </span>
-                    )}
                 </span>
             </div>
         </div>
@@ -217,31 +242,62 @@ export const StatsMenu: React.FC<StatsMenuProps> = ({ gameState }) => {
 
                         {/* Left: Table */}
                         <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 4 }}>
-                            <StatRow label="Health" stat={player.hp} legendaryBonus={calculateLegendaryBonus(gameState, 'hp_per_kill')} />
-                            <StatRow label="Damage" stat={player.dmg} legendaryBonus={calculateLegendaryBonus(gameState, 'dmg_per_kill')} />
-                            <StatRow
-                                label="Attack Speed"
-                                stat={player.atk}
-                                legendaryBonus={calculateLegendaryBonus(gameState, 'ats_per_kill')}
-                                extraInfo={`${((calcStat(player.atk) + calculateLegendaryBonus(gameState, 'ats_per_kill')) / 200).toFixed(1)}/s`}
-                            />
-                            <StatRow label="Regeneration" stat={player.reg} legendaryBonus={calculateLegendaryBonus(gameState, 'reg_per_kill')} />
+                            {(() => {
+                                const arenaIdx = getArenaIndex(player.x, player.y);
+                                const hpMult = arenaIdx === 2 ? 1.2 : 1;
+                                const regMult = arenaIdx === 2 ? 1.2 : 1;
+
+                                return (
+                                    <>
+                                        <StatRow label="Health" stat={player.hp} legendaryBonusFlat={calculateLegendaryBonus(gameState, 'hp_per_kill')} legendaryBonusPct={calculateLegendaryBonus(gameState, 'hp_pct_per_kill')} arenaMult={hpMult} />
+                                        <StatRow label="Damage" stat={player.dmg} legendaryBonusFlat={calculateLegendaryBonus(gameState, 'dmg_per_kill')} legendaryBonusPct={calculateLegendaryBonus(gameState, 'dmg_pct_per_kill')} />
+                                        <StatRow
+                                            label="Attack Speed"
+                                            stat={player.atk}
+                                            legendaryBonusFlat={calculateLegendaryBonus(gameState, 'ats_per_kill')}
+                                            legendaryBonusPct={calculateLegendaryBonus(gameState, 'ats_pct_per_kill')}
+                                            extraInfo={`${(((calcStat(player.atk) + calculateLegendaryBonus(gameState, 'ats_per_kill')) * (1 + calculateLegendaryBonus(gameState, 'ats_pct_per_kill') / 100)) / 200).toFixed(1)}/s`}
+                                        />
+                                        <StatRow label="Regeneration" stat={player.reg} legendaryBonusFlat={calculateLegendaryBonus(gameState, 'reg_per_kill')} legendaryBonusPct={calculateLegendaryBonus(gameState, 'reg_pct_per_kill')} arenaMult={regMult} />
+                                    </>
+                                );
+                            })()}
                             <StatRow label="Armor" stat={player.arm} extraInfo={`(${(0.95 * (calcStat(player.arm) / (calcStat(player.arm) + 5263)) * 100).toFixed(1)}%)`} />
                             {/* XP Display: Explicit Breakdown */}
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', borderBottom: '1px solid #1e293b' }}>
                                 <span style={{ color: '#94a3b8', fontSize: 12, fontWeight: 700 }}>XP Gain</span>
-                                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                                    <span style={{ color: '#64748b', fontSize: 10 }}>
-                                        ({40 + (player.level * 3)} + {player.xp_per_kill.flat}) x {100 + player.xp_per_kill.mult}%
-                                        {calculateLegendaryBonus(gameState, 'xp_per_kill') > 0 && (
-                                            <span style={{ color: '#fbbf24', marginLeft: 4 }}>
-                                                (+{calculateLegendaryBonus(gameState, 'xp_per_kill').toFixed(1)} Legendary)
-                                            </span>
-                                        )}
-                                    </span>
-                                    <span style={{ color: '#4ade80', fontSize: 12, fontWeight: 900, minWidth: 40, textAlign: 'right' }}>
-                                        {Math.round(((40 + (player.level * 3) + player.xp_per_kill.flat) * (1 + player.xp_per_kill.mult / 100)) + calculateLegendaryBonus(gameState, 'xp_per_kill'))}
-                                    </span>
+                                <div style={{ display: 'flex', gap: 6, alignItems: 'center', justifyContent: 'flex-end' }}>
+                                    {(() => {
+                                        const flatBase = 40 + (player.level * 3) + player.xp_per_kill.flat;
+                                        const hexFlat = calculateLegendaryBonus(gameState, 'xp_per_kill');
+                                        const baseSum = flatBase + hexFlat;
+
+                                        const normalMult = 1 + player.xp_per_kill.mult / 100;
+                                        const hexMult = 1 + calculateLegendaryBonus(gameState, 'xp_pct_per_kill') / 100;
+
+                                        const total = baseSum * normalMult * hexMult;
+
+                                        return (
+                                            <>
+                                                <span style={{ color: '#64748b', fontSize: 10 }}>{Math.round(baseSum)}</span>
+
+                                                <span style={{ color: '#64748b', fontSize: 10 }}> x </span>
+                                                <span style={{ color: '#94a3b8', fontSize: 10 }}>{Math.round(normalMult * 100)}%</span>
+
+                                                {hexMult > 1 && (
+                                                    <>
+                                                        <span style={{ color: '#64748b', fontSize: 10 }}> x </span>
+                                                        <span style={{ color: '#fbbf24', fontSize: 10 }}>{Math.round(hexMult * 100)}%</span>
+                                                    </>
+                                                )}
+
+                                                <span style={{ color: '#64748b', fontSize: 10 }}> = </span>
+                                                <span style={{ color: '#4ade80', fontSize: 12, fontWeight: 900, minWidth: 30, textAlign: 'right' }}>
+                                                    {Math.round(total)}
+                                                </span>
+                                            </>
+                                        );
+                                    })()}
                                 </div>
                             </div>
 
