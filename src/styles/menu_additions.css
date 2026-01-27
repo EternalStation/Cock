@@ -121,8 +121,8 @@ body {
     position: absolute;
     top: 0;
     left: 0;
-    width: 100vw;
-    height: 100vh;
+    width: 100%;
+    height: 100%;
     background: #050505;
     /* Deep, stable black */
     display: flex;
@@ -236,8 +236,8 @@ body {
     position: fixed;
     top: 0;
     left: 0;
-    width: 100vw;
-    height: 100vh;
+    width: 100%;
+    height: 100%;
     background: rgba(2, 6, 23, 0.95);
     z-index: 5000;
     display: flex;
@@ -390,8 +390,8 @@ body {
     position: fixed;
     top: 0;
     left: 0;
-    width: 100vw;
-    height: 100vh;
+    width: 100%;
+    height: 100%;
     background: rgba(0, 0, 0, 0.95);
     display: flex;
     flex-direction: column;
@@ -500,7 +500,8 @@ body {
     top: 0;
     right: -450px;
     width: 400px;
-    height: 100vh;
+    height: 100%;
+    bottom: 0;
     background: rgba(5, 5, 5, 0.98);
     border-left: 2px solid var(--neon-cyan);
     box-shadow: -20px 0 50px rgba(0, 0, 0, 1);

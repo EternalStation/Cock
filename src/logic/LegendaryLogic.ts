@@ -44,15 +44,15 @@ export function getLegendaryPerksArray(type: string, level: number): string[] {
         ],
         EcoXP: [
             "+1 XP per kill",
-            "+1% Meteorite drop per kill",
             "+1 XP% per kill",
+            "+1% Meteorite drop per kill",
             "+1% Upgrade Rarity per kill",
             "Mergeable"
         ],
         EcoHP: [
             "+1 Max HP per kill",
-            "+1 HP/sec per kill",
             "+1 Max HP% per kill",
+            "+1 HP/sec per kill",
             "+1 HP/sec% per kill",
             "Mergeable"
         ]
@@ -149,14 +149,14 @@ export function calculateLegendaryBonus(state: GameState, statKey: string): numb
         }
         if (hex.type === 'EcoXP') {
             if (statKey === 'xp_per_kill' && hex.level >= 1) total += kills * 1 * multiplier;
-            if (statKey === 'met_drop_per_kill' && hex.level >= 2) total += kills * 0.01 * multiplier;
-            if (statKey === 'xp_pct_per_kill' && hex.level >= 3) total += kills * 1 * multiplier;
+            if (statKey === 'xp_pct_per_kill' && hex.level >= 2) total += kills * 1 * multiplier;
+            if (statKey === 'met_drop_per_kill' && hex.level >= 3) total += kills * 0.01 * multiplier;
             if (statKey === 'rarity_boost_per_kill' && hex.level >= 4) total += kills * 0.01 * multiplier;
         }
         if (hex.type === 'EcoHP') {
             if (statKey === 'hp_per_kill' && hex.level >= 1) total += kills * 1 * multiplier;
-            if (statKey === 'reg_per_kill' && hex.level >= 2) total += kills * 1 * multiplier;
-            if (statKey === 'hp_pct_per_kill' && hex.level >= 3) total += kills * 1 * multiplier;
+            if (statKey === 'hp_pct_per_kill' && hex.level >= 2) total += kills * 1 * multiplier;
+            if (statKey === 'reg_per_kill' && hex.level >= 3) total += kills * 1 * multiplier;
             if (statKey === 'reg_pct_per_kill' && hex.level >= 4) total += kills * 1 * multiplier;
         }
     });

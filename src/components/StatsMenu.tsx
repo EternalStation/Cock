@@ -29,14 +29,22 @@ export const StatRow: React.FC<{ label: string; stat: PlayerStats; isPercent?: b
 
     return (
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', borderBottom: '1px solid #1e293b' }}>
-            <span style={{ color: '#94a3b8', fontSize: 12, fontWeight: 700 }}>{label}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ color: '#94a3b8', fontSize: 12, fontWeight: 700 }}>{label}</span>
+                {extraInfo && <span style={{ color: '#64748b', fontSize: 10 }}>{extraInfo}</span>}
+            </div>
             <div style={{ display: 'flex', gap: 6, alignItems: 'center', justifyContent: 'flex-end' }}>
-                {extraInfo && <span style={{ color: '#64748b', fontSize: 10, marginRight: 4 }}>{extraInfo} | </span>}
 
                 {/* 1. Base (Sum of Base + Flat + HexFlat) */}
-                <span style={{ color: '#64748b', fontSize: 10 }}>
-                    {Math.round(baseSum * 10) / 10}
-                </span>
+                {legendaryBonusFlat > 0 ? (
+                    <span style={{ color: '#64748b', fontSize: 10 }}>
+                        ({Math.round((stat.base + stat.flat) * 10) / 10} <span style={{ color: '#fbbf24' }}>+{Math.round(legendaryBonusFlat * 10) / 10}</span>)
+                    </span>
+                ) : (
+                    <span style={{ color: '#64748b', fontSize: 10 }}>
+                        {Math.round(baseSum * 10) / 10}
+                    </span>
+                )}
 
                 {/* 2. Upgrade Mult */}
                 <span style={{ color: '#64748b', fontSize: 10 }}> x </span>
@@ -256,7 +264,7 @@ export const StatsMenu: React.FC<StatsMenuProps> = ({ gameState }) => {
                                             stat={player.atk}
                                             legendaryBonusFlat={calculateLegendaryBonus(gameState, 'ats_per_kill')}
                                             legendaryBonusPct={calculateLegendaryBonus(gameState, 'ats_pct_per_kill')}
-                                            extraInfo={`${(((calcStat(player.atk) + calculateLegendaryBonus(gameState, 'ats_per_kill')) * (1 + calculateLegendaryBonus(gameState, 'ats_pct_per_kill') / 100)) / 200).toFixed(1)}/s`}
+                                            extraInfo={`(${(((calcStat(player.atk) + calculateLegendaryBonus(gameState, 'ats_per_kill')) * (1 + calculateLegendaryBonus(gameState, 'ats_pct_per_kill') / 100)) / 200).toFixed(1)}/s)`}
                                         />
                                         <StatRow label="Regeneration" stat={player.reg} legendaryBonusFlat={calculateLegendaryBonus(gameState, 'reg_per_kill')} legendaryBonusPct={calculateLegendaryBonus(gameState, 'reg_pct_per_kill')} arenaMult={regMult} />
                                     </>
@@ -277,9 +285,18 @@ export const StatsMenu: React.FC<StatsMenuProps> = ({ gameState }) => {
 
                                         const total = baseSum * normalMult * hexMult;
 
+                                        // Visual breakdown logic
+                                        const showBreakdown = hexFlat > 0;
+
                                         return (
                                             <>
-                                                <span style={{ color: '#64748b', fontSize: 10 }}>{Math.round(baseSum)}</span>
+                                                {showBreakdown ? (
+                                                    <span style={{ color: '#64748b', fontSize: 10 }}>
+                                                        ({Math.round(flatBase)} <span style={{ color: '#fbbf24' }}>+{Math.round(hexFlat)}</span>)
+                                                    </span>
+                                                ) : (
+                                                    <span style={{ color: '#64748b', fontSize: 10 }}>{Math.round(baseSum)}</span>
+                                                )}
 
                                                 <span style={{ color: '#64748b', fontSize: 10 }}> x </span>
                                                 <span style={{ color: '#94a3b8', fontSize: 10 }}>{Math.round(normalMult * 100)}%</span>

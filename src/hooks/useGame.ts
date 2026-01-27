@@ -19,6 +19,7 @@ export function useGameLoop(gameStarted: boolean) {
     const gameState = useRef<GameState>(createInitialGameState());
     const requestRef = useRef<number>(0);
     const keys = useRef<Record<string, boolean>>({});
+    const inputVector = useRef({ x: 0, y: 0 });
     // Fixed Time Step Logic
     const lastTimeRef = useRef<number>(0);
     const accRef = useRef<number>(0);
@@ -340,7 +341,7 @@ export function useGameLoop(gameStarted: boolean) {
             const ctx = canvasRef.current?.getContext('2d');
             if (ctx) {
                 try {
-                    renderGame(ctx, state, meteoriteImagesRef.current);
+                    renderGame(ctx, state, meteoriteImagesRef.current, windowScaleFactor.current);
                 } catch (e) {
                     console.error("Render Error:", e);
                 }
@@ -421,7 +422,7 @@ export function useGameLoop(gameStarted: boolean) {
             }
         };
 
-        updatePlayer(state, keys.current, eventHandler);
+        updatePlayer(state, keys.current, eventHandler, inputVector.current);
 
         if (state.spawnTimer > 0.95 && !state.hasPlayedSpawnSound) {
             playSfx('spawn');
@@ -562,6 +563,9 @@ export function useGameLoop(gameStarted: boolean) {
     const framesRef = useRef(0);
     const lastFpsUpdateRef = useRef(0);
 
+    // Window Scale Factor Ref (Accessed by render logic)
+    const windowScaleFactor = useRef(1);
+
     return {
         canvasRef,
         gameState: gameState.current,
@@ -602,36 +606,48 @@ export function useGameLoop(gameStarted: boolean) {
             });
         },
         uiState,
-        fps // Expose FPS
+        inputVector,
+        handleJoystickInput: (x: number, y: number) => {
+            inputVector.current = { x, y };
+        },
+        fps, // Expose FPS
+        setWindowScaleFactor: (scale: number) => {
+            windowScaleFactor.current = scale;
+        }
     };
 }
 
-function renderGame(ctx: CanvasRenderingContext2D, state: GameState, meteoriteImages: Record<string, HTMLImageElement>) {
+function renderGame(ctx: CanvasRenderingContext2D, state: GameState, meteoriteImages: Record<string, HTMLImageElement>, scaleFactor: number = 1) {
     const { width, height } = ctx.canvas;
     const { camera, player, enemies, bullets, enemyBullets, drones, particles } = state;
 
-    // High-Quality Smoothing
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
+    // Pixel Art Rendering
+    ctx.imageSmoothingEnabled = false;
 
     const dpr = window.devicePixelRatio || 1;
-    const logicalWidth = width / dpr;
-    const logicalHeight = height / dpr;
+    // Logical Width/Height calculated based on CURRENT SCALE
+    // We already sized the canvas buffer in GameCanvas.tsx using window.innerWidth * dpr
+    // But for logic centering, we need to know the 'virtual' dimensions
+    const logicalWidth = (width / dpr) / scaleFactor;
+    const logicalHeight = (height / dpr) / scaleFactor;
 
-    // Clear
+    // Clear (Full buffer size, PHYSICAL pixels)
     ctx.fillStyle = '#020617';
-    ctx.fillRect(0, 0, logicalWidth, logicalHeight);
+    ctx.fillRect(0, 0, width, height);
 
     try {
         ctx.save();
 
         // Zoom / Camera Logic
-        // 120% Vision = 0.8 scale roughly (1 / 1.25)
-        // To keep player centered:
-        // 1. Move origin to center of screen (logical)
-        ctx.translate(logicalWidth / 2, logicalHeight / 2);
-        // 2. Apply Scale - Zoom scale reduced by 15% (0.68 -> 0.58)
-        ctx.scale(0.58, 0.58);
+        // 1. Move origin to center of PHYSICAL screen
+        ctx.translate(width / 2, height / 2);
+
+        // 2. Apply Scale
+        // Base Game Zoom is 0.58.
+        // We multiply by scaleFactor (resolution) AND dpr (pixel density) to map logical game units to physical pixels.
+        const zoom = scaleFactor * 0.58 * dpr;
+        ctx.scale(zoom, zoom);
+
         // 3. Move origin to camera position (which follows player)
         ctx.translate(-camera.x, -camera.y);
 

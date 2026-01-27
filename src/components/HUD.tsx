@@ -460,7 +460,23 @@ export const HUD: React.FC<HUDProps> = ({ gameState, upgradeChoices, onUpgradeSe
                                 <div className="honeycomb-cluster" style={{ bottom: '20%', right: '15%' }} />
                             </div>
 
-                            <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', zIndex: 20, perspective: '1000px', gap: '60px' }}>
+                            <h2 style={{
+                                position: 'absolute',
+                                top: '10%',
+                                color: '#FFFFFF',
+                                fontSize: 32,
+                                fontFamily: 'Orbitron, sans-serif',
+                                textTransform: 'uppercase',
+                                letterSpacing: 8,
+                                textShadow: '0 0 20px rgba(255, 255, 255, 0.5)',
+                                zIndex: 20,
+                                textAlign: 'center',
+                                width: '100%',
+                            }}>
+                                {upgradeChoices[0].isSpecial ? "VOID TECHNOLOGY DETECTED" : "SELECT AUGMENTATION"}
+                            </h2>
+
+                            <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', zIndex: 20, perspective: '1000px', gap: '60px', marginTop: -40 }}>
                                 {upgradeChoices.map((c, i) => (
                                     <div key={i} className="upgrade-card-container">
                                         <UpgradeCard
@@ -477,22 +493,6 @@ export const HUD: React.FC<HUDProps> = ({ gameState, upgradeChoices, onUpgradeSe
                                     </div>
                                 ))}
                             </div>
-
-                            <h2 style={{
-                                marginTop: 40,
-                                color: '#FFFFFF',
-                                fontSize: 24,
-                                fontFamily: 'Orbitron, sans-serif',
-                                textTransform: 'uppercase',
-                                letterSpacing: 4,
-                                textShadow: '0 0 20px rgba(255, 255, 255, 0.5)',
-                                zIndex: 20,
-                                textAlign: 'center',
-                                width: '100%',
-                                marginBottom: 5
-                            }}>
-                                {upgradeChoices[0].isSpecial ? "VOID TECHNOLOGY DETECTED" : "SELECT AUGMENTATION"}
-                            </h2>
 
                             {gameState.rareRewardActive && (
                                 <div className="glitch-text" style={{

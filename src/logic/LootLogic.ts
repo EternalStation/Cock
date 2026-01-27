@@ -172,8 +172,12 @@ export function updateLoot(state: GameState) {
         const dist = Math.hypot(dx, dy);
 
         // Magnet Logic
-        if (dist < MAGNET_RANGE) {
+        const hasSPACE = inventory.findIndex(slot => slot === null) !== -1;
+
+        if (dist < MAGNET_RANGE && hasSPACE) {
             item.magnetized = true;
+        } else if (!hasSPACE) {
+            item.magnetized = false;
         }
 
         if (item.magnetized) {

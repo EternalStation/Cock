@@ -122,18 +122,16 @@
     position: fixed;
     top: 0;
     left: 0;
-    width: 100vw;
-    height: 100vh;
+    width: 100%;
+    height: 100%;
     background-color: #020205;
     /* Deep Navy/Black */
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding-bottom: 60px;
-    /* Space from bottom edge */
-    justify-content: flex-end;
-    /* Align content to bottom */
-    gap: 40px;
+    justify-content: center;
+    /* Center vertically */
+    gap: 60px;
     /* Space between title and cards */
 }
 
@@ -149,8 +147,8 @@
 
 .upgrade-card {
     position: relative;
-    width: 280px;
-    height: 420px;
+    width: 320px;
+    height: 500px;
     background: #0A0A1A;
     background-color: rgba(10, 10, 26, 0.95);
     border-radius: 20px;

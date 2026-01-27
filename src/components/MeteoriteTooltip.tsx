@@ -11,13 +11,13 @@ interface MeteoriteTooltipProps {
 }
 
 const RARITY_COLORS: Record<MeteoriteRarity, string> = {
-    scrap: '#9ca3af',
-    anomalous: '#14b8a6',
-    quantum: '#06b6d4',
-    astral: '#a855f7',
-    radiant: '#eab308',
-    void: '#7c3aed',
-    eternal: '#f43f5e'
+    scrap: '#7FFF00',
+    anomalous: '#00C0C0',
+    quantum: '#00FFFF',
+    astral: '#7B68EE',
+    radiant: '#FFD700',
+    void: '#8B0000', // Abyss Color
+    eternal: '#B8860B'
 };
 
 const getMeteoriteImage = (m: Meteorite) => {
@@ -45,9 +45,9 @@ export const MeteoriteTooltip: React.FC<MeteoriteTooltipProps> = ({ meteorite, g
     // Calculate how many stats we have
     const activeStatsCount = meteorite.perks ? meteorite.perks.length : 0;
 
-    const CARD_WIDTH = 280;
-    // Base height increased to 340 to accommodate full header/footer + 140px image
-    const CARD_HEIGHT = 340 + (activeStatsCount * 36);
+    const CARD_WIDTH = 350;
+    // Tighter height calculation to remove empty space
+    const CARD_HEIGHT = 300 + (activeStatsCount * 42);
     const OFFSET = 20;
 
     // Final positioning: Centered vertically on screen, horizontal follows cursor
@@ -88,27 +88,27 @@ export const MeteoriteTooltip: React.FC<MeteoriteTooltipProps> = ({ meteorite, g
             }}>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
                     <span style={{
-                        fontSize: '12px',
+                        fontSize: '14px',
                         fontWeight: 900,
                         color: '#fff',
                         letterSpacing: '1px'
                     }}>{info.name}</span>
                     <div style={{
                         marginTop: '2px',
-                        fontSize: '10px',
+                        fontSize: '12px',
                         fontWeight: 900,
                         color: rarityColor,
                         display: 'flex',
                         alignItems: 'center',
                         gap: '4px'
                     }}>
-                        <span style={{ opacity: 0.6, fontSize: '8px' }}>ACTIVE POWER:</span>
+                        <span style={{ opacity: 0.6, fontSize: '10px' }}>ACTIVE POWER:</span>
                         <span>+{Math.round(efficiency.totalBoost * 100)}%</span>
-                        {meteoriteIdx === -1 && <span style={{ fontSize: '7px', opacity: 0.5, marginLeft: '4px' }}>(UNPLACED)</span>}
+                        {meteoriteIdx === -1 && <span style={{ fontSize: '9px', opacity: 0.5, marginLeft: '4px' }}>(UNPLACED)</span>}
                     </div>
                 </div>
                 <span style={{
-                    fontSize: '16px',
+                    fontSize: '19px',
                     color: rarityColor,
                     textShadow: `0 0 10px ${rarityColor}`
                 }}>{info.symbol}</span>
@@ -146,7 +146,7 @@ export const MeteoriteTooltip: React.FC<MeteoriteTooltipProps> = ({ meteorite, g
             {/* Protocols Label */}
             <div style={{
                 padding: '4px 10px',
-                fontSize: '8px',
+                fontSize: '10px',
                 color: rarityColor,
                 fontWeight: 900,
                 letterSpacing: '2px',
@@ -198,11 +198,11 @@ export const MeteoriteTooltip: React.FC<MeteoriteTooltipProps> = ({ meteorite, g
                             <div className="content" style={{ flex: 1 }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                                     <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
-                                        <span className="label" style={{ fontSize: '7px', opacity: 0.9, fontWeight: 900 }}>{getPerkName(perk.id)}</span>
-                                        <span style={{ fontSize: '7px', color: rarityColor, opacity: 0.5 }}>({perk.range.min}-{perk.range.max}%)</span>
+                                        <span className="label" style={{ fontSize: '9px', opacity: 0.9, fontWeight: 900 }}>{getPerkName(perk.id)}</span>
+                                        <span style={{ fontSize: '9px', color: rarityColor, opacity: 0.5 }}>({perk.range.min}-{perk.range.max}%)</span>
                                     </div>
                                     <span className="value" style={{
-                                        fontSize: '11px',
+                                        fontSize: '13px',
                                         color: isActive ? '#fff' : '#94a3b8',
                                         opacity: isActive ? 1 : 0.4,
                                         fontWeight: 900,
@@ -212,7 +212,7 @@ export const MeteoriteTooltip: React.FC<MeteoriteTooltipProps> = ({ meteorite, g
                                         +{isActive ? perkResult.activeValue : perk.value}%
                                     </span>
                                 </div>
-                                <div style={{ fontSize: '8px', color: '#94a3b8', lineHeight: '1.2', marginTop: '1px', opacity: 0.9 }}>
+                                <div style={{ fontSize: '10px', color: '#94a3b8', lineHeight: '1.2', marginTop: '1px', opacity: 0.9 }}>
                                     {perk.description}
                                     {isActive && perkResult.count > 1 && <span style={{ color: '#FCD34D' }}> (x{perkResult.count})</span>}
                                 </div>
@@ -230,7 +230,7 @@ export const MeteoriteTooltip: React.FC<MeteoriteTooltipProps> = ({ meteorite, g
                 gap: '4px',
                 borderTop: `1px solid ${rarityColor}33`,
                 background: 'rgba(0,0,0,0.5)',
-                fontSize: '10px',
+                fontSize: '11px',
                 letterSpacing: '0.5px',
                 fontWeight: 900,
                 textTransform: 'uppercase'
@@ -241,9 +241,7 @@ export const MeteoriteTooltip: React.FC<MeteoriteTooltipProps> = ({ meteorite, g
                 <div style={{ color: '#fff' }}>
                     <span style={{ color: rarityColor, opacity: 0.8 }}>DISCOVERED IN:</span> {meteorite.discoveredIn}
                 </div>
-                <div style={{ color: rarityColor }}>
-                    <span style={{ opacity: 0.8 }}>RARITY:</span> {meteorite.rarity.toUpperCase()}
-                </div>
+                {/* Rarity text removed by user request to save space and fix cut-off */}
             </div>
         </div>
     );

@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { useGameLoop } from '../hooks/useGame';
+import { useWindowScale } from '../hooks/useWindowScale';
 
 interface GameCanvasProps {
     // We can pass props from App if needed, but hook manages most
@@ -8,32 +9,29 @@ interface GameCanvasProps {
 
 export const GameCanvas: React.FC<GameCanvasProps> = ({ hook }) => {
     const { canvasRef } = hook;
+    const { scale } = useWindowScale();
 
     useEffect(() => {
-        const resize = () => {
-            if (canvasRef.current) {
-                const dpr = window.devicePixelRatio || 1;
-                const width = window.innerWidth;
-                const height = window.innerHeight;
+        if (canvasRef.current) {
+            const dpr = window.devicePixelRatio || 1;
 
-                // Buffer size
-                canvasRef.current.width = width * dpr;
-                canvasRef.current.height = height * dpr;
+            // Buffer size (Physical Pixels)
+            canvasRef.current.width = window.innerWidth * dpr;
+            canvasRef.current.height = window.innerHeight * dpr;
 
-                // CSS size
-                canvasRef.current.style.width = `${width}px`;
-                canvasRef.current.style.height = `${height}px`;
+            // CSS size
+            canvasRef.current.style.width = `${window.innerWidth}px`;
+            canvasRef.current.style.height = `${window.innerHeight}px`;
 
-                const ctx = canvasRef.current.getContext('2d');
-                if (ctx) {
-                    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-                }
-            }
-        };
-        window.addEventListener('resize', resize);
-        resize(); // Init
-        return () => window.removeEventListener('resize', resize);
-    }, [canvasRef]);
+            // Context scale is handled inside useGame's renderGame loop now, 
+            // but we trigger the hook update below.
+        }
+    }, [canvasRef, scale]);
+
+    // Updating the hook with the latest scale to be used in render/logic
+    useEffect(() => {
+        hook.setWindowScaleFactor(scale);
+    }, [scale, hook]);
 
     return (
         <canvas

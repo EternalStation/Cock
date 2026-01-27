@@ -1,11 +1,12 @@
 .hex-tooltip {
     position: fixed;
-    width: 280px;
+    width: 320px;
     z-index: 5000;
     pointer-events: none;
     border-radius: 4px;
     overflow: hidden;
     font-family: 'Orbitron', sans-serif;
+    font-size: 115%;
     animation: hexAppear 0.2s ease-out;
 }
 

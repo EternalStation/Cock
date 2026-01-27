@@ -36,7 +36,7 @@ export const LegendarySelectionMenu: React.FC<LegendarySelectionMenuProps> = ({ 
 
     return (
         <div style={{
-            position: 'absolute', top: 0, left: 0, width: '100vw', height: '100vh',
+            position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
             background: 'rgba(5, 5, 20, 0.9)',
             display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
             zIndex: 3000, fontFamily: 'Orbitron, sans-serif', color: 'white'

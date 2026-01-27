@@ -147,7 +147,7 @@ export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClo
 
     return (
         <div style={{
-            position: 'absolute', top: 0, left: 0, width: '100vw', height: '100vh',
+            position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
             background: 'radial-gradient(circle, rgb(10, 10, 30) 0%, rgb(2, 2, 5) 100%)',
             zIndex: 2000, color: 'white', fontFamily: 'Orbitron, sans-serif',
             overflow: 'hidden'

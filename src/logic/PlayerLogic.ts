@@ -7,7 +7,7 @@ import { calculateLegendaryBonus, getLegendaryOptions } from './LegendaryLogic';
 import { spawnParticles } from './ParticleLogic';
 import { trySpawnMeteorite } from './LootLogic';
 
-export function updatePlayer(state: GameState, keys: Record<string, boolean>, onEvent?: (type: string, data?: any) => void) {
+export function updatePlayer(state: GameState, keys: Record<string, boolean>, onEvent?: (type: string, data?: any) => void, inputVector?: { x: number, y: number }) {
     const { player } = state;
 
     // Track player position history for laser prediction (last 60 frames = ~1 second at 60fps)
@@ -31,6 +31,12 @@ export function updatePlayer(state: GameState, keys: Record<string, boolean>, on
         if (keys['s'] || keys['keys'] || keys['arrowdown']) vy++;
         if (keys['a'] || keys['keya'] || keys['arrowleft']) vx--;
         if (keys['d'] || keys['keyd'] || keys['arrowright']) vx++;
+
+        // Add Joystick Input
+        if (inputVector) {
+            vx += inputVector.x;
+            vy += inputVector.y;
+        }
     }
 
     if (vx !== 0 || vy !== 0) {
