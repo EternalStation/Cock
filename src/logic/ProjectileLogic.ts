@@ -253,7 +253,7 @@ export function updateProjectiles(state: GameState, onEvent?: (event: string, da
                 // --- ComLife Lvl 1: Lifesteal ---
                 if (lifeLevel >= 1 && (b.id !== -1)) { // Ensure it's a projectile (Shockwave shouldn't trigger this? Bullet ID check is weak but ok)
                     // "Lifesteal from dmg dealth of projectiles"
-                    const heal = damageAmount * 0.15;
+                    const heal = damageAmount * 0.03;
 
                     const maxHp = calcStat(player.hp);
                     const missing = maxHp - player.curHp;

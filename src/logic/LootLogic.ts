@@ -2,7 +2,7 @@ import type { GameState, Meteorite, MeteoriteRarity } from './types';
 import { playSfx } from './AudioLogic';
 import { calculateLegendaryBonus } from './LegendaryLogic';
 
-const DROP_CHANCE = 0.03; // 3% (Avg 1 per 33 kills)
+
 const MAGNET_RANGE = 200;
 const PICKUP_RANGE = 20;
 
@@ -73,19 +73,19 @@ import { SECTOR_NAMES } from './MapLogic';
 // [MinTime, MaxTime, [Lvl1, Lvl2, ..., Lvl9]]
 // Time in Minutes
 const DROP_TABLE: { min: number, max: number, weights: number[] }[] = [
-    { min: 0, max: 5, weights: [5, 2, 0.5, 0, 0, 0, 0, 0, 0] },
-    { min: 5, max: 10, weights: [7, 4, 2, 0.5, 0, 0, 0, 0, 0] },
-    { min: 10, max: 15, weights: [5, 5, 3, 1, 0.5, 0, 0, 0, 0] },
-    { min: 15, max: 20, weights: [2, 3, 5, 2, 1, 0, 0.5, 0, 0] }, // Lvl 6 skipped in user table, aligned to idx
-    { min: 20, max: 25, weights: [0, 1, 4, 3, 1.5, 0, 1, 0.5, 0] },
-    { min: 25, max: 30, weights: [0, 0, 2, 4, 2, 0, 1.5, 1, 0.5] },
-    { min: 30, max: 35, weights: [0, 0, 0, 2, 2.5, 0, 2, 1.5, 1] },
-    { min: 35, max: 40, weights: [0, 0, 0, 1.5, 3, 0, 2.5, 2, 1.5] },
-    { min: 40, max: 45, weights: [0, 0, 0, 1, 2.5, 0, 3, 2.5, 2] },
-    { min: 45, max: 50, weights: [0, 0, 0, 0.5, 2, 0, 3.5, 3, 2.5] },
-    { min: 50, max: 55, weights: [0, 0, 0, 0.1, 1.5, 0, 3, 3.5, 3] },
-    { min: 55, max: 60, weights: [0, 0, 0, 0, 1, 0, 2.5, 4, 3.5] },
-    { min: 60, max: 9999, weights: [0, 0, 0, 0, 0.1, 0, 2, 4.5, 4] }
+    { min: 0, max: 5, weights: [1.6, 1.0, 0.4, 0, 0, 0, 0, 0, 0] },
+    { min: 5, max: 10, weights: [1.3, 0.9, 0.5, 0.2, 0, 0, 0, 0, 0] },
+    { min: 10, max: 15, weights: [1.0, 0.8, 0.6, 0.3, 0.1, 0, 0, 0, 0] },
+    { min: 15, max: 20, weights: [0.7, 0.7, 0.6, 0.4, 0.2, 0.1, 0, 0, 0] },
+    { min: 20, max: 25, weights: [0.4, 0.6, 0.6, 0.5, 0.3, 0.1, 0.1, 0, 0] },
+    { min: 25, max: 30, weights: [0, 0.5, 0.6, 0.6, 0.4, 0.2, 0.15, 0.05, 0] },
+    { min: 30, max: 35, weights: [0, 0, 0.5, 0.6, 0.5, 0.3, 0.25, 0.15, 0.1] },
+    { min: 35, max: 40, weights: [0, 0, 0, 0.5, 0.5, 0.4, 0.35, 0.25, 0.15] },
+    { min: 40, max: 45, weights: [0, 0, 0, 0, 0.5, 0.45, 0.45, 0.45, 0.35] },
+    { min: 45, max: 50, weights: [0, 0, 0, 0, 0.4, 0.45, 0.5, 0.45, 0.3] },
+    { min: 50, max: 55, weights: [0, 0, 0, 0, 0, 0.4, 0.5, 0.55, 0.55] },
+    { min: 55, max: 60, weights: [0, 0, 0, 0, 0, 0.3, 0.45, 0.55, 0.5] },
+    { min: 60, max: 9999, weights: [0, 0, 0, 0, 0, 0, 0.4, 0.6, 0.5] }
 ];
 
 const RARITY_LIST: MeteoriteRarity[] = ['scrap', 'anomalous', 'quantum', 'astral', 'radiant', 'void', 'eternal', 'divine', 'singularity'];
@@ -188,7 +188,12 @@ export function createMeteorite(state: GameState, rarity: MeteoriteRarity, x: nu
 }
 
 export function trySpawnMeteorite(state: GameState, x: number, y: number) {
-    let chance = DROP_CHANCE;
+    const minutes = state.gameTime / 60;
+    const entry = DROP_TABLE.find(e => minutes >= e.min && minutes < e.max) || DROP_TABLE[DROP_TABLE.length - 1];
+
+    // Base chance is the sum of the weights (e.g. 1.6 + 1.0 + 0.4 = 3.0 -> 3%)
+    let chance = entry.weights.reduce((a, b) => a + b, 0) / 100;
+
     if (state.currentArena === 0) chance *= 1.15; // +15% Drop Chance in Economic Hex
 
     // Add Legendary Bonus

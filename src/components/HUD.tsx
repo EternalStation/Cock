@@ -461,103 +461,96 @@ export const HUD: React.FC<HUDProps> = ({ gameState, upgradeChoices, onUpgradeSe
                             );
                         })()}
 
-                        {/* ACTIVE SKILLS BAR */}
-                        {player.activeSkills && player.activeSkills.length > 0 && (
-                            <div style={{ display: 'flex', gap: 8, marginBottom: 4 }}>
-                                {player.activeSkills.map((skill, idx) => (
-                                    <div key={idx} style={{
+                        <div style={{ display: 'flex', gap: 8, marginBottom: 4, justifyContent: 'center' }}>
+                            {/* ACTIVE SKILLS */}
+                            {player.activeSkills && player.activeSkills.map((skill, idx) => (
+                                <div key={idx} style={{
+                                    width: 40, height: 40,
+                                    position: 'relative',
+                                    background: '#0f172a',
+                                    border: skill.inUse ? '2px solid #22d3ee' : '2px solid #475569',
+                                    borderRadius: 6,
+                                    overflow: 'hidden',
+                                    boxShadow: skill.inUse ? '0 0 10px #22d3ee' : 'none',
+                                    transition: 'all 0.2s'
+                                }}>
+                                    {/* Icon */}
+                                    {skill.icon && <img src={skill.icon} alt={skill.type} style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: skill.cooldown > 0 ? 0.5 : 1 }} />}
+
+                                    {/* Cooldown Overlay */}
+                                    {skill.cooldown > 0 && (
+                                        <div style={{
+                                            position: 'absolute', bottom: 0, left: 0, width: '100%',
+                                            height: `${(skill.cooldown / skill.cooldownMax) * 100}%`,
+                                            background: 'rgba(0, 0, 0, 0.7)',
+                                            transition: 'height 0.1s linear'
+                                        }} />
+                                    )}
+                                    {skill.cooldown > 0 && (
+                                        <div style={{
+                                            position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+                                            color: '#fff', fontSize: 10, fontWeight: 900, textShadow: '0 0 2px #000'
+                                        }}>
+                                            {Math.ceil(skill.cooldown)}
+                                        </div>
+                                    )}
+
+                                    {/* Keybind */}
+                                    <div style={{
+                                        position: 'absolute', top: 1, left: 3,
+                                        color: '#fff', fontSize: 8, fontWeight: 900,
+                                        textShadow: '0 0 2px #000', opacity: 0.8
+                                    }}>
+                                        {skill.keyBind}
+                                    </div>
+                                </div>
+                            ))}
+
+                            {/* PASSIVE SKILLS (Always Rendered if acquired) */}
+                            {(() => {
+                                const waveLevel = getHexLevel(gameState, 'ComWave');
+                                if (waveLevel <= 0) return null;
+
+                                const shots = player.shotsFired || 0;
+                                const required = 15;
+                                const progress = (shots % required);
+                                const remaining = required - progress;
+
+                                return (
+                                    <div style={{
                                         width: 40, height: 40,
                                         position: 'relative',
-                                        background: '#0f172a',
-                                        border: skill.inUse ? '2px solid #22d3ee' : '2px solid #475569',
+                                        background: 'rgba(15, 23, 42, 0.4)',
+                                        border: '1px solid rgba(56, 189, 248, 0.3)',
                                         borderRadius: 6,
                                         overflow: 'hidden',
-                                        boxShadow: skill.inUse ? '0 0 10px #22d3ee' : 'none',
-                                        transition: 'all 0.2s'
                                     }}>
-                                        {/* Icon */}
-                                        {skill.icon && <img src={skill.icon} alt={skill.type} style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: skill.cooldown > 0 ? 0.5 : 1 }} />}
+                                        {/* Static Icon for Sonic Wave */}
+                                        <img src="/assets/hexes/ComWave.png" alt="Sonic Wave" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
 
-                                        {/* Cooldown Overlay */}
-                                        {skill.cooldown > 0 && (
-                                            <div style={{
-                                                position: 'absolute', bottom: 0, left: 0, width: '100%',
-                                                height: `${(skill.cooldown / skill.cooldownMax) * 100}%`,
-                                                background: 'rgba(0, 0, 0, 0.7)',
-                                                transition: 'height 0.1s linear'
-                                            }} />
-                                        )}
-                                        {skill.cooldown > 0 && (
-                                            <div style={{
-                                                position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
-                                                color: '#fff', fontSize: 10, fontWeight: 900, textShadow: '0 0 2px #000'
-                                            }}>
-                                                {Math.ceil(skill.cooldown)}
-                                            </div>
-                                        )}
-
-                                        {/* Keybind */}
+                                        {/* Progress Overlay (fills up as you shoot) */}
                                         <div style={{
-                                            position: 'absolute', top: 1, left: 3,
-                                            color: '#fff', fontSize: 8, fontWeight: 900,
-                                            textShadow: '0 0 2px #000', opacity: 0.8
+                                            position: 'absolute', bottom: 0, left: 0, width: '100%',
+                                            height: `${(progress / required) * 100}%`,
+                                            background: 'rgba(56, 189, 248, 0.3)',
+                                            borderTop: '1px solid rgba(56, 189, 248, 0.6)',
+                                            transition: 'height 0.1s'
+                                        }} />
+
+                                        {/* Shots Remaining Counter */}
+                                        <div style={{
+                                            position: 'absolute', bottom: 1, right: 3,
+                                            color: '#38BDF8', fontSize: 10, fontWeight: 900,
+                                            textShadow: '0 0 4px #000'
                                         }}>
-                                            {skill.keyBind}
+                                            {remaining}
                                         </div>
+
+                                        {/* "PASSIVE" Indicator - Removed as per user request */}
                                     </div>
-                                ))}
-
-                                {/* PASSIVE SKILLS section */}
-                                {(() => {
-                                    const waveLevel = getHexLevel(gameState, 'ComWave');
-                                    if (waveLevel <= 0) return null;
-
-                                    const shots = player.shotsFired || 0;
-                                    const remaining = 15 - (shots % 15);
-
-                                    return (
-                                        <div style={{
-                                            width: 40, height: 40,
-                                            position: 'relative',
-                                            marginLeft: 8, // Gap from active skills
-                                            background: 'rgba(15, 23, 42, 0.4)',
-                                            border: '1px solid rgba(56, 189, 248, 0.3)',
-                                            borderRadius: 6,
-                                            overflow: 'hidden',
-                                        }}>
-                                            {/* Fear Icon - used for Sonic Wave status */}
-                                            <img src="/assets/Icons/FearSkill.png" alt="Sonic Wave" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-
-                                            {/* Progress Overlay */}
-                                            <div style={{
-                                                position: 'absolute', bottom: 0, left: 0, width: '100%',
-                                                height: `${((shots % 15) / 15) * 100}%`,
-                                                background: 'rgba(56, 189, 248, 0.2)',
-                                                borderTop: '1px solid rgba(56, 189, 248, 0.5)',
-                                                transition: 'height 0.1s'
-                                            }} />
-
-                                            {/* Shots Counter */}
-                                            <div style={{
-                                                position: 'absolute', bottom: 1, right: 3,
-                                                color: '#38BDF8', fontSize: 10, fontWeight: 900,
-                                                textShadow: '0 0 4px #000'
-                                            }}>
-                                                {remaining}
-                                            </div>
-
-                                            <div style={{
-                                                position: 'absolute', top: 1, left: 3,
-                                                color: 'rgba(255,255,255,0.4)', fontSize: 7, fontWeight: 900,
-                                                textShadow: '0 0 2px #000'
-                                            }}>
-                                                P
-                                            </div>
-                                        </div>
-                                    );
-                                })()}
-                            </div>
-                        )}
+                                );
+                            })()}
+                        </div>
 
                         <div style={{
                             width: '100%', height: 16, background: 'rgba(15, 23, 42, 0.8)',

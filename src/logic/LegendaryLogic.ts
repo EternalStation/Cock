@@ -34,7 +34,7 @@ export const LEGENDARY_UPGRADES: Record<string, LegendaryHex> = {
     ComLife: {
         id: 'com_life',
         name: 'CRIMSON FEAST',
-        desc: '+15% Lifesteal',
+        desc: '+3% Lifesteal',
         category: 'Combat',
         type: 'ComLife',
         level: 1,
@@ -117,7 +117,7 @@ export function getLegendaryPerksArray(type: string, level: number): string[] {
             "MAX LEVEL (Mergeable)"
         ],
         ComLife: [
-            "+15% Lifesteal",
+            "+3% Lifesteal",
             "Overheal -> Shield (200% eff, 3s)",
             "Attacks: Deal 2% Enemy Max HP",
             "Necromancy: 10% Chance for Zombie",
@@ -339,7 +339,7 @@ export function calculateLegendaryBonus(state: GameState, statKey: string): numb
 
         // ComLife Logic
         if (hex.type === 'ComLife') {
-            if (statKey === 'lifesteal' && hex.level >= 1) total += 15 * multiplier;
+            if (statKey === 'lifesteal' && hex.level >= 1) total += 3 * multiplier;
         }
     });
     return total;

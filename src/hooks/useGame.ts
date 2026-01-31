@@ -182,7 +182,9 @@ export function useGameLoop(gameStarted: boolean) {
             }
         };
 
-        updatePlayer(state, keys.current, eventHandler, inputVector.current);
+        if (state.portalState !== 'transferring') {
+            updatePlayer(state, keys.current, eventHandler, inputVector.current);
+        }
 
         if (state.spawnTimer > 0.95 && !state.hasPlayedSpawnSound) {
             playSfx('spawn');
