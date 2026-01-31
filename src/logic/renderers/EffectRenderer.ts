@@ -31,8 +31,8 @@ export function renderAreaEffects(ctx: CanvasRenderingContext2D, state: GameStat
             ctx.restore();
         } else if (effect.type === 'epicenter') {
             const baseR = effect.radius || 500;
-            const pTimer = effect.pulseTimer || 0;
-            const progress = pTimer / 0.5;
+            // const pTimer = effect.pulseTimer || 0;
+            // const progress = pTimer / 0.5;
             if (isNaN(effect.x) || isNaN(effect.y)) return;
 
             ctx.save();
@@ -58,14 +58,22 @@ export function renderAreaEffects(ctx: CanvasRenderingContext2D, state: GameStat
             ctx.strokeStyle = `rgba(34, 211, 238, ${Math.max(0, 1 - (state.gameTime % 1.5) / 1.5)})`; ctx.lineWidth = 1; ctx.stroke();
             ctx.restore();
 
+            const progress = ((effect.pulseTimer || 0) / 0.5) % 1;
+
             ctx.save(); ctx.translate(effect.x, effect.y);
-            const spikeCount = 20; // Reduced from 30
-            const shardScale = 0.75; // Reduced from 0.9
+            const spikeCount = 16;
+            const shardScale = 0.75;
+
+            // Use simple flat color for performance
+            ctx.fillStyle = 'rgba(34, 211, 238, 0.6)';
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+            ctx.lineWidth = 1;
+
             for (let i = 0; i < spikeCount; i++) {
                 const seedX = Math.sin(i * 123.4) * (baseR * shardScale);
                 const seedY = Math.cos(i * 567.8) * (baseR * shardScale) * 0.6;
                 const localOff = (i * 0.13) % 0.5;
-                const heightProg = Math.max(0, Math.sin((progress + localOff) * Math.PI));
+                const heightProg = Math.max(0, Math.sin(((progress + localOff) % 1) * Math.PI));
                 const h = (70 + Math.sin(i * 2) * 15) * heightProg;
                 const w = (15 + Math.cos(i) * 5);
                 const tilt = Math.sin(i * 456) * 10;
@@ -73,27 +81,15 @@ export function renderAreaEffects(ctx: CanvasRenderingContext2D, state: GameStat
                 if (h <= 0) continue;
                 ctx.save(); ctx.translate(seedX, seedY); ctx.rotate(tilt * Math.PI / 180);
 
-                // Simplified Triangle Spike
                 ctx.beginPath();
                 ctx.moveTo(-w / 2, 0);
                 ctx.lineTo(0, -h);
                 ctx.lineTo(w / 2, 0);
                 ctx.closePath();
 
-                const grad = ctx.createLinearGradient(0, 0, 0, -h);
-                grad.addColorStop(0, 'rgba(14, 165, 233, 0.7)');
-                grad.addColorStop(0.5, 'rgba(34, 211, 238, 0.8)');
-                grad.addColorStop(1, '#ffffff');
-
-                ctx.fillStyle = grad; ctx.fill();
-                ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
-                ctx.lineWidth = 0.5;
+                ctx.fill();
                 ctx.stroke();
                 ctx.restore();
-
-                // Simple Shadow
-                ctx.save(); ctx.translate(seedX, seedY); ctx.globalAlpha = 0.15 * heightProg;
-                ctx.fillStyle = '#000000'; ctx.beginPath(); ctx.ellipse(0, 2, Math.max(1, w * 0.4), Math.max(1, 2), 0, 0, Math.PI * 2); ctx.fill(); ctx.restore();
             }
             ctx.restore();
         }

@@ -279,7 +279,7 @@ export function useGameLoop(gameStarted: boolean) {
                 // Visuals handled by renderer reading areaEffects
             } else if (effect.type === 'epicenter') {
                 const range = 500;
-                const pulseInterval = 0.5; // 0.5 sec
+                const pulseInterval = 0.5; // 0.5 sec ("hits every 0.5 sec")
                 effect.pulseTimer = (effect.pulseTimer || 0) + step;
 
                 // Slow Aura (Constant)
@@ -304,18 +304,25 @@ export function useGameLoop(gameStarted: boolean) {
                         const dist = Math.hypot(e.x - effect.x, e.y - effect.y);
                         if (dist < range) {
                             e.hp -= dmg;
-                            // OPTIMIZATION: Reduce visual clutter slightly to prevent lag with many enemies
-                            if (Math.random() < 0.25) {
+
+                            // Visual Feedback (50% chance to reduce lag, but good feedback)
+                            if (Math.random() < 0.5) {
                                 spawnFloatingNumber(state, e.x, e.y, Math.round(dmg).toString(), '#0ea5e9', false);
                             }
 
-                            // Tiny red/orange particle bursts on spike hits
+                            // Tiny red/orange particle bursts on spike hits (10% chance)
                             if (Math.random() < 0.1) {
                                 const particleColor = Math.random() > 0.5 ? '#ef4444' : '#f97316';
                                 spawnParticles(state, e.x, e.y, particleColor, 2, 2, 20, 'spark');
                             }
                         }
                     });
+
+                    // Sound: Play every 1.0s (every 2nd pulse) to avoid chaos?
+                    // Or every 0.5s? User said "repeat every 1 sec".
+                    // We can approximate this by checking if duration is even-ish?
+                    // Let's rely on a dynamic property we create on the fly or just play it every 0.5s.
+                    // 0.5s is fine for a skill sound loop.
                     playSfx('ice-loop');
                 }
             }

@@ -1,6 +1,6 @@
 import type { GameState } from './types';
 import { getHexLevel } from './LegendaryLogic';
-import { playSfx } from './SfxLogic';
+// import { playSfx } from './SfxLogic';
 
 export function castSkill(state: GameState, skillIndex: number) {
     // 0-indexed skill slot
@@ -50,10 +50,10 @@ export function castSkill(state: GameState, skillIndex: number) {
             creationTime: state.gameTime,
             level,
             casterId: -1, // Player
-            pulseTimer: 0
+            pulseTimer: 100 // Force immediate first pulse in update loop
         });
 
-        playSfx('ice-loop');
+        // playSfx('ice-loop'); // Handled by pulse logic now for consistency
 
         skill.cooldown = 30;
         skill.cooldownMax = 30;

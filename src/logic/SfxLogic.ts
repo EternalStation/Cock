@@ -220,35 +220,8 @@ export function playSfx(type: SfxType) {
             const randomRate = 0.8 + Math.random() * 0.4;
             source.playbackRate.value = randomRate;
 
-            // Play random 1-second segment loop if file is longer, or just loop it.
-            // Requirement: "use like 1 sec onf it, and loop it"
-            // We set loop start/end? Or just let it play. 
-            // The user implies they want "spikes working at same time", so overlapping loops.
-            // But usually this SFX is triggered ONCE per skill activation?
-            // Actually, for Epicenter it's a pulse.
-            // Let's just play a 1-second LOOPING clip.
-
-            source.loopStart = 0;
-            source.loopEnd = 1.0;
-            source.start(t, 0, 1.0); // Play 1s then stop? Or loop indefinitely?
-            // User: "loop it and make like different copies... sound like different spikes"
-            // If it loops indefinitely, we need a way to STOP it.
-            // Current playSfx is fire-and-forget.
-            // If we want a continuous loop while skill is active, we need to return the SourceNode.
-            // But playSfx signature returns void.
-
-            // Re-reading request: "ice freeze spell for Epicenter... use like 1 sec... loop it... make like different formats... lower higher pitch"
-            // Epicenter lasts 10s.
-            // Maybe this sound should play per PULSE (every 1s)?
-            // Or continuous hum?
-            // If continuous, we need state.
-
-            // Interpretation: Play short, randomized loops repeatedly?
-            // Or just play 1s of sound once? 
-            // "loop it" might mean the sample itself is a loop.
-            // Let's play 1s of it with random pitch.
-
-            source.start(t, 0, 1.0); // Play 1 second slice
+            // Play 1 second slice
+            source.start(t, 0, 1.0);
         }
         return;
     }

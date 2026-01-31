@@ -87,7 +87,14 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, mete
         renderScreenEffects(ctx, state, width, height);
 
     } catch (e) {
-        console.error("Render Error:", e);
+        // Prevent console spam causing freeze
+        if ((window as any)._rendererErrorCount === undefined) {
+            (window as any)._rendererErrorCount = 0;
+        }
+        if ((window as any)._rendererErrorCount < 3) {
+            console.error("Render Error:", e);
+            (window as any)._rendererErrorCount++;
+        }
     }
 
     // Final restore in case of nested saves
