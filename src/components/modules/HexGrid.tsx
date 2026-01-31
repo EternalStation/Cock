@@ -1,6 +1,6 @@
 
 import React from 'react';
-import type { GameState, LegendaryHex, Meteorite } from '../../logic/types';
+import type { GameState, LegendaryHex } from '../../logic/types';
 import { calculateMeteoriteEfficiency } from '../../logic/EfficiencyLogic';
 import { getHexPoints, getMeteoriteImage, getLegendaryInfo, findClosestVertices, RARITY_COLORS } from './ModuleUtils';
 
