@@ -340,7 +340,9 @@ export function useGameLoop(gameStarted: boolean) {
 
         // --- PORTAL LOGIC ---
         if (state.portalState !== 'transferring') {
-            state.portalTimer -= step;
+            if (state.portalState !== 'closed') {
+                state.portalTimer -= step;
+            }
             if (state.portalState === 'closed' && state.portalTimer <= 10) {
                 state.portalState = 'warn';
                 playSfx('warning');
@@ -697,6 +699,15 @@ export function useGameLoop(gameStarted: boolean) {
         spendDust: (amount: number) => {
             if (gameState.current.player.dust >= amount) {
                 gameState.current.player.dust -= amount;
+                setUiState(p => p + 1);
+                return true;
+            }
+            return false;
+        },
+        triggerPortal: () => {
+            if (gameState.current.portalState === 'closed' && gameState.current.player.dust >= 5) {
+                gameState.current.player.dust -= 5;
+                gameState.current.portalTimer = 10; // Trigger "warn" sequence immediately
                 setUiState(p => p + 1);
                 return true;
             }

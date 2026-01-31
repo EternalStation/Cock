@@ -118,6 +118,7 @@ function App() {
                 onInventoryUpdate={hook.updateInventorySlot}
                 onRecycle={hook.recycleMeteorite}
                 spendDust={hook.spendDust}
+                triggerPortal={hook.triggerPortal}
               />
             </div>
 

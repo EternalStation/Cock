@@ -1,4 +1,5 @@
 import { isInMap } from './MapLogic';
+import { GAME_CONFIG } from './GameConfig';
 import { playSfx } from './AudioLogic';
 import { calcStat } from './MathUtils';
 import type { GameState } from './types';
@@ -15,8 +16,8 @@ function triggerShockwave(state: GameState, angle: number, level: number) {
     // Lvl 3: 125% dmg, 600 range (was 3750, then 750)
     // Lvl 4: Backwards wave too
 
-    const range = level >= 3 ? 600 : 450;
-    const damageMult = level >= 3 ? 1.25 : 0.75;
+    const range = level >= 3 ? GAME_CONFIG.SKILLS.WAVE_RANGE.LVL3 : GAME_CONFIG.SKILLS.WAVE_RANGE.LVL1;
+    const damageMult = level >= 3 ? GAME_CONFIG.SKILLS.WAVE_DAMAGE_MULT.LVL3 : GAME_CONFIG.SKILLS.WAVE_DAMAGE_MULT.LVL1;
     const coneHalfAngle = 0.7; // ~80 degrees total
 
     const playerDmg = calcStat(state.player.dmg);
@@ -25,7 +26,7 @@ function triggerShockwave(state: GameState, angle: number, level: number) {
     const castWave = (waveAngle: number) => {
         // Visuals: Echolocation Wave (Single clean arc)
         // We use a special 'shockwave' particle type that the renderer draws as a bent line
-        const speed = 25; // Even Faster (was 18) to ensure it disappears quickly at destination
+        const speed = GAME_CONFIG.SKILLS.WAVE_SPEED; // Even Faster (was 18) to ensure it disappears quickly at destination
 
         state.particles.push({
             x: state.player.x,
@@ -99,7 +100,7 @@ function triggerShockwave(state: GameState, angle: number, level: number) {
 
 export function spawnBullet(state: GameState, x: number, y: number, angle: number, dmg: number, pierce: number, offsetAngle: number = 0) {
     if (state.player.immobilized) return;
-    const spd = 12;
+    const spd = GAME_CONFIG.PROJECTILE.PLAYER_BULLET_SPEED;
 
     // --- ComCrit Logic ---
     const critLevel = getHexLevel(state, 'ComCrit');
@@ -108,11 +109,11 @@ export function spawnBullet(state: GameState, x: number, y: number, angle: numbe
     let mult = 1.0;
 
     if (critLevel > 0) {
-        let chance = 0.15;
-        mult = 2.0;
+        let chance = GAME_CONFIG.SKILLS.CRIT_BASE_CHANCE;
+        mult = GAME_CONFIG.SKILLS.CRIT_BASE_MULT;
         if (state.moduleSockets.hexagons.some(h => h?.type === 'ComCrit' && h.level >= 4)) {
-            chance = 0.25;
-            mult = 3.5;
+            chance = GAME_CONFIG.SKILLS.CRIT_LVL4_CHANCE;
+            mult = GAME_CONFIG.SKILLS.CRIT_LVL4_MULT;
         }
 
         if (Math.random() < chance) {
@@ -142,7 +143,7 @@ export function spawnBullet(state: GameState, x: number, y: number, angle: numbe
     const waveLevel = getHexLevel(state, 'ComWave');
     if (waveLevel > 0) {
         state.player.shotsFired = (state.player.shotsFired || 0) + 1;
-        if (state.player.shotsFired % 15 === 0) {
+        if (state.player.shotsFired % GAME_CONFIG.SKILLS.WAVE_SHOTS_REQUIRED === 0) {
             triggerShockwave(state, angle + offsetAngle, waveLevel);
         }
     }
@@ -211,7 +212,7 @@ export function updateProjectiles(state: GameState, onEvent?: (event: string, da
 
                 // Check if Marked (Shattered Fate Lvl 3)
                 if (critLevel >= 3 && e.deathMarkExpiry && state.gameTime < e.deathMarkExpiry) {
-                    const markMult = 3.0;
+                    const markMult = GAME_CONFIG.SKILLS.DEATH_MARK_MULT;
                     const bulletMult = b.critMult || 1.0;
                     const finalMult = Math.max(bulletMult, markMult);
 
@@ -293,7 +294,7 @@ export function updateProjectiles(state: GameState, onEvent?: (event: string, da
 
                 // ELITE SKILL: SQUARE THORNS (Blade Mail)
                 if (e.isElite && e.shape === 'square') {
-                    const rawReflectDmg = Math.max(1, Math.floor(e.maxHp * 0.002));
+                    const rawReflectDmg = Math.max(1, Math.floor(e.maxHp * GAME_CONFIG.SKILLS.REFLECT_DAMAGE_PERCENT));
                     const armor = calcStat(player.arm);
                     const reflectDmg = Math.max(0, rawReflectDmg - armor);
 
@@ -322,8 +323,8 @@ export function updateProjectiles(state: GameState, onEvent?: (event: string, da
                 }
 
                 // --- ComCrit Lvl 2: Execute ---
-                if (critLevel >= 2 && !e.boss && e.hp < e.maxHp * 0.5) {
-                    if (Math.random() < 0.10) {
+                if (critLevel >= 2 && !e.boss && e.hp < e.maxHp * GAME_CONFIG.SKILLS.EXECUTE_THRESHOLD) {
+                    if (Math.random() < GAME_CONFIG.SKILLS.EXECUTE_CHANCE) {
                         const remainingHp = Math.round(e.hp);
                         e.hp = 0; // Execute
                         e.isExecuted = true; // Mark for no particles in handleEnemyDeath
@@ -443,7 +444,7 @@ export function updateProjectiles(state: GameState, onEvent?: (event: string, da
         const distP = Math.hypot(player.x - eb.x, player.y - eb.y);
         if (distP < player.size + 10) {
             const armorValue = calcStat(player.arm);
-            const armRedMult = 1 - (0.95 * (armorValue / (armorValue + 5263)));
+            const armRedMult = 1 - (0.95 * (armorValue / (armorValue + GAME_CONFIG.PLAYER.ARMOR_CONSTANT)));
 
             const projRedRaw = calculateLegendaryBonus(state, 'proj_red_per_kill');
             const projRed = Math.min(80, projRedRaw); // Cap at 80% reduction

@@ -1,6 +1,7 @@
 import type { GameState, Enemy } from './types';
 import { isInMap, ARENA_CENTERS, PORTALS, getHexWallLine, ARENA_RADIUS } from './MapLogic';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from './constants';
+import { GAME_CONFIG } from './GameConfig';
 import { calcStat } from './MathUtils';
 import { playSfx } from './AudioLogic';
 import { calculateLegendaryBonus } from './LegendaryLogic';
@@ -14,7 +15,7 @@ export function updatePlayer(state: GameState, keys: Record<string, boolean>, on
     // Track player position history for laser prediction (last 60 frames = ~1 second at 60fps)
     if (!state.playerPosHistory) state.playerPosHistory = [];
     state.playerPosHistory.unshift({ x: player.x, y: player.y, timestamp: Date.now() });
-    if (state.playerPosHistory.length > 60) state.playerPosHistory.pop();
+    if (state.playerPosHistory.length > GAME_CONFIG.PLAYER.HISTORY_LENGTH) state.playerPosHistory.pop();
 
     // Spawn Animation Logic
     if (state.spawnTimer > 0) {
@@ -76,7 +77,7 @@ export function updatePlayer(state: GameState, keys: Record<string, boolean>, on
         const nextY = player.y + dy;
 
         // Hitbox radius
-        const hitboxR = 56;
+        const hitboxR = GAME_CONFIG.PLAYER.HITBOX_RADIUS;
 
         const checkMove = (tx: number, ty: number) => {
             // Check if point is inside map OR inside an active portal
@@ -123,15 +124,15 @@ export function updatePlayer(state: GameState, keys: Record<string, boolean>, on
             const ry = dy - 2 * dot * ny;
             const reflectDir = Math.atan2(ry, rx);
 
-            player.knockback.x = Math.cos(reflectDir) * 37.5;
-            player.knockback.y = Math.sin(reflectDir) * 37.5;
+            player.knockback.x = Math.cos(reflectDir) * GAME_CONFIG.PLAYER.WALL_BOUNCE_SPEED;
+            player.knockback.y = Math.sin(reflectDir) * GAME_CONFIG.PLAYER.WALL_BOUNCE_SPEED;
 
             const maxHp = calcStat(player.hp);
-            const rawWallDmg = maxHp * 0.10;
+            const rawWallDmg = maxHp * GAME_CONFIG.PLAYER.WALL_DAMAGE_PERCENT;
             const armor = calcStat(player.arm);
             // Wall damage reduction (Using the proper reduction formula)
             // Formula in MathUtils: 0.95 * (armor / (armor + 5263))
-            const armRed = 1 - (0.95 * (armor / (armor + 5263)));
+            const armRed = 1 - (0.95 * (armor / (armor + GAME_CONFIG.PLAYER.ARMOR_CONSTANT)));
             const wallDmg = rawWallDmg * armRed;
 
             // Check Shield Chunks
@@ -179,8 +180,8 @@ export function updatePlayer(state: GameState, keys: Record<string, boolean>, on
             player.x = nx;
             player.y = ny;
         }
-        player.knockback.x *= 0.85;
-        player.knockback.y *= 0.85;
+        player.knockback.x *= GAME_CONFIG.PLAYER.KNOCKBACK_DECAY;
+        player.knockback.y *= GAME_CONFIG.PLAYER.KNOCKBACK_DECAY;
     } else {
         player.knockback.x = 0;
         player.knockback.y = 0;
@@ -254,13 +255,13 @@ export function updatePlayer(state: GameState, keys: Record<string, boolean>, on
             if (!e.isNeutral) {
                 if (e.shape === 'minion' && e.parentId !== undefined) {
                     const mother = state.enemies.find(m => m.id === e.parentId);
-                    const ratio = e.stunOnHit ? 0.03 : 0.15;
+                    const ratio = e.stunOnHit ? GAME_CONFIG.ENEMY.MINION_STUN_DAMAGE_RATIO : GAME_CONFIG.ENEMY.MINION_DAMAGE_RATIO;
                     rawDmg = (mother ? mother.hp : e.hp) * ratio;
                 } else if (e.customCollisionDmg !== undefined) {
                     // Scale custom damage by current health percentage if it was originally based on maxHp
                     rawDmg = (e.hp / e.maxHp) * e.customCollisionDmg;
                 } else {
-                    rawDmg = e.hp * 0.15;
+                    rawDmg = e.hp * GAME_CONFIG.ENEMY.CONTACT_DAMAGE_PERCENT;
                 }
             }
 
@@ -269,7 +270,7 @@ export function updatePlayer(state: GameState, keys: Record<string, boolean>, on
             }
 
             const armorValue = calcStat(player.arm);
-            const armRedMult = 1 - (0.95 * (armorValue / (armorValue + 5263)));
+            const armRedMult = 1 - (0.95 * (armorValue / (armorValue + GAME_CONFIG.PLAYER.ARMOR_CONSTANT)));
 
             const colRedRaw = calculateLegendaryBonus(state, 'col_red_per_kill');
             const colRed = Math.min(80, colRedRaw); // Cap at 80% reduction

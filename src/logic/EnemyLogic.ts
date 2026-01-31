@@ -1,6 +1,5 @@
-import type { GameState, Enemy, ShapeType } from './types';
-import { SHAPE_DEFS, PALETTES, PULSE_RATES, SHAPE_CYCLE_ORDER } from './constants';
-import { isInMap, getArenaIndex, getRandomPositionInArena, ARENA_CENTERS } from './MapLogic';
+import type { GameState, Enemy } from './types';
+import { isInMap, ARENA_CENTERS } from './MapLogic';
 import { playSfx } from './AudioLogic';
 import { spawnParticles } from './ParticleLogic';
 import { handleEnemyDeath } from './DeathLogic';
@@ -9,42 +8,14 @@ import { handleEnemyDeath } from './DeathLogic';
 import { updateNormalCircle, updateNormalTriangle, updateNormalSquare, updateNormalDiamond, updateNormalPentagon, updateUniquePentagon } from './enemies/NormalEnemyLogic';
 import { updateEliteCircle, updateEliteTriangle, updateEliteSquare, updateEliteDiamond, updateElitePentagon } from './enemies/EliteEnemyLogic';
 import { updateBossEnemy } from './enemies/BossEnemyLogic';
+import { GAME_CONFIG } from './GameConfig';
+import { getProgressionParams, spawnEnemy, manageRareSpawnCycles } from './enemies/EnemySpawnLogic';
+import { scanForMerges, manageMerges } from './enemies/EnemyMergeLogic';
 import { updateZombie, updateSnitch, updateMinion } from './enemies/UniqueEnemyLogic';
 
 // Helper to determine current game era params
-function getProgressionParams(gameTime: number) {
-    const minutes = Math.floor(gameTime / 60);
-    const eraIndex = Math.floor(minutes / 15);
-    const cycleIndex = Math.floor((minutes % 15) / 5);
-    const shapeIndex = minutes % 5;
+export { spawnEnemy, spawnRareEnemy } from './enemies/EnemySpawnLogic';
 
-    // Cycle shapes: Circle -> Triangle -> Square -> Diamond -> Pentagon
-    const shapeId = SHAPE_CYCLE_ORDER[shapeIndex];
-    const shapeDef = SHAPE_DEFS[shapeId];
-
-    // Era Palette (Green -> Blue -> Purple -> Orange -> Red)
-    const eraPalette = PALETTES[eraIndex % PALETTES.length];
-    const baseColors = eraPalette.colors; // [Bright, Medium, Dark]
-
-    // Determine Active Colors based on Cycle (0-5m, 5-10m, 10-15m)
-    let activeColors: string[];
-
-    if (cycleIndex === 0) {
-        // Cycle 1 (0-5m): Bright Core, Dim Inner, Dim Outer
-        activeColors = [baseColors[0], baseColors[2], baseColors[2]];
-    } else if (cycleIndex === 1) {
-        // Cycle 2 (5-10m): Dim Core, Bright Inner, Dim Outer
-        activeColors = [baseColors[2], baseColors[0], baseColors[2]];
-    } else {
-        // Cycle 3 (10-15m): Bright Core, Dim Inner, Bright Outer
-        activeColors = [baseColors[0], baseColors[2], baseColors[0]];
-    }
-
-    // Pulse Speed
-    const pulseDef = PULSE_RATES.find(p => minutes < p.time) || PULSE_RATES[PULSE_RATES.length - 1];
-
-    return { shapeDef, activeColors, pulseDef };
-}
 
 export function updateEnemies(state: GameState, onEvent?: (event: string, data?: any) => void, step: number = 1 / 60) {
     const { enemies, player, gameTime } = state;
@@ -52,7 +23,7 @@ export function updateEnemies(state: GameState, onEvent?: (event: string, data?:
 
     // Spawning Logic
     const minutes = gameTime / 60;
-    const baseSpawnRate = 1.4 + (minutes * 0.1);
+    const baseSpawnRate = GAME_CONFIG.ENEMY.BASE_SPAWN_RATE + (minutes * GAME_CONFIG.ENEMY.SPAWN_RATE_PER_MINUTE);
     let actualRate = baseSpawnRate * shapeDef.spawnWeight;
     if (state.currentArena === 1) actualRate *= 1.15; // +15% Spawn Rate in Combat Hex
 
@@ -69,7 +40,7 @@ export function updateEnemies(state: GameState, onEvent?: (event: string, data?:
     if (gameTime >= state.nextBossSpawnTime && state.portalState !== 'transferring') {
         // Fix: Pass arguments correctly (x, y, shape, isBoss)
         spawnEnemy(state, undefined, undefined, undefined, true);
-        state.nextBossSpawnTime += 120; // 2 Minutes
+        state.nextBossSpawnTime += GAME_CONFIG.ENEMY.BOSS_SPAWN_INTERVAL; // 2 Minutes
     }
 
     // --- SPATIAL GRID UPDATE ---
@@ -287,262 +258,4 @@ export function updateEnemies(state: GameState, onEvent?: (event: string, data?:
     });
 }
 
-export function spawnEnemy(state: GameState, x?: number, y?: number, shape?: ShapeType, isBoss: boolean = false) {
-    const { player, gameTime } = state;
-    const { shapeDef, activeColors } = getProgressionParams(gameTime);
 
-    // Use provided shape OR respect game progression (shapeDef unlocks based on game time)
-    const chosenShape: ShapeType = shape || shapeDef.type as ShapeType;
-
-    // If specific position provided (cheat command), use it; otherwise calculate spawn location
-    let spawnPos = (x !== undefined && y !== undefined) ? { x, y } : { x: player.x, y: player.y };
-    const playerArena = getArenaIndex(player.x, player.y);
-    let found = false;
-
-    // Only calculate spawn position if not provided
-    if (x === undefined || y === undefined) {
-        // Try Ring around player valid in arena
-        for (let i = 0; i < 8; i++) {
-            const a = Math.random() * 6.28;
-            const d = (isBoss ? 1500 : 1200) + Math.random() * 300;
-            const tx = player.x + Math.cos(a) * d;
-            const ty = player.y + Math.sin(a) * d;
-
-            if (isInMap(tx, ty) && getArenaIndex(tx, ty) === playerArena) {
-                spawnPos = { x: tx, y: ty };
-                found = true;
-                break;
-            }
-
-        }
-
-
-        // Fallback: Random spot in Arena
-        if (!found) {
-            spawnPos = getRandomPositionInArena(playerArena);
-        }
-
-    }
-
-
-
-    // Scaling
-    const cycleCount = Math.floor(gameTime / 300);
-    const hpMult = Math.pow(1.2, cycleCount) * SHAPE_DEFS[chosenShape].hpMult;
-    const size = isBoss ? 60 : (20 * SHAPE_DEFS[chosenShape].sizeMult);
-    const minutes = gameTime / 60;
-    const baseHp = 50 * Math.pow(1.15, Math.floor(minutes));
-    const hp = (isBoss ? baseHp * 15 : baseHp) * hpMult;
-
-    const newEnemy: Enemy = {
-        id: Math.random(),
-        type: (isBoss ? 'boss' : chosenShape) as 'boss' | ShapeType,
-        x: spawnPos.x, y: spawnPos.y,
-        size,
-        hp,
-        maxHp: hp,
-        spd: 2.4 * SHAPE_DEFS[chosenShape].speedMult,
-        boss: isBoss,
-        bossType: isBoss ? Math.floor(Math.random() * 2) : 0,
-        bossAttackPattern: 0,
-        dead: false,
-        shape: chosenShape as ShapeType,
-        shellStage: 2,
-        palette: activeColors,
-        pulsePhase: 0,
-        rotationPhase: Math.random() * Math.PI * 2,
-        lastAttack: Date.now() + Math.random() * 2000,
-        timer: 0,
-        summonState: 0,
-        dodgeDir: Math.random() > 0.5 ? 1 : -1,
-        wobblePhase: isBoss ? Math.random() * Math.PI * 2 : 0,
-        jitterX: 0, jitterY: 0,
-        glitchPhase: 0, crackPhase: 0, particleOrbit: 0,
-        knockback: { x: 0, y: 0 },
-        isRare: false,
-        spawnedAt: state.gameTime
-    };
-
-    state.enemies.push(newEnemy);
-}
-
-export function spawnRareEnemy(state: GameState) {
-    const { player } = state;
-    // const { activeColors } = getProgressionParams(gameTime); // Not needed for fixed snitch
-
-    // Spawn near player or random valid
-    let spawnPos = { x: player.x, y: player.y };
-    let found = false;
-    const playerArena = getArenaIndex(player.x, player.y);
-
-    for (let i = 0; i < 10; i++) {
-        const a = Math.random() * 6.28;
-        const d = 1150 + Math.random() * 100;
-        const tx = player.x + Math.cos(a) * d;
-        const ty = player.y + Math.sin(a) * d;
-        if (isInMap(tx, ty) && getArenaIndex(tx, ty) === playerArena) {
-            spawnPos = { x: tx, y: ty };
-            found = true;
-            break;
-        }
-    }
-    if (!found) spawnPos = getRandomPositionInArena(playerArena);
-
-    const { x, y } = spawnPos;
-
-    // Always Snitch
-    // const isPentagon = false; 
-
-    // Scale HP based on time
-    // const baseHp = 50 * Math.pow(1.15, Math.floor(state.gameTime / 60));
-    // const hp = 1; 
-    // Original code: const hp = isPentagon ? ... : 1;
-    // So Snitch is 1 HP.
-
-    const rareEnemy: Enemy = {
-        id: Math.random(),
-        type: 'snitch',
-        x, y,
-        hp: 1,
-        maxHp: 1,
-        spd: player.speed * 0.8,
-        boss: false, bossType: 0, bossAttackPattern: 0, lastAttack: 0, dead: false,
-        shape: 'snitch',
-        shellStage: 2,
-        palette: ['#FACC15', '#EAB308', '#CA8A04'],
-        pulsePhase: 0, rotationPhase: 0, timer: Date.now(),
-        isRare: true, size: 18,
-        rarePhase: 0, rareTimer: state.gameTime, rareIntent: 0, rareReal: true, canBlock: false,
-        trails: [], longTrail: [{ x, y }], wobblePhase: 0,
-        knockback: { x: 0, y: 0 },
-        glitchPhase: 0, crackPhase: 0, particleOrbit: 0,
-        spawnedAt: state.gameTime
-    };
-
-    state.enemies.push(rareEnemy);
-    playSfx('rare-spawn');
-    state.rareSpawnActive = true;
-}
-
-function manageRareSpawnCycles(state: GameState) {
-    const { gameTime, rareSpawnCycle, rareSpawnActive } = state;
-    if (rareSpawnActive) return;
-
-    const nextSpawnTime = 60 + (rareSpawnCycle * 120);
-
-    if (gameTime >= nextSpawnTime) {
-        spawnRareEnemy(state);
-        state.rareSpawnCycle++;
-    }
-}
-
-// Updated signature to support Strong Minions
-
-export function spawnShield(state: GameState, x: number, y: number) {
-    const shield: Enemy = {
-        id: Math.random(),
-        type: 'square', // Acts as a block
-        x, y,
-        size: 15,
-        hp: 1, // Single hit destruction
-        maxHp: 1,
-        spd: 0, // Stationary
-        boss: false, bossType: 0, bossAttackPattern: 0, lastAttack: 0, dead: false,
-        shape: 'square',
-        shellStage: 0,
-        palette: ['#475569', '#334155', '#1e293b'], // Slate
-        pulsePhase: 0,
-        rotationPhase: Math.random() * 6.28,
-        spawnedAt: state.gameTime,
-        knockback: { x: 0, y: 0 },
-        isRare: false,
-        isNeutral: true // Tag as neutral for auto-aim (ignored)
-    };
-    state.enemies.push(shield);
-}
-
-function scanForMerges(state: GameState) {
-    const { enemies, spatialGrid } = state;
-    for (const e of enemies) {
-        if (e.dead || e.boss || e.isElite || e.isRare || e.mergeState) continue;
-        if (e.mergeCooldown && state.gameTime < e.mergeCooldown) continue;
-        const neighbors = spatialGrid.query(e.x, e.y, 100);
-        const candidates = neighbors.filter(n =>
-            n.shape === e.shape && !n.dead && !n.boss && !n.isElite && !n.isRare && !n.mergeState && !n.isNeutral &&
-            n.shape !== 'minion' && (!n.mergeCooldown || state.gameTime >= n.mergeCooldown)
-        );
-        const threshold = e.shape === 'pentagon' ? 5 : 10;
-        if (candidates.length >= threshold) {
-            const cluster = candidates.slice(0, threshold);
-            const mergeId = `merge_${Math.random()}`;
-            cluster.forEach((c, index) => {
-                c.mergeState = 'warming_up';
-                c.mergeId = mergeId;
-                c.mergeTimer = state.gameTime + 3;
-                c.mergeHost = index === 0;
-                c.mergeCooldown = undefined;
-            });
-            playSfx('merge-start');
-            return;
-        }
-    }
-}
-
-function manageMerges(state: GameState) {
-    const { enemies } = state;
-    const mergeGroups = new Map<string, Enemy[]>();
-    enemies.forEach(e => {
-        if (e.mergeState === 'warming_up' && e.mergeId && !e.dead) {
-            if (!mergeGroups.has(e.mergeId)) mergeGroups.set(e.mergeId, []);
-            mergeGroups.get(e.mergeId)!.push(e);
-        }
-    });
-
-    mergeGroups.forEach((group, mergeId) => {
-        const aliveEnemies = group.filter(e => !e.dead && e.hp > 0);
-        const sample = group[0];
-        const threshold = (sample && sample.shape === 'pentagon') ? 5 : 10;
-
-        if (aliveEnemies.length < threshold) {
-            const firstAlive = aliveEnemies[0];
-            if (firstAlive) {
-                const nearby = state.spatialGrid.query(firstAlive.x, firstAlive.y, 100);
-                const recruits = nearby.filter(n =>
-                    n.shape === firstAlive.shape && !n.dead && !n.boss && !n.isElite && !n.isRare && !n.mergeState
-                ).slice(0, threshold - aliveEnemies.length);
-                recruits.forEach((r) => {
-                    r.mergeState = 'warming_up';
-                    r.mergeId = mergeId;
-                    r.mergeTimer = firstAlive.mergeTimer;
-                    r.mergeHost = false;
-                    r.mergeCooldown = undefined;
-                });
-                aliveEnemies.push(...recruits);
-            }
-            if (aliveEnemies.length < threshold) {
-                group.forEach(e => {
-                    e.mergeState = 'none'; e.mergeTimer = 0; e.mergeId = undefined;
-                    e.mergeHost = false; e.mergeCooldown = state.gameTime + 2;
-                });
-                return;
-            }
-        }
-
-        const first = aliveEnemies[0];
-        if (state.gameTime >= (first.mergeTimer || 0)) {
-            const host = aliveEnemies.find(e => e.mergeHost);
-            if (!host) return;
-            host.mergeState = 'none'; host.isElite = true; host.eliteState = 0;
-            host.spawnedAt = state.gameTime;
-            host.lastAttack = Date.now() + 3000;
-            host.size *= 1.2;
-            const mult = host.shape === 'pentagon' ? 6 : 12;
-            host.hp *= mult; host.maxHp *= mult; host.hp = host.maxHp;
-            host.xpRewardMult = mult;
-            aliveEnemies.forEach(e => {
-                if (e !== host) { e.dead = true; e.hp = 0; }
-            });
-            playSfx('merge-complete');
-        }
-    });
-}

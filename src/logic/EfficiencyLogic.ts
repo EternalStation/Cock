@@ -15,104 +15,106 @@ export function calculateMeteoriteEfficiency(state: GameState, meteoriteIdx: num
     const neighbors = getMeteoriteNeighbors(state, meteoriteIdx);
     const hexConnections = getMeteoriteHexConnections(state, meteoriteIdx);
 
-    meteorite.perks.forEach(perk => {
-        let count = 0;
-        switch (perk.id) {
-            case 'base_efficiency':
-                count = 1; // Always active
-                break;
-            case 'matrix_same_type_rarity':
-                const currentMet = state.moduleSockets.diamonds[meteoriteIdx];
-                if (currentMet) {
-                    count = state.moduleSockets.diamonds.filter(m =>
-                        m && m.id !== currentMet.id && // Don't count self? "per each meteorite... placed in matrix" usually implies others or all? 
-                        // "per each" might mean total count including self or excluding? 
-                        // Usually "per neighbor" excludes self. "per each in matrix" implies total count.
-                        // If I have 3 same types, do I get 3x boost?
-                        // Let's assume inclusive or exclusive? 
-                        // "Efficiency per each... THAT IS PLACED". 
-                        // If I am one of them, I am placed.
-                        // Let's count *other* matching ones to avoid specific self-loop double dipping issues, or just count all-1?
-                        // Let's count ALL matching ones including self? No, that scales quadratically. 
-                        // Let's count ALL matching ones.
-                        m.rarity === currentMet.rarity &&
-                        m.discoveredIn === currentMet.discoveredIn
-                    ).length;
-                }
-                break;
-            case 'neighbor_any_all':
-                count = neighbors.meteorites.length;
-                break;
-            case 'neighbor_any_eco':
-                count = neighbors.meteorites.filter(m => m.discoveredIn === 'ECONOMIC HEX').length;
-                break;
-            case 'neighbor_any_com':
-                count = neighbors.meteorites.filter(m => m.discoveredIn === 'COMBAT HEX').length;
-                break;
-            case 'neighbor_any_def':
-                count = neighbors.meteorites.filter(m => m.discoveredIn === 'DEFENCE HEX').length;
-                break;
-            case 'neighbor_new_eco':
-                count = neighbors.meteorites.filter(m => m.discoveredIn === 'ECONOMIC HEX' && m.quality === 'New').length;
-                break;
-            case 'neighbor_dam_eco':
-                count = neighbors.meteorites.filter(m => m.discoveredIn === 'ECONOMIC HEX' && m.quality === 'Damaged').length;
-                break;
-            case 'neighbor_bro_eco':
-                count = neighbors.meteorites.filter(m => m.discoveredIn === 'ECONOMIC HEX' && m.quality === 'Broken').length;
-                break;
-            case 'neighbor_new_com':
-                count = neighbors.meteorites.filter(m => m.discoveredIn === 'COMBAT HEX' && m.quality === 'New').length;
-                break;
-            case 'neighbor_dam_com':
-                count = neighbors.meteorites.filter(m => m.discoveredIn === 'COMBAT HEX' && m.quality === 'Damaged').length;
-                break;
-            case 'neighbor_bro_com':
-                count = neighbors.meteorites.filter(m => m.discoveredIn === 'COMBAT HEX' && m.quality === 'Broken').length;
-                break;
-            case 'neighbor_new_def':
-                count = neighbors.meteorites.filter(m => m.discoveredIn === 'DEFENCE HEX' && m.quality === 'New').length;
-                break;
-            case 'neighbor_dam_def':
-                count = neighbors.meteorites.filter(m => m.discoveredIn === 'DEFENCE HEX' && m.quality === 'Damaged').length;
-                break;
-            case 'neighbor_bro_def':
-                count = neighbors.meteorites.filter(m => m.discoveredIn === 'DEFENCE HEX' && m.quality === 'Broken').length;
-                break;
-            case 'neighbor_leg_any':
-                count = hexConnections.length;
-                break;
-            case 'neighbor_leg_eco':
-                count = hexConnections.filter(h => h.category === 'Economic').length;
-                break;
-            case 'neighbor_leg_com':
-                count = hexConnections.filter(h => h.category === 'Combat').length;
-                break;
-            case 'neighbor_leg_def':
-                count = hexConnections.filter(h => h.category === 'Defensive').length;
-                break;
-            case 'pair_eco_eco':
-            case 'pair_eco_com':
-            case 'pair_eco_def':
-            case 'pair_com_com':
-            case 'pair_com_def':
-            case 'pair_def_def':
-                count = calculatePairBonus(hexConnections, perk.id, 1, false);
-                break;
-            case 'pair_eco_eco_lvl':
-            case 'pair_eco_com_lvl':
-            case 'pair_eco_def_lvl':
-            case 'pair_com_com_lvl':
-            case 'pair_com_def_lvl':
-            case 'pair_def_def_lvl':
-                count = calculatePairBonus(hexConnections, perk.id, 1, true);
-                break;
-        }
+    if (meteorite.perks) {
+        meteorite.perks.forEach(perk => {
+            let count = 0;
+            switch (perk.id) {
+                case 'base_efficiency':
+                    count = 1; // Always active
+                    break;
+                case 'matrix_same_type_rarity':
+                    const currentMet = state.moduleSockets.diamonds[meteoriteIdx];
+                    if (currentMet) {
+                        count = state.moduleSockets.diamonds.filter(m =>
+                            m && m.id !== currentMet.id && // Don't count self? "per each meteorite... placed in matrix" usually implies others or all? 
+                            // "per each" might mean total count including self or excluding? 
+                            // Usually "per neighbor" excludes self. "per each in matrix" implies total count.
+                            // If I have 3 same types, do I get 3x boost?
+                            // Let's assume inclusive or exclusive? 
+                            // "Efficiency per each... THAT IS PLACED". 
+                            // If I am one of them, I am placed.
+                            // Let's count *other* matching ones to avoid specific self-loop double dipping issues, or just count all-1?
+                            // Let's count ALL matching ones including self? No, that scales quadratically. 
+                            // Let's count ALL matching ones.
+                            m.rarity === currentMet.rarity &&
+                            m.discoveredIn === currentMet.discoveredIn
+                        ).length;
+                    }
+                    break;
+                case 'neighbor_any_all':
+                    count = neighbors.meteorites.length;
+                    break;
+                case 'neighbor_any_eco':
+                    count = neighbors.meteorites.filter(m => m.discoveredIn === 'ECONOMIC HEX').length;
+                    break;
+                case 'neighbor_any_com':
+                    count = neighbors.meteorites.filter(m => m.discoveredIn === 'COMBAT HEX').length;
+                    break;
+                case 'neighbor_any_def':
+                    count = neighbors.meteorites.filter(m => m.discoveredIn === 'DEFENCE HEX').length;
+                    break;
+                case 'neighbor_new_eco':
+                    count = neighbors.meteorites.filter(m => m.discoveredIn === 'ECONOMIC HEX' && m.quality === 'New').length;
+                    break;
+                case 'neighbor_dam_eco':
+                    count = neighbors.meteorites.filter(m => m.discoveredIn === 'ECONOMIC HEX' && m.quality === 'Damaged').length;
+                    break;
+                case 'neighbor_bro_eco':
+                    count = neighbors.meteorites.filter(m => m.discoveredIn === 'ECONOMIC HEX' && m.quality === 'Broken').length;
+                    break;
+                case 'neighbor_new_com':
+                    count = neighbors.meteorites.filter(m => m.discoveredIn === 'COMBAT HEX' && m.quality === 'New').length;
+                    break;
+                case 'neighbor_dam_com':
+                    count = neighbors.meteorites.filter(m => m.discoveredIn === 'COMBAT HEX' && m.quality === 'Damaged').length;
+                    break;
+                case 'neighbor_bro_com':
+                    count = neighbors.meteorites.filter(m => m.discoveredIn === 'COMBAT HEX' && m.quality === 'Broken').length;
+                    break;
+                case 'neighbor_new_def':
+                    count = neighbors.meteorites.filter(m => m.discoveredIn === 'DEFENCE HEX' && m.quality === 'New').length;
+                    break;
+                case 'neighbor_dam_def':
+                    count = neighbors.meteorites.filter(m => m.discoveredIn === 'DEFENCE HEX' && m.quality === 'Damaged').length;
+                    break;
+                case 'neighbor_bro_def':
+                    count = neighbors.meteorites.filter(m => m.discoveredIn === 'DEFENCE HEX' && m.quality === 'Broken').length;
+                    break;
+                case 'neighbor_leg_any':
+                    count = hexConnections.length;
+                    break;
+                case 'neighbor_leg_eco':
+                    count = hexConnections.filter(h => h.category === 'Economic').length;
+                    break;
+                case 'neighbor_leg_com':
+                    count = hexConnections.filter(h => h.category === 'Combat').length;
+                    break;
+                case 'neighbor_leg_def':
+                    count = hexConnections.filter(h => h.category === 'Defensive').length;
+                    break;
+                case 'pair_eco_eco':
+                case 'pair_eco_com':
+                case 'pair_eco_def':
+                case 'pair_com_com':
+                case 'pair_com_def':
+                case 'pair_def_def':
+                    count = calculatePairBonus(hexConnections, perk.id, 1, false);
+                    break;
+                case 'pair_eco_eco_lvl':
+                case 'pair_eco_com_lvl':
+                case 'pair_eco_def_lvl':
+                case 'pair_com_com_lvl':
+                case 'pair_com_def_lvl':
+                case 'pair_def_def_lvl':
+                    count = calculatePairBonus(hexConnections, perk.id, 1, true);
+                    break;
+            }
 
-        const activeValue = count * perk.value;
-        totalActiveBoostPct += activeValue;
-        perkResults[perk.id] = { activeValue, count };
-    });
+            const activeValue = count * perk.value;
+            totalActiveBoostPct += activeValue;
+            perkResults[perk.id] = { activeValue, count };
+        });
+    }
 
     return { totalBoost: totalActiveBoostPct / 100, perkResults };
 }
