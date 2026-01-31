@@ -304,12 +304,15 @@ export function useGameLoop(gameStarted: boolean) {
                         const dist = Math.hypot(e.x - effect.x, e.y - effect.y);
                         if (dist < range) {
                             e.hp -= dmg;
-                            spawnFloatingNumber(state, e.x, e.y, Math.round(dmg).toString(), '#0ea5e9', false);
+                            // OPTIMIZATION: Reduce visual clutter slightly to prevent lag with many enemies
+                            if (Math.random() < 0.25) {
+                                spawnFloatingNumber(state, e.x, e.y, Math.round(dmg).toString(), '#0ea5e9', false);
+                            }
 
                             // Tiny red/orange particle bursts on spike hits
-                            if (Math.random() < 0.4) {
+                            if (Math.random() < 0.1) {
                                 const particleColor = Math.random() > 0.5 ? '#ef4444' : '#f97316';
-                                spawnParticles(state, e.x, e.y, particleColor, 3, 2, 20, 'spark');
+                                spawnParticles(state, e.x, e.y, particleColor, 2, 2, 20, 'spark');
                             }
                         }
                     });
