@@ -1,46 +1,46 @@
-export const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+import {
+    audioCtx,
+    getMusicVolume,
+    getSfxVolume,
+    setMusicVolume as setBaseMusicVolume,
+    setSfxVolume as setBaseSfxVolume,
+    getSfxGain,
+    initMasterGains,
+    masterMusicGain
+} from './AudioBase';
+import { loadSfxAssets } from './SfxLogic';
+
+export { audioCtx, getMusicVolume, getSfxVolume, getSfxGain };
 
 // Audio State
 let isBgmPlaying = false;
-
-// Master Gains
-let masterMusicGain: GainNode | null = null;
-let masterSfxGain: GainNode | null = null;
-let musicVolume = 0.5;
-let sfxVolume = 0.5;
-let savedMusicVolume = 0.5; // For restoring after ducking
-
-export const getMusicVolume = () => musicVolume;
-export const getSfxVolume = () => sfxVolume;
+let savedMusicVolume = 0.425; // For restoring after ducking
 
 // Simple BGM System - Single looping track
 let bgmBuffer: AudioBuffer | null = null;
 let bgmSource: AudioBufferSourceNode | null = null;
 let bgmGain: GainNode | null = null;
 
-// Shoot System
-let shootBuffer: AudioBuffer | null = null;
-
 // Boss Ambience System
 let bossAmbienceOsc: OscillatorNode | null = null;
 let bossAmbienceGain: GainNode | null = null;
 let isBossAmbiencePlaying = false;
 
-
 export function setMusicVolume(vol: number) {
-    musicVolume = Math.max(0, Math.min(1, vol));
-    savedMusicVolume = musicVolume;
+    setBaseMusicVolume(vol);
+    savedMusicVolume = vol;
     if (bgmGain) {
-        bgmGain.gain.setValueAtTime(musicVolume, audioCtx.currentTime);
-    }
-    if (masterMusicGain) {
-        masterMusicGain.gain.setValueAtTime(musicVolume, audioCtx.currentTime);
+        bgmGain.gain.setValueAtTime(vol, audioCtx.currentTime);
     }
 }
 
-// Duck volume to 70% for stats menu
+export function setSfxVolume(vol: number) {
+    setBaseSfxVolume(vol);
+}
+
+// Duck volume by 15% for stats menu / matrix
 export function duckMusic() {
-    const duckedVolume = savedMusicVolume * 0.7;
+    const duckedVolume = savedMusicVolume * 0.85; // 15% reduction
     if (bgmGain) {
         bgmGain.gain.linearRampToValueAtTime(duckedVolume, audioCtx.currentTime + 0.1);
     }
@@ -67,58 +67,55 @@ export function resumeMusic() {
     }
 }
 
-export function setSfxVolume(vol: number) {
-    sfxVolume = Math.max(0, Math.min(1, vol));
-    if (masterSfxGain) {
-        masterSfxGain.gain.setValueAtTime(sfxVolume, audioCtx.currentTime);
-    }
-}
-
-export async function startBGM() {
+export async function startBGM(arenaId: number = 0) {
     if (isBgmPlaying) return;
     if (audioCtx.state === 'suspended') {
         await audioCtx.resume().catch(() => { });
     }
 
     // Init Master Gains if needed
-    if (!masterMusicGain) {
-        masterMusicGain = audioCtx.createGain();
-        masterMusicGain.gain.value = musicVolume;
-        masterMusicGain.connect(audioCtx.destination);
-    }
-
-    if (!masterSfxGain) {
-        masterSfxGain = audioCtx.createGain();
-        masterSfxGain.gain.value = sfxVolume;
-        masterSfxGain.connect(audioCtx.destination);
-    }
+    initMasterGains();
 
     isBgmPlaying = true;
+    await switchBGM(arenaId);
 
-    // Load background music
-    if (!bgmBuffer) {
-        try {
-            const response = await fetch('/Background.mp3');
-            const arrayBuffer = await response.arrayBuffer();
-            bgmBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-        } catch (e) {
-            console.error("Failed to load BGM:", e);
+    // Load SFX Assets
+    await loadSfxAssets();
+}
+
+const BGM_TRACKS: Record<number, string> = {
+    0: '/audio/EconomicArenaBackground.mp3',
+    1: '/audio/CombatArenaBackground.mp3',
+    2: '/audio/DefensiveArenaBackgound.mp3'
+};
+
+let currentTrackId: number | null = null;
+
+export async function switchBGM(arenaId: number) {
+    if (currentTrackId === arenaId && bgmSource) return;
+
+    if (bgmSource) {
+        // Fade out
+        const fadeOutTime = 0.5;
+        if (bgmGain) {
+            bgmGain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + fadeOutTime);
         }
+        const oldSource = bgmSource;
+        setTimeout(() => {
+            try { oldSource.stop(); } catch (e) { }
+        }, fadeOutTime * 1000 + 100);
     }
 
-    if (bgmBuffer) {
+    currentTrackId = arenaId;
+    const trackUrl = BGM_TRACKS[arenaId] || BGM_TRACKS[0];
+
+    try {
+        const response = await fetch(trackUrl);
+        const arrayBuffer = await response.arrayBuffer();
+        bgmBuffer = await audioCtx.decodeAudioData(arrayBuffer);
         playBgmLoop();
-    }
-
-    // Load Shoot Ding
-    if (!shootBuffer) {
-        try {
-            const response = await fetch('/audio/pleasant_neon_ding.wav');
-            const arrayBuffer = await response.arrayBuffer();
-            shootBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-        } catch (e) {
-            console.error(`Failed to load shoot ding:`, e);
-        }
+    } catch (e) {
+        console.error(`Failed to load BGM track ${trackUrl}:`, e);
     }
 }
 
@@ -162,11 +159,7 @@ export function startBossAmbience() {
     }
 
     // Ensure SFX Gain exists
-    if (!masterSfxGain) {
-        masterSfxGain = audioCtx.createGain();
-        masterSfxGain.gain.value = sfxVolume;
-        masterSfxGain.connect(audioCtx.destination);
-    }
+    const masterSfxGainRef = getSfxGain();
 
     isBossAmbiencePlaying = true;
     const t = audioCtx.currentTime;
@@ -198,7 +191,7 @@ export function startBossAmbience() {
 
     bossAmbienceOsc.connect(filter);
     filter.connect(bossAmbienceGain);
-    bossAmbienceGain.connect(masterSfxGain);
+    bossAmbienceGain.connect(masterSfxGainRef);
 
     bossAmbienceOsc.start(t);
 }
@@ -221,7 +214,6 @@ export function stopBossAmbience() {
         if (oldOsc) {
             try { oldOsc.stop(); } catch (e) { }
         }
-        // Cleanup happens naturally via GC once stopped and disconnected
     }, 2100);
 
     bossAmbienceOsc = null;
@@ -239,11 +231,7 @@ export function startPortalAmbience() {
         audioCtx.resume().catch(() => { });
     }
 
-    if (!masterSfxGain) {
-        masterSfxGain = audioCtx.createGain();
-        masterSfxGain.gain.value = sfxVolume;
-        masterSfxGain.connect(audioCtx.destination);
-    }
+    const masterSfxGainRef = getSfxGain();
 
     isPortalAmbiencePlaying = true;
     const t = audioCtx.currentTime;
@@ -251,7 +239,7 @@ export function startPortalAmbience() {
     portalAmbienceGain = audioCtx.createGain();
     portalAmbienceGain.gain.value = 0;
     portalAmbienceGain.gain.linearRampToValueAtTime(0.2, t + 1.0); // Fade in
-    portalAmbienceGain.connect(masterSfxGain);
+    portalAmbienceGain.connect(masterSfxGainRef);
 
     // Shimmering Cluster (High Pitch)
     const freqs = [880, 1108, 1320, 1760]; // A5, C#6, E6, A6
@@ -297,449 +285,7 @@ export function stopPortalAmbience() {
     }, 600);
 }
 
-
-export function playShootDing() {
-    if (audioCtx.state === 'suspended') return;
-
-    const t = audioCtx.currentTime;
-
-    // "Cosmic Photon" - Sci-fi, laser-like, but smooth
-    // Lowered pitch variant (Octave down)
-
-    // 1. The Core Beam (Sine Sweep)
-    const osc1 = audioCtx.createOscillator();
-    const g1 = audioCtx.createGain();
-    osc1.type = 'sine';
-    // Start mid, drop low
-    osc1.frequency.setValueAtTime(750, t);
-    osc1.frequency.exponentialRampToValueAtTime(150, t + 0.15);
-
-    g1.gain.setValueAtTime(0, t);
-    g1.gain.linearRampToValueAtTime(sfxVolume * 0.25, t + 0.01);
-    g1.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
-
-    osc1.connect(g1);
-    g1.connect(masterSfxGain!);
-    osc1.start(t);
-    osc1.stop(t + 0.15);
-
-    // 2. The Energy Trail (Triangle Detune)
-    const osc2 = audioCtx.createOscillator();
-    const g2 = audioCtx.createGain();
-    osc2.type = 'triangle';
-    osc2.frequency.setValueAtTime(760, t); // Slight detune start
-    osc2.frequency.exponentialRampToValueAtTime(300, t + 0.2); // Slower drop
-
-    g2.gain.setValueAtTime(0, t);
-    g2.gain.linearRampToValueAtTime(sfxVolume * 0.15, t + 0.02);
-    g2.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
-
-    osc2.connect(g2);
-    g2.connect(masterSfxGain!);
-    osc2.start(t);
-    osc2.stop(t + 0.2);
-}
-
-export async function playUpgradeSfx(rarityId: string) {
-    if (audioCtx.state === 'suspended') await audioCtx.resume();
-
-    if (!masterSfxGain) {
-        masterSfxGain = audioCtx.createGain();
-        masterSfxGain.gain.value = sfxVolume;
-        masterSfxGain.connect(audioCtx.destination);
-    }
-
-    console.log(`[Audio] Selection SFX: ${rarityId} (Context: ${audioCtx.state})`);
-    const t = audioCtx.currentTime + 0.05; // 50ms scheduling buffer
-    const tone = (freq: number, type: OscillatorType, dur: number, vol: number, startTime: number) => {
-        const osc = audioCtx.createOscillator();
-        const g = audioCtx.createGain();
-        osc.type = type;
-        osc.frequency.setValueAtTime(freq, startTime);
-        g.gain.setValueAtTime(vol, startTime);
-        g.gain.exponentialRampToValueAtTime(0.001, startTime + dur);
-        osc.connect(g); g.connect(masterSfxGain!);
-        osc.start(startTime); osc.stop(startTime + dur);
-    };
-
-    // Rarity frequency map
-    const rarityMap: Record<string, number> = {
-        'junk': 110,
-        'broken': 146.83,
-        'common': 220,
-        'uncommon': 293.66,
-        'rare': 440,
-        'epic': 587.33,
-        'legendary': 880,
-        'mythical': 1174.66,
-        'ancient': 1760,
-        'divine': 220 // Base for divine chord
-    };
-
-    const baseFreq = rarityMap[rarityId] || 440;
-
-    if (rarityId === 'divine') {
-        // Massive Divine Impact
-        const chord = [55, 110, 220, 330, 440, 554, 659, 880, 1320]; // Rich A major stack
-        chord.forEach((f, i) => {
-            const osc = audioCtx.createOscillator();
-            const g = audioCtx.createGain();
-            const filter = audioCtx.createBiquadFilter();
-
-            osc.type = i < 3 ? 'sawtooth' : 'sine';
-            osc.frequency.setValueAtTime(f, t);
-
-            filter.type = 'lowpass';
-            filter.frequency.setValueAtTime(2000, t);
-            filter.frequency.exponentialRampToValueAtTime(100, t + 2.0);
-
-            g.gain.setValueAtTime(0, t);
-            g.gain.linearRampToValueAtTime(0.2, t + 0.1);
-            g.gain.exponentialRampToValueAtTime(0.001, t + 3.0);
-
-            osc.connect(filter);
-            filter.connect(g);
-            g.connect(masterSfxGain!);
-            osc.start(t);
-            osc.stop(t + 4.0);
-        });
-
-        // Divine "Aaaa" Choir Formants stack
-        [600, 1040, 2250, 2450].forEach(f => {
-            const osc = audioCtx.createOscillator();
-            const filter = audioCtx.createBiquadFilter();
-            const g = audioCtx.createGain();
-            osc.type = 'sawtooth';
-            osc.frequency.setValueAtTime(220 + Math.random() * 2, t);
-            filter.type = 'bandpass';
-            filter.frequency.setValueAtTime(f, t);
-            filter.Q.value = 10;
-            g.gain.setValueAtTime(0, t);
-            g.gain.linearRampToValueAtTime(0.1, t + 0.5);
-            g.gain.exponentialRampToValueAtTime(0.001, t + 3.0);
-            osc.connect(filter); filter.connect(g); g.connect(masterSfxGain!);
-            osc.start(t); osc.stop(t + 3.5);
-        });
-
-    } else {
-        // Universal Indexed Pluck
-        const isLow = ['junk', 'broken', 'common'].includes(rarityId);
-        const type = isLow ? 'sawtooth' : 'triangle';
-        const decay = isLow ? 0.4 : 1.0;
-        const volume = isLow ? 0.15 : 0.25;
-
-        // Main Pluck
-        tone(baseFreq, type, decay, volume, t);
-
-        // Harmonic / Octave
-        if (!isLow) {
-            tone(baseFreq * 2, 'sine', decay * 1.5, volume * 0.5, t + 0.05);
-            tone(baseFreq * 1.5, 'sine', decay * 1.2, volume * 0.3, t + 0.1);
-        } else {
-            // "Dirty" subtle noise for junk/broken
-            tone(baseFreq * 0.5, 'sawtooth', 0.2, 0.05, t);
-        }
-    }
-}
-
-export function playSfx(type: 'shoot' | 'hit' | 'level' | 'hurt' | 'boss-fire' | 'rare-spawn' | 'rare-kill' | 'rare-despawn' | 'spawn' | 'smoke-puff' | 'wall-shock' | 'merge-start' | 'merge-complete' | 'stun-disrupt' | 'warning') {
-    if (audioCtx.state === 'suspended') {
-        audioCtx.resume().catch(() => { });
-        return;
-    }
-    // Ensure SFX Gain exists
-    if (!masterSfxGain) {
-        masterSfxGain = audioCtx.createGain();
-        masterSfxGain.gain.value = sfxVolume;
-        masterSfxGain.connect(audioCtx.destination);
-    }
-
-    const t = audioCtx.currentTime;
-    const osc = audioCtx.createOscillator();
-    const g = audioCtx.createGain();
-    osc.connect(g);
-    g.connect(masterSfxGain);
-
-    if (type === 'shoot') {
-        playShootDing();
-        return;
-    }
-    else if (type === 'hit') {
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(200, t);
-        osc.frequency.exponentialRampToValueAtTime(10, t + 0.1);
-        g.gain.setValueAtTime(0.08, t);
-        g.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
-        osc.start(t);
-        osc.stop(t + 0.1);
-    }
-    else if (type === 'hurt') {
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(100, t);
-        osc.frequency.linearRampToValueAtTime(50, t + 0.2);
-        g.gain.setValueAtTime(0.15, t);
-        g.gain.linearRampToValueAtTime(0, t + 0.2);
-        osc.start(t);
-        osc.stop(t + 0.2);
-    }
-    else if (type === 'boss-fire') {
-        osc.type = 'square';
-        osc.frequency.setValueAtTime(150, t);
-        osc.frequency.linearRampToValueAtTime(50, t + 0.5);
-        g.gain.setValueAtTime(0.1, t);
-        osc.start(t);
-        osc.stop(t + 0.5);
-    }
-    else if (type === 'level') {
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(440, t);
-        osc.frequency.linearRampToValueAtTime(880, t + 0.5);
-        g.gain.setValueAtTime(0.1, t);
-        osc.start(t);
-        osc.stop(t + 0.5);
-    }
-    else if (type === 'rare-spawn') {
-        // Alert Sound
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(600, t);
-        osc.frequency.linearRampToValueAtTime(800, t + 0.1);
-        osc.frequency.linearRampToValueAtTime(600, t + 0.2);
-        g.gain.setValueAtTime(0.15, t); // Increased by 50% from 0.1
-        g.gain.linearRampToValueAtTime(0, t + 0.3);
-        osc.start(t);
-        osc.stop(t + 0.3);
-    }
-    else if (type === 'rare-kill') {
-        // Jackpot Sound
-        osc.type = 'square';
-        osc.frequency.setValueAtTime(880, t);
-        osc.frequency.setValueAtTime(1100, t + 0.1);
-        osc.frequency.setValueAtTime(1320, t + 0.2);
-        g.gain.setValueAtTime(0.1, t);
-        g.gain.exponentialRampToValueAtTime(0.001, t + 0.6);
-        osc.start(t);
-        osc.stop(t + 0.6);
-    }
-    else if (type === 'rare-despawn') {
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(300, t);
-        osc.frequency.linearRampToValueAtTime(100, t + 0.5);
-        g.gain.setValueAtTime(0.1, t);
-        g.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
-        osc.start(t);
-        osc.stop(t + 0.5);
-    }
-    else if (type === 'spawn') {
-        // VOID Cosmic Collapse - "The Connection"
-        // Deep, heavy impact with a metallic snap
-
-        // 1. Deep Sub-Bass Swell (The Void Opening = 30-60Hz)
-        const osc1 = audioCtx.createOscillator();
-        const g1 = audioCtx.createGain();
-        osc1.type = 'sawtooth';
-        osc1.frequency.setValueAtTime(40, t);
-        osc1.frequency.linearRampToValueAtTime(60, t + 0.8); // Rising tension
-
-        g1.gain.setValueAtTime(0, t);
-        g1.gain.linearRampToValueAtTime(0.4, t + 0.2);
-        g1.gain.linearRampToValueAtTime(0, t + 1.0); // Cut before snap
-
-        osc1.connect(g1);
-        g1.connect(masterSfxGain);
-        osc1.start(t);
-        osc1.stop(t + 1.0);
-
-        // 2. High Ethereal Sweep (The Energy Gathering)
-        const osc2 = audioCtx.createOscillator();
-        const g2 = audioCtx.createGain();
-        const filter2 = audioCtx.createBiquadFilter();
-
-        osc2.type = 'square';
-        osc2.frequency.setValueAtTime(200, t);
-
-        filter2.type = 'lowpass';
-        filter2.frequency.setValueAtTime(200, t);
-        filter2.frequency.exponentialRampToValueAtTime(2000, t + 0.9); // Open filter
-        filter2.Q.value = 10; // Resonant peak
-
-        g2.gain.setValueAtTime(0, t);
-        g2.gain.linearRampToValueAtTime(0.08, t + 0.5);
-        g2.gain.linearRampToValueAtTime(0, t + 0.9);
-
-        osc2.connect(filter2);
-        filter2.connect(g2);
-        g2.connect(masterSfxGain);
-        osc2.start(t);
-        osc2.stop(t + 1.0);
-
-        // 3. The "Snap" (Connection Made)
-        // Sharp metallic connect sound at t + 0.9
-        const snapOsc = audioCtx.createOscillator();
-        const snapGain = audioCtx.createGain();
-        const snapFilter = audioCtx.createBiquadFilter();
-
-        snapOsc.type = 'sawtooth';
-        snapOsc.frequency.setValueAtTime(1200, t + 0.9);
-        snapOsc.frequency.exponentialRampToValueAtTime(100, t + 1.0); // Rapid drop
-
-        snapFilter.type = 'highpass';
-        snapFilter.frequency.value = 500; // Remove mud
-
-        snapGain.gain.setValueAtTime(0, t + 0.9);
-        snapGain.gain.linearRampToValueAtTime(0.3, t + 0.92);
-        snapGain.gain.exponentialRampToValueAtTime(0.001, t + 1.1);
-
-        snapOsc.connect(snapFilter);
-        snapFilter.connect(snapGain);
-        snapGain.connect(masterSfxGain);
-        snapOsc.start(t + 0.9);
-        snapOsc.stop(t + 1.2);
-    }
-    else if (type === 'smoke-puff') {
-        // White Noise Burst for Smoke Screen
-        // Using a buffer with random noise for simplicity if we want detailed texture
-        // But for quick synthesis, many short oscillators or just a filtered noise buffer
-        // Let's use a low pitched noise burst if possible, or a cluster of low Saws
-
-        // Simulating noise with rapid frequency modulation or just a cluster
-        const count = 5;
-        for (let i = 0; i < count; i++) {
-            const noiseOsc = audioCtx.createOscillator();
-            const noiseGain = audioCtx.createGain();
-            noiseOsc.type = 'sawtooth';
-            // Random low frequencies
-            noiseOsc.frequency.setValueAtTime(50 + Math.random() * 100, t);
-            noiseOsc.frequency.exponentialRampToValueAtTime(10, t + 0.5); // Pitch Drop
-
-            noiseGain.gain.setValueAtTime(0.05, t);
-            noiseGain.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
-
-            noiseOsc.connect(noiseGain);
-            noiseGain.connect(masterSfxGain);
-            noiseOsc.start(t);
-            noiseOsc.stop(t + 0.5);
-        }
-    }
-    else if (type === 'wall-shock') {
-        const t = audioCtx.currentTime;
-
-        // 1. Harsh Core (Dissonant Square Waves)
-        const osc1 = audioCtx.createOscillator();
-        const osc2 = audioCtx.createOscillator();
-        const g = audioCtx.createGain();
-
-        osc1.type = 'square';
-        osc1.frequency.setValueAtTime(150, t); // Low base
-        osc1.frequency.exponentialRampToValueAtTime(40, t + 0.2);
-
-        osc2.type = 'sawtooth';
-        osc2.frequency.setValueAtTime(158, t); // Dissonant minor second
-        osc2.frequency.exponentialRampToValueAtTime(45, t + 0.2);
-
-        // 2. High Frequency "Frying" (Noise Burst)
-        const noiseCount = 10;
-        for (let i = 0; i < noiseCount; i++) {
-            const noise = audioCtx.createOscillator();
-            const ng = audioCtx.createGain();
-            noise.type = 'square';
-            noise.frequency.setValueAtTime(2000 + Math.random() * 3000, t);
-            ng.gain.setValueAtTime(0.08 * sfxVolume, t);
-            ng.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
-            noise.connect(ng);
-            ng.connect(masterSfxGain!);
-            noise.start(t);
-            noise.stop(t + 0.05);
-        }
-
-        g.gain.setValueAtTime(0, t);
-        g.gain.linearRampToValueAtTime(0.4 * sfxVolume, t + 0.01);
-        g.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
-
-        osc1.connect(g);
-        osc2.connect(g);
-        g.connect(masterSfxGain!);
-
-        osc1.start(t);
-        osc2.start(t);
-        osc1.stop(t + 0.3);
-        osc2.stop(t + 0.3);
-    }
-    else if (type === 'merge-start') {
-        const t = audioCtx.currentTime;
-        const osc = audioCtx.createOscillator();
-        const g = audioCtx.createGain();
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(100, t);
-        osc.frequency.linearRampToValueAtTime(150, t + 0.5);
-        g.gain.setValueAtTime(0, t);
-        g.gain.linearRampToValueAtTime(0.2, t + 0.1);
-        g.gain.linearRampToValueAtTime(0, t + 0.5);
-        osc.connect(g);
-        g.connect(masterSfxGain!);
-        osc.start(t);
-        osc.stop(t + 0.5);
-    }
-    else if (type === 'warning') {
-        const t = audioCtx.currentTime;
-        const count = 3;
-        for (let i = 0; i < count; i++) {
-            const osc = audioCtx.createOscillator();
-            const g = audioCtx.createGain();
-            const startT = t + i * 0.4;
-            osc.type = 'sine';
-            osc.frequency.setValueAtTime(880, startT);
-            osc.frequency.exponentialRampToValueAtTime(440, startT + 0.2);
-            g.gain.setValueAtTime(0, startT);
-            g.gain.linearRampToValueAtTime(0.3 * sfxVolume, startT + 0.05);
-            g.gain.linearRampToValueAtTime(0, startT + 0.3);
-            osc.connect(g);
-            g.connect(masterSfxGain!);
-            osc.start(startT);
-            osc.stop(startT + 0.3);
-        }
-    }
-    else if (type === 'merge-complete') {
-        const t = audioCtx.currentTime;
-        const osc = audioCtx.createOscillator();
-        const g = audioCtx.createGain();
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(220, t);
-        osc.frequency.exponentialRampToValueAtTime(880, t + 0.5);
-        g.gain.setValueAtTime(0.1, t);
-        g.gain.linearRampToValueAtTime(0, t + 0.6);
-        osc.connect(g);
-        g.connect(masterSfxGain!);
-        osc.start(t);
-        osc.stop(t + 0.6);
-    }
-    else if (type === 'stun-disrupt') {
-        // "Engine Disabled" - Electrical power down + static
-        const t = audioCtx.currentTime;
-
-        // 1. Power Down Sweep (Sine)
-        const osc1 = audioCtx.createOscillator();
-        const g1 = audioCtx.createGain();
-        osc1.type = 'sine';
-        osc1.frequency.setValueAtTime(800, t);
-        osc1.frequency.exponentialRampToValueAtTime(100, t + 0.5); // Rapid pitch drop
-        g1.gain.setValueAtTime(0.2, t);
-        g1.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
-        osc1.connect(g1); g1.connect(masterSfxGain!);
-        osc1.start(t); osc1.stop(t + 0.5);
-
-        // 2. Static Burst (Noise)
-        const count = 5;
-        for (let i = 0; i < count; i++) {
-            const noise = audioCtx.createOscillator();
-            const ng = audioCtx.createGain();
-            noise.type = 'sawtooth';
-            noise.frequency.setValueAtTime(50 + Math.random() * 200, t);
-            ng.gain.setValueAtTime(0.05, t);
-            ng.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
-            noise.connect(ng); ng.connect(masterSfxGain!);
-            noise.start(t); noise.stop(t + 0.3);
-        }
-    }
-}
+export { playShootDing, playUpgradeSfx, playSfx } from './SfxLogic';
+export type { SfxType } from './SfxLogic';
 
 export const startMenuMusic = startBGM;

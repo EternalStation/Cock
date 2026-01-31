@@ -3,9 +3,10 @@ import { isInMap, ARENA_CENTERS, PORTALS, getHexWallLine, ARENA_RADIUS } from '.
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from './constants';
 import { calcStat } from './MathUtils';
 import { playSfx } from './AudioLogic';
-import { calculateLegendaryBonus, getLegendaryOptions } from './LegendaryLogic';
-import { spawnParticles } from './ParticleLogic';
-import { trySpawnMeteorite } from './LootLogic';
+import { calculateLegendaryBonus } from './LegendaryLogic';
+import { handleEnemyDeath } from './DeathLogic';
+import { spawnFloatingNumber } from './ParticleLogic';
+
 
 export function updatePlayer(state: GameState, keys: Record<string, boolean>, onEvent?: (type: string, data?: any) => void, inputVector?: { x: number, y: number }) {
     const { player } = state;
@@ -26,7 +27,32 @@ export function updatePlayer(state: GameState, keys: Record<string, boolean>, on
 
     const isStunned = player.stunnedUntil && Date.now() < player.stunnedUntil;
 
-    if (!isStunned) {
+    // Movement Cancel Logic for Channeling (Epicenter)
+    if (player.immobilized && !isStunned) {
+        let tryingToMove = false;
+        if (keys['w'] || keys['keyw'] || keys['arrowup']) tryingToMove = true;
+        if (keys['s'] || keys['keys'] || keys['arrowdown']) tryingToMove = true;
+        if (keys['a'] || keys['keya'] || keys['arrowleft']) tryingToMove = true;
+        if (keys['d'] || keys['keyd'] || keys['arrowright']) tryingToMove = true;
+        if (inputVector && (Math.abs(inputVector.x) > 0.1 || Math.abs(inputVector.y) > 0.1)) tryingToMove = true;
+
+        if (tryingToMove) {
+            player.immobilized = false;
+            // Find and remove the epicenter area effect
+            const epiIdx = state.areaEffects.findIndex(ae => ae.type === 'epicenter');
+            if (epiIdx !== -1) {
+                state.areaEffects.splice(epiIdx, 1);
+            }
+            // Clear shield if any
+            if (player.buffs) player.buffs.epicenterShield = 0;
+
+            // Skill icon inactive
+            const skill = player.activeSkills.find(s => s.type === 'DefEpi');
+            if (skill) skill.inUse = false;
+        }
+    }
+
+    if (!isStunned && !player.immobilized) {
         if (keys['w'] || keys['keyw'] || keys['arrowup']) vy--;
         if (keys['s'] || keys['keys'] || keys['arrowdown']) vy++;
         if (keys['a'] || keys['keya'] || keys['arrowleft']) vx--;
@@ -103,9 +129,37 @@ export function updatePlayer(state: GameState, keys: Record<string, boolean>, on
             const maxHp = calcStat(player.hp);
             const rawWallDmg = maxHp * 0.10;
             const armor = calcStat(player.arm);
-            const wallDmg = Math.max(0, rawWallDmg - armor);
-            player.curHp -= wallDmg;
-            player.damageTaken += wallDmg;
+            // Wall damage reduction (Using the proper reduction formula)
+            // Formula in MathUtils: 0.95 * (armor / (armor + 5263))
+            const armRed = 1 - (0.95 * (armor / (armor + 5263)));
+            const wallDmg = rawWallDmg * armRed;
+
+            // Check Shield Chunks
+            let absorbed = 0;
+            if (player.shieldChunks && player.shieldChunks.length > 0) {
+                let rem = wallDmg;
+                for (const chunk of player.shieldChunks) {
+                    if (chunk.amount >= rem) {
+                        chunk.amount -= rem;
+                        absorbed += rem;
+                        rem = 0; break;
+                    } else {
+                        absorbed += chunk.amount;
+                        rem -= chunk.amount;
+                        chunk.amount = 0;
+                    }
+                }
+                player.shieldChunks = player.shieldChunks.filter(c => c.amount > 0);
+            }
+
+            const finalWallDmg = wallDmg - absorbed;
+            if (wallDmg > 0) {
+                if (finalWallDmg > 0) {
+                    player.curHp -= finalWallDmg;
+                    player.damageTaken += finalWallDmg;
+                }
+                spawnFloatingNumber(state, player.x, player.y, Math.round(wallDmg).toString(), '#ef4444', false);
+            }
             playSfx('wall-shock');
 
             if (onEvent) onEvent('player_hit', { dmg: wallDmg });
@@ -158,13 +212,18 @@ export function updatePlayer(state: GameState, keys: Record<string, boolean>, on
         regenAmount *= 1.2; // +20% Regen in Defence Hex
     }
 
+    if (player.buffs?.puddleRegen) {
+        maxHp *= 1.25; // +25% Max HP in Puddle (Lvl 3)
+        regenAmount *= 1.25; // +25% Regen in Puddle (Lvl 3)
+    }
+
     player.curHp = Math.min(maxHp, player.curHp + regenAmount);
 
     // Auto-Aim Logic (skip barrels - they're neutral)
     let nearest: Enemy | null = null;
     let minDist = 800;
     state.enemies.forEach((e: Enemy) => {
-        if (e.dead || e.isNeutral) return; // Skip dead enemies and neutral barrels
+        if (e.dead || e.isNeutral || e.isZombie) return; // Skip dead, neutral, and zombies
         const d = Math.hypot(e.x - player.x, e.y - player.y);
         if (d < minDist) {
             minDist = d;
@@ -181,7 +240,7 @@ export function updatePlayer(state: GameState, keys: Record<string, boolean>, on
 
     // --- ENEMY CONTACT DAMAGE & COLLISION ---
     state.enemies.forEach(e => {
-        if (e.dead || e.hp <= 0) return;
+        if (e.dead || e.hp <= 0 || e.isZombie) return;
 
         const dToE = Math.hypot(e.x - player.x, e.y - player.y);
         const contactDist = e.size + 15;
@@ -209,12 +268,49 @@ export function updatePlayer(state: GameState, keys: Record<string, boolean>, on
                 rawDmg *= 1.15; // +15% Collision Damage in Combat Hex
             }
 
-            const armor = calcStat(player.arm);
-            const finalDmg = Math.max(1, rawDmg - armor);
+            const armorValue = calcStat(player.arm);
+            const armRedMult = 1 - (0.95 * (armorValue / (armorValue + 5263)));
+
+            const colRedRaw = calculateLegendaryBonus(state, 'col_red_per_kill');
+            const colRed = Math.min(80, colRedRaw); // Cap at 80% reduction
+            const colRedMult = 1 - (colRed / 100);
+
+            // Apply Armor Reduction then % Perk Reduction
+            let reducedDmg = rawDmg * armRedMult * colRedMult;
+
+            // EPICENTER SHIELD: Invulnerability (Lvl 3)
+            if (player.buffs?.epicenterShield && player.buffs.epicenterShield > 0) {
+                reducedDmg = 0;
+            }
+
+            const finalDmg = Math.max(0, reducedDmg); // Allow 0 for shield
 
             if (finalDmg > 0) {
-                player.curHp -= finalDmg;
-                player.damageTaken += finalDmg;
+                // Check Shield Chunks
+                let absorbed = 0;
+                if (player.shieldChunks && player.shieldChunks.length > 0) {
+                    let rem = finalDmg;
+                    for (const chunk of player.shieldChunks) {
+                        if (chunk.amount >= rem) {
+                            chunk.amount -= rem;
+                            absorbed += rem;
+                            rem = 0; break;
+                        } else {
+                            absorbed += chunk.amount;
+                            rem -= chunk.amount;
+                            chunk.amount = 0;
+                        }
+                    }
+                    player.shieldChunks = player.shieldChunks.filter(c => c.amount > 0);
+                }
+                const actualDmg = finalDmg - absorbed;
+                if (finalDmg > 0) {
+                    if (actualDmg > 0) {
+                        player.curHp -= actualDmg;
+                        player.damageTaken += actualDmg;
+                    }
+                    spawnFloatingNumber(state, player.x, player.y, Math.round(finalDmg).toString(), '#ef4444', false);
+                }
             }
 
             // Stun Logic
@@ -222,9 +318,8 @@ export function updatePlayer(state: GameState, keys: Record<string, boolean>, on
                 const currentStunEnd = Math.max(Date.now(), player.stunnedUntil || 0);
                 player.stunnedUntil = currentStunEnd + 1000; // Stack 1 second
                 playSfx('stun-disrupt'); // "Engine Disabled" sound
-            } else {
-                playSfx('hit');
             }
+
 
             if (onEvent) onEvent('player_hit', { dmg: finalDmg });
 
@@ -234,70 +329,11 @@ export function updatePlayer(state: GameState, keys: Record<string, boolean>, on
 
             // Contact Death for ALL Enemies (only if not on cooldown)
             if (!e.lastCollisionDamage || now - e.lastCollisionDamage <= 10) {
-                e.dead = true;
-                e.hp = 0;
-                state.killCount++;
-                state.score += 1;
-
-                // Visual & Loot
-                spawnParticles(state, e.x, e.y, e.palette ? e.palette[0] : '#FFFFFF', 12);
-                trySpawnMeteorite(state, e.x, e.y);
-
-                // Boss Reward
-                if (e.boss) {
-                    state.legendaryOptions = getLegendaryOptions(state);
-                    state.showLegendarySelection = true;
-                    state.isPaused = true;
-                    playSfx('rare-spawn');
-                    if (onEvent) onEvent('boss_kill');
-                }
-
-                // Rare Reward
-                if (e.isRare && e.rareReal) {
-                    playSfx('rare-kill');
-                    state.rareRewardActive = true;
-                    state.rareSpawnActive = false;
-                    player.xp.current += player.xp.needed;
-                } else {
-                    // Standard XP Reward
-                    let xpBase = player.xp_per_kill.base;
-                    // Note: base is usually 40 + level scaling from somewhere else, or fixed here?
-                    // In StatsMenu it says 40 + level*3. Let's adhere to player.xp_per_kill values if possible or use the formula.
-                    // Actually, let's use the local logic but updated:
-
-                    if (e.xpRewardMult !== undefined) {
-                        xpBase *= e.xpRewardMult;
-                    } else if (e.isElite) {
-                        xpBase *= 12; // Elite = 12x XP
-                    }
-
-                    if (state.currentArena === 0) xpBase *= 1.15; // +15% XP in Economic Hex
-
-                    // Legendary XP Bonuses
-                    const hexFlat = calculateLegendaryBonus(state, 'xp_per_kill');
-                    const hexPct = calculateLegendaryBonus(state, 'xp_pct_per_kill');
-
-                    // Formula: (Base + Flat + HexFlat) * (1 + NormalMult) * (1 + HexMult)
-                    const totalFlat = xpBase + player.xp_per_kill.flat + hexFlat;
-                    const normalMult = 1 + (player.xp_per_kill.mult / 100);
-                    const hexMult = 1 + (hexPct / 100);
-
-                    const finalXp = totalFlat * normalMult * hexMult;
-
-                    player.xp.current += finalXp;
-                }
-
-                // Level Up Loop
-                while (player.xp.current >= player.xp.needed) {
-                    player.xp.current -= player.xp.needed;
-                    player.level++;
-                    player.xp.needed *= 1.10;
-                    if (onEvent) onEvent('level_up');
-                }
+                handleEnemyDeath(state, e, onEvent);
             }
 
             // Check Game Over
-            if (player.curHp <= 0) {
+            if (player.curHp <= 0 && !state.gameOver) {
                 state.gameOver = true;
                 if (onEvent) onEvent('game_over');
             }

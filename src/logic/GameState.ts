@@ -5,6 +5,7 @@ export const createInitialPlayer = (): Player => ({
     y: 0,
     size: 10,
     speed: 5.3,
+    dust: 0,
     hp: { base: 150, flat: 0, mult: 0 },
     curHp: 150,
     dmg: { base: 50, flat: 0, mult: 0 },
@@ -25,7 +26,8 @@ export const createInitialPlayer = (): Player => ({
     lastAngle: 0,
     targetAngle: 0,
     faceAngle: 0,
-    knockback: { x: 0, y: 0 }
+    knockback: { x: 0, y: 0 },
+    activeSkills: []
 });
 
 import { SpatialGrid } from './SpatialGrid';
@@ -35,8 +37,10 @@ export const createInitialGameState = (): GameState => ({
     enemies: [],
     bullets: [],
     enemyBullets: [],
+    floatingNumbers: [],
     drones: [],
     particles: [],
+    areaEffects: [],
     camera: { x: 0, y: 0 },
     score: 0,
     killCount: 0,
@@ -52,6 +56,7 @@ export const createInitialGameState = (): GameState => ({
     spawnTimer: 3.0, // 3 Second animation
     hasPlayedSpawnSound: false,
     bossPresence: 0,
+    critShake: 0,
     spatialGrid: new SpatialGrid(250), // 250px cells
 
     // Portal / Arena Defaults
@@ -63,6 +68,7 @@ export const createInitialGameState = (): GameState => ({
     nextArenaId: null,
 
     // Inventory Defaults
+    meteoriteDust: 0,
     meteorites: [],
     inventory: Array(30).fill(null),
 

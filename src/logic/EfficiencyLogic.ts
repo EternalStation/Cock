@@ -18,6 +18,28 @@ export function calculateMeteoriteEfficiency(state: GameState, meteoriteIdx: num
     meteorite.perks.forEach(perk => {
         let count = 0;
         switch (perk.id) {
+            case 'base_efficiency':
+                count = 1; // Always active
+                break;
+            case 'matrix_same_type_rarity':
+                const currentMet = state.moduleSockets.diamonds[meteoriteIdx];
+                if (currentMet) {
+                    count = state.moduleSockets.diamonds.filter(m =>
+                        m && m.id !== currentMet.id && // Don't count self? "per each meteorite... placed in matrix" usually implies others or all? 
+                        // "per each" might mean total count including self or excluding? 
+                        // Usually "per neighbor" excludes self. "per each in matrix" implies total count.
+                        // If I have 3 same types, do I get 3x boost?
+                        // Let's assume inclusive or exclusive? 
+                        // "Efficiency per each... THAT IS PLACED". 
+                        // If I am one of them, I am placed.
+                        // Let's count *other* matching ones to avoid specific self-loop double dipping issues, or just count all-1?
+                        // Let's count ALL matching ones including self? No, that scales quadratically. 
+                        // Let's count ALL matching ones.
+                        m.rarity === currentMet.rarity &&
+                        m.discoveredIn === currentMet.discoveredIn
+                    ).length;
+                }
+                break;
             case 'neighbor_any_all':
                 count = neighbors.meteorites.length;
                 break;

@@ -17,7 +17,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onStart }) => {
     // Handle ESC key to close blueprint
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.key === 'Escape' && showBlueprint) {
+            if ((e.key === 'Escape' || e.code.toLowerCase() === 'escape') && showBlueprint) {
                 setShowBlueprint(false);
             }
         };
@@ -162,9 +162,9 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onStart }) => {
                 )}
 
                 <div className="controls-hint-container">
-                    {/* WASD - Movement & Scroll */}
+                    {/* WASD / ARROWS - Movement & Scroll */}
                     <div className="control-group">
-                        <div className="keys-visual">
+                        <div className="keys-visual" style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
                             <div className="key-group">
                                 <div className="key-row">
                                     <div className="key-box">W</div>
@@ -173,6 +173,17 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onStart }) => {
                                     <div className="key-box">A</div>
                                     <div className="key-box">S</div>
                                     <div className="key-box">D</div>
+                                </div>
+                            </div>
+                            <span style={{ color: '#1e293b', fontWeight: 900 }}>/</span>
+                            <div className="key-group">
+                                <div className="key-row">
+                                    <div className="key-box">↑</div>
+                                </div>
+                                <div className="key-row">
+                                    <div className="key-box">←</div>
+                                    <div className="key-box">↓</div>
+                                    <div className="key-box">→</div>
                                 </div>
                             </div>
                         </div>

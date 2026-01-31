@@ -72,9 +72,11 @@ export const HexTooltip: React.FC<HexTooltipProps> = ({ hex, gameState, hexIdx, 
                     <div style={{ fontSize: '11px', fontWeight: 900, color: '#fff', letterSpacing: '2px', textShadow: `0 0 10px ${color}` }}>
                         {hex.name.toUpperCase()}
                     </div>
-                    <div style={{ fontSize: '7px', color: '#94a3b8', marginTop: '2px', fontWeight: 900 }}>
-                        SOUL HARVEST: <span style={{ color: '#fff' }}>{kills}</span>
-                    </div>
+                    {hex.category === 'Economic' && (
+                        <div style={{ fontSize: '7px', color: '#94a3b8', marginTop: '2px', fontWeight: 900 }}>
+                            SOUL HARVEST: <span style={{ color: '#fff' }}>{kills}</span>
+                        </div>
+                    )}
                 </div>
                 <div className="hex-level-tag" style={{ background: color, color: '#111', fontSize: '10px', fontWeight: 900, padding: '2px 6px', borderRadius: '4px' }}>
                     LVL {hex.level}
@@ -100,25 +102,66 @@ export const HexTooltip: React.FC<HexTooltipProps> = ({ hex, gameState, hexIdx, 
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', background: 'rgba(0,0,0,0.3)', padding: '10px', borderRadius: '6px' }}>
                     {hex.perks && hex.perks.map((p, i) => {
-                        // Logic to extract base value from perk string (e.g. "+1 DMG per kill" -> 1)
-                        const baseMatch = p.match(/\+(\d+\.?\d*)/);
+                        const isEconomic = hex.category === 'Economic';
+                        const level = i + 1;
+                        const startKills = hex.killsAtLevel ? (hex.killsAtLevel[level] ?? hex.killsAtAcquisition) : hex.killsAtAcquisition;
+                        const levelKills = Math.max(0, gameState.killCount - startKills);
+
+                        // Logic to extract numeric value: +15%, 0.2, etc.
+                        const baseMatch = p.match(/(\d+\.?\d*)/);
                         const baseValue = baseMatch ? parseFloat(baseMatch[1]) : 0;
-                        const finalValue = baseValue * multiplier;
-                        const perkWords = p.split(' ');
-                        const statName = perkWords.slice(1).join(' ').replace('per kill', '').trim();
+                        const hasPercent = p.includes('%');
+
+                        let displayValue = "";
+                        let cleanLabel = p;
+                        let isNumeric = false;
+
+                        if (isEconomic) {
+                            // Economic logic: Base * Resonance * Souls
+                            const finalValuePerKill = baseValue * multiplier;
+                            const totalValue = finalValuePerKill * levelKills;
+                            displayValue = `+${totalValue.toFixed(2)}${hasPercent ? '%' : ''}`;
+                            isNumeric = p.includes('per kill');
+
+                            // Extract Label: "+0.2 DMG per kill" -> "DMG"
+                            cleanLabel = p.replace(/[+]\d+\.?\d*%?\s*/, '').replace('per kill', '').trim();
+                        } else {
+                            // Combat/Defense logic: Base * Resonance (if it has a number)
+                            if (baseValue > 0 && (hasPercent || p.includes('DMG') || p.includes('HP') || p.includes('Lifesteal') || p.includes('Crit'))) {
+                                const amplified = baseValue * multiplier;
+                                displayValue = `${hasPercent ? '+' : ''}${amplified.toFixed(1)}${hasPercent ? '%' : ''}`;
+                                isNumeric = true;
+
+                                // Extract Label: "+15% Lifesteal" -> "Lifesteal"
+                                cleanLabel = p.replace(/[+]\d+\.?\d*%?\s*/, '').trim();
+                            }
+                        }
 
                         return (
                             <div key={i} className="hex-stat-column" style={{ display: 'flex', flexDirection: 'column', gap: '2px', borderBottom: i < hex.perks!.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none', paddingBottom: '4px' }}>
-                                <div style={{ fontSize: '7px', color: color, fontWeight: 900, opacity: 0.8 }}>{statName.toUpperCase()}</div>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center', fontSize: '11px' }}>
-                                        <span style={{ color: '#fff', fontWeight: 900 }}>{baseValue}</span>
-                                        <span style={{ color: '#94a3b8', fontSize: '8px' }}>×</span>
-                                        <span style={{ color: color, fontWeight: 900 }}>{multiplier.toFixed(2)}</span>
+                                    <div style={{ fontSize: '7px', color: color, fontWeight: 900, opacity: 0.8, letterSpacing: '1px' }}>
+                                        {cleanLabel.toUpperCase()}
                                     </div>
-                                    <div style={{ fontSize: '12px', color: '#fff', fontWeight: 900, textShadow: `0 0 10px ${color}66` }}>
-                                        ={finalValue.toFixed(2)}
-                                    </div>
+                                    {isEconomic && isNumeric && (
+                                        <div style={{ fontSize: '7px', color: '#94a3b8', fontWeight: 900 }}>SOULS: <span style={{ color: '#fff' }}>{levelKills}</span></div>
+                                    )}
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    {isNumeric ? (
+                                        <>
+                                            <div style={{ display: 'flex', gap: '4px', alignItems: 'center', fontSize: '10px' }}>
+                                                <span style={{ color: '#fff', fontWeight: 900, opacity: 0.6 }}>{baseValue}{hasPercent ? '%' : ''}</span>
+                                                <span style={{ color: '#94a3b8', fontSize: '7px' }}>×</span>
+                                                <span style={{ color: color, fontWeight: 900 }}>{multiplier.toFixed(2)}</span>
+                                            </div>
+                                            <div style={{ fontSize: '12px', color: '#fff', fontWeight: 900, textShadow: `0 0 10px ${color}66` }}>
+                                                {displayValue}
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <div style={{ fontSize: '10px', color: '#fff', fontWeight: 900, lineHeight: '1.2' }}>{p}</div>
+                                    )}
                                 </div>
                             </div>
                         );

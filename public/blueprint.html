@@ -258,6 +258,7 @@
     <div class="tab-container">
         <button class="tab-button active" onclick="openTab('progression')">Game Mechanics</button>
         <button class="tab-button" onclick="openTab('rarity')">Rarity</button>
+        <button class="tab-button" onclick="openTab('legendary')">Legendary Upgrades</button>
         <button class="tab-button" onclick="openTab('enemies')">Enemy Intel</button>
         <button class="tab-button" onclick="openTab('elites')">Elite Database</button>
         <button class="tab-button" onclick="openTab('scaling')">Scaling & Colors</button>
@@ -307,7 +308,7 @@
             </tr>
             <tr>
                 <td>Health Regen</td>
-                <td>5</td>
+                <td>2.5</td>
             </tr>
             <tr>
                 <td>Regen (%)</td>
@@ -804,6 +805,125 @@
         </table>
     </div>
 
+    <!-- TAB: LEGENDARY UPGRADES -->
+    <div id="legendary" class="tab-content">
+        <h2>Legendary Hex Upgrades</h2>
+        <p>Powerful upgrades that socket into the Module Matrix. These persist and level up based on kills.</p>
+
+        <h3>Economic Class (Scales with Kills)</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 64px;">Icon</th>
+                    <th>Name</th>
+                    <th>Base Effect</th>
+                    <th>Level Bonuses</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><img src="/assets/hexes/EcoDMG.png" width="48" height="48" alt="EcoDMG"></td>
+                    <td><strong>STORM OF STEEL</strong><br><small>EcoDMG</small></td>
+                    <td>+1 DMG per kill</td>
+                    <td>
+                        <ul>
+                            <li>Lvl 1: +0.2 DMG per kill</li>
+                            <li>Lvl 2: +0.2 Attack Speed per kill</li>
+                            <li>Lvl 3: +0.2% DMG per kill</li>
+                            <li>Lvl 4: +0.2% Attack Speed per kill</li>
+                            <li>Lvl 5: MAX LEVEL (Mergeable)</li>
+                        </ul>
+                    </td>
+                </tr>
+                <tr>
+                    <td><img src="/assets/hexes/EcoXP.png" width="48" height="48" alt="EcoXP"></td>
+                    <td><strong>NEURAL HARVEST</strong><br><small>EcoXP</small></td>
+                    <td>+1 XP per kill</td>
+                    <td>
+                        <ul>
+                            <li>Lvl 1: +0.2 XP per kill</li>
+                            <li>Lvl 2: +0.2% Meteor Drop Chance per kill</li>
+                            <li>Lvl 3: +0.2% Rarity Boost per kill</li>
+                            <li>Lvl 4: +0.2% XP per kill</li>
+                            <li>Lvl 5: MAX LEVEL (Mergeable)</li>
+                        </ul>
+                    </td>
+                </tr>
+                <tr>
+                    <td><img src="/assets/hexes/EcoHP.png" width="48" height="48" alt="EcoHP"></td>
+                    <td><strong>ESSENCE SYPHON</strong><br><small>EcoHP</small></td>
+                    <td>+1 Max HP per kill</td>
+                    <td>
+                        <ul>
+                            <li>Lvl 1: +0.2 Max HP per kill</li>
+                            <li>Lvl 2: +0.2 HP Regen/sec per kill</li>
+                            <li>Lvl 3: +0.2% Max HP per kill</li>
+                            <li>Lvl 4: +0.2% HP Regen per kill</li>
+                            <li>Lvl 5: MAX LEVEL (Mergeable)</li>
+                        </ul>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h3>Combat Class (Active Effects)</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 64px;">Icon</th>
+                    <th>Name</th>
+                    <th>Base Effect</th>
+                    <th>Level Perks</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><img src="/assets/hexes/ComLife.png" width="48" height="48" alt="ComLife"></td>
+                    <td><strong>CRIMSON FEAST</strong><br><small>ComLife</small></td>
+                    <td>+15% Lifesteal</td>
+                    <td>
+                        <ul>
+                            <li>Lvl 1: +15% Lifesteal from projectiles</li>
+                            <li>Lvl 2: Overheal converts to Shield (200% eff, 3s duration)</li>
+                            <li>Lvl 3: Attacks deal +2% Enemy Max HP as bonus DMG</li>
+                            <li>Lvl 4: Necromancy: 10% Chance to spawn friendly Zombie on kill</li>
+                            <li>Lvl 5: MAX LEVEL (Mergeable)</li>
+                        </ul>
+                    </td>
+                </tr>
+                <tr>
+                    <td><img src="/assets/hexes/ComCrit.png" width="48" height="48" alt="ComCrit"></td>
+                    <td><strong>SHATTERED FATE</strong><br><small>ComCrit</small></td>
+                    <td>+15% Crit Chance</td>
+                    <td>
+                        <ul>
+                            <li>Lvl 1: +15% Crit Chance (2x DMG multiplier)</li>
+                            <li>Lvl 2: Execute: 10% Chance to kill non-bosses below 50% HP</li>
+                            <li>Lvl 3: Death Mark: Targets take 300% DMG for 3s</li>
+                            <li>Lvl 4: Crit Upgrade: 25% Chance for Critical Hit (3.5x DMG)</li>
+                            <li>Lvl 5: MAX LEVEL (Mergeable)</li>
+                        </ul>
+                    </td>
+                </tr>
+                <tr>
+                    <td><img src="/assets/hexes/ComWave.png" width="48" height="48" alt="ComWave"></td>
+                    <td><strong>TERROR PULSE</strong><br><small>ComWave</small></td>
+                    <td>Sonic Wave on every 15th shot</td>
+                    <td>
+                        <ul>
+                            <li>Lvl 1: Sonic Wave deals 75% DMG (450 Range)</li>
+                            <li>Lvl 2: Wave inflicts FEAR for 1.5s</li>
+                            <li>Lvl 3: Wave Upgrade: 125% DMG, 600 Range</li>
+                            <li>Lvl 4: Twin Sonic Wave (Fires Front & Back)</li>
+                            <li>Lvl 5: MAX LEVEL (Mergeable)</li>
+                        </ul>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+
+    </div>
+
     <!-- TAB 2: ENEMIES -->
     <div id="enemies" class="tab-content">
         <h2>Hostile Entity Database</h2>
@@ -907,7 +1027,7 @@
                 <div class="enemy-name" style="color: #facc15;">The Quantum Snitch</div>
                 <div class="enemy-role">Legendary Reward</div>
                 <div class="enemy-desc">
-                    <strong>Visual:</strong> Spike Star Shape.<br>
+                    <strong>Visual:</strong> Triple-Blade Mechanical Wings.<br>
                     <strong>P1 (Yellow):</strong> Proximity Trigger. <strong>Projectile Immune!</strong><br>
                     <strong>P2 (Orange):</strong> Tactical Avoidance + Barrier Spawning.<br>
                     <strong>P3 (Red):</strong> Fatal Shift (1.1x Player Speed). <strong>Smoke Escape:</strong> Teleports

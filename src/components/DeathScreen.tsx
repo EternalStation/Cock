@@ -17,6 +17,22 @@ interface DeathScreenProps {
 
 export const DeathScreen: React.FC<DeathScreenProps> = ({ stats, gameState, onRestart, onQuit }) => {
     const [activeTab, setActiveTab] = useState<'overview' | 'modules'>('overview');
+
+    // Keyboard Navigation
+    useEffect(() => {
+        const handleKeys = (e: KeyboardEvent) => {
+            const key = e.key.toLowerCase();
+            const code = e.code.toLowerCase();
+            if (key === 'a' || code === 'keya' || key === 'arrowleft' || code === 'arrowleft') {
+                setActiveTab('overview');
+            }
+            if (key === 'd' || code === 'keyd' || key === 'arrowright' || code === 'arrowright') {
+                setActiveTab('modules');
+            }
+        };
+        window.addEventListener('keydown', handleKeys);
+        return () => window.removeEventListener('keydown', handleKeys);
+    }, []);
     const [displayStats, setDisplayStats] = useState({
         kills: 0,
         level: 0,

@@ -8,7 +8,21 @@ export interface Particle {
     life: number;
     color: string;
     size: number;
-    type?: 'shard' | 'spark';
+    type?: 'shard' | 'spark' | 'shockwave' | 'bubble' | 'vapor';
+    alpha?: number;
+    decay?: number;
+}
+
+export interface FloatingNumber {
+    x: number;
+    y: number;
+    vx: number;
+    vy: number;
+    value: string;
+    color: string;
+    life: number;
+    maxLife: number;
+    isCrit: boolean;
 }
 
 
@@ -20,11 +34,43 @@ export interface PlayerStats {
     hexMult?: number;
 }
 
+export interface ShieldChunk {
+    amount: number;
+    expiry: number;
+}
+
+export interface ActiveSkill {
+    type: LegendaryType;
+    cooldownMax: number;
+    cooldown: number;
+    duration?: number;
+    inUse: boolean;
+    keyBind: string; // '1', '2', '3', '4', '5'
+    icon?: string;
+}
+
+export interface AreaEffect {
+    id: number;
+    type: 'puddle' | 'epicenter';
+    x: number;
+    y: number;
+    radius: number;
+    duration: number; // remaining time in frames or ms? Let's use seconds/frames logic. Usually ms based on gameTime.
+    creationTime: number;
+    level: number;
+    // Puddle props
+    tickTimer?: number;
+    // Epicenter props
+    casterId?: number; // Player ID?
+    pulseTimer?: number;
+}
+
 export interface Player {
     x: number;
     y: number;
     size: number;
     speed: number;
+    dust: number;
     hp: PlayerStats;
     curHp: number;
     dmg: PlayerStats;
@@ -49,6 +95,19 @@ export interface Player {
     knockback: Vector;
     stunnedUntil?: number; // Timestamp when stun ends
     invincibleUntil?: number; // Timestamp for invincibility (e.g. Ninja Smoke)
+
+    // New Legendary Props
+    shield?: number; // @deprecated: Use shieldChunks
+    shieldExpiry?: number; // @deprecated: Use shieldChunks
+    shieldChunks?: ShieldChunk[];
+    shotsFired?: number;
+    lastDeathMark?: number;
+    activeSkills: ActiveSkill[];
+    immobilized?: boolean; // For Epicenter self-root
+    buffs?: {
+        puddleRegen?: boolean; // Lvl 3 puddle buff
+        epicenterShield?: number; // Lvl 3 epicenter shield
+    };
 }
 
 export interface Bullet {
@@ -64,6 +123,8 @@ export interface Bullet {
     hits: Set<number>; // Enemy IDs hit
     color?: string;
     size: number;
+    isCrit?: boolean;
+    critMult?: number;
 }
 
 export type ShapeType = 'circle' | 'triangle' | 'square' | 'diamond' | 'pentagon' | 'minion' | 'snitch';
@@ -98,6 +159,7 @@ export interface Enemy {
     bossAttackPattern: number; // 0 = Spread Shot, 1 = Tracking Snipe
     lastAttack: number;
     dead: boolean;
+    isExecuted?: boolean;
 
     // New Progression Props
     shape: ShapeType;
@@ -204,6 +266,30 @@ export interface Enemy {
     panicCooldown?: number; // Cooldown for panic escape
     trollTimer?: number; // Stop duration for Fake Snitch
     trollRush?: boolean; // If true, Fake Snitch is suicide rushing wall
+
+    // Friendly Zombie Props
+    isFriendly?: boolean;
+    attackTargetId?: number;
+
+    // Status Effects
+    deathMarkExpiry?: number;
+    fearedUntil?: number;
+
+    // Friendly Zombie Props (Refined)
+    isZombie?: boolean;
+    zombieState?: 'dead' | 'rising' | 'active' | 'clinging';
+    zombieTimer?: number;
+    zombieSpd?: number;
+    infected?: boolean;
+    zombieTargetId?: number;
+    zombieHearts?: number;
+    isEnraged?: boolean;
+    vx?: number;
+    vy?: number;
+    distGoal?: number;
+    critGlitchUntil?: number;
+    slowFactor?: number; // 0-1 (e.g. 0.3 = 30% slow)
+    takenDamageMultiplier?: number; // e.g. 1.2 = +20% dmg taken
 }
 
 export interface Upgrade {
@@ -218,6 +304,8 @@ export type LegendaryCategory = 'Economic' | 'Combat' | 'Defensive';
 
 export type LegendaryType =
     | 'EcoDMG' | 'EcoXP' | 'EcoHP'
+    | 'ComLife' | 'ComCrit' | 'ComWave'
+    | 'DefPuddle' | 'DefEpi' | 'CombShield'
     | 'hp_per_kill' | 'ats_per_kill' | 'xp_per_kill' | 'dmg_per_kill' | 'reg_per_kill'
     | 'shockwave' | 'shield_passive' | 'dash_boost' | 'lifesteal' | 'orbital_strike' | 'drone_overdrive';
 
@@ -229,6 +317,7 @@ export interface LegendaryHex {
     type: LegendaryType;
     level: number;
     killsAtAcquisition: number;
+    killsAtLevel?: Record<number, number>; // Track killCount when each level was unlocked
     customIcon?: string;
     perks?: string[];
 }
@@ -251,6 +340,7 @@ export interface GameState {
     enemies: Enemy[];
     bullets: Bullet[];
     enemyBullets: Bullet[];
+    floatingNumbers: FloatingNumber[];
     drones: { a: number; last: number; x: number; y: number }[];
     particles: Particle[];
     camera: Vector;
@@ -270,8 +360,10 @@ export interface GameState {
     spawnTimer: number; // For start/restart animation
     hasPlayedSpawnSound?: boolean;
     bossPresence: number; // 0 to 1 smooth transition for boss effects
+    critShake: number; // Screenshake intensity from crits
     smokeBlindTime?: number; // Timestamp for full-screen white fog effect
     spatialGrid: import('./SpatialGrid').SpatialGrid;
+    areaEffects: AreaEffect[];
 
     // Portal / Multiverse Props
     currentArena: number; // ID of the arena the player is currently in
@@ -282,6 +374,7 @@ export interface GameState {
     nextArenaId: number | null; // Destination
 
     // Inventory System
+    meteoriteDust: number; // Currency from recycling
     meteorites: Meteorite[]; // Dropped items in the world
     inventory: (Meteorite | null)[];  // Collected items (30 slots)
 
@@ -299,7 +392,7 @@ export interface GameState {
     };
 }
 
-export type MeteoriteRarity = 'scrap' | 'anomalous' | 'quantum' | 'astral' | 'radiant' | 'void' | 'eternal';
+export type MeteoriteRarity = 'scrap' | 'anomalous' | 'quantum' | 'astral' | 'radiant' | 'void' | 'eternal' | 'divine' | 'singularity';
 export type MeteoriteQuality = 'Broken' | 'Damaged' | 'New';
 
 export interface MeteoritePerk {

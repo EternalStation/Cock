@@ -116,6 +116,8 @@ function App() {
                 onClose={() => hook.setShowModuleMenu(false)}
                 onSocketUpdate={hook.handleModuleSocketUpdate}
                 onInventoryUpdate={hook.updateInventorySlot}
+                onRecycle={hook.recycleMeteorite}
+                spendDust={hook.spendDust}
               />
             </div>
 

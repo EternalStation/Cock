@@ -1,3 +1,4 @@
+import React from 'react';
 import type { GameState, Meteorite, MeteoriteRarity } from '../logic/types';
 import './MeteoriteTooltip.css';
 import { calculateMeteoriteEfficiency } from '../logic/EfficiencyLogic';
@@ -8,6 +9,12 @@ interface MeteoriteTooltipProps {
     meteoriteIdx?: number; // Optional index if placed in socket
     x: number;
     y: number;
+    onRemove?: () => boolean; // Return success status
+    canRemove?: boolean;
+    removeCost?: number;
+    isInteractive?: boolean;
+    onMouseEnter?: () => void;
+    onMouseLeave?: () => void;
 }
 
 const RARITY_COLORS: Record<MeteoriteRarity, string> = {
@@ -16,12 +23,10 @@ const RARITY_COLORS: Record<MeteoriteRarity, string> = {
     quantum: '#00FFFF',
     astral: '#7B68EE',
     radiant: '#FFD700',
-    void: '#8B0000', // Abyss Color
-    eternal: '#B8860B'
-};
-
-const getMeteoriteImage = (m: Meteorite) => {
-    return `/assets/meteorites/M${m.visualIndex}${m.quality}.png`;
+    void: '#8B0000',
+    eternal: '#B8860B',
+    divine: '#FFFFFF',
+    singularity: '#E942FF'
 };
 
 const RARITY_INFO: Record<MeteoriteRarity, { name: string, symbol: string }> = {
@@ -31,10 +36,21 @@ const RARITY_INFO: Record<MeteoriteRarity, { name: string, symbol: string }> = {
     astral: { name: 'ASTRAL SEED', symbol: '★' },
     radiant: { name: 'RADIANT STAR', symbol: '✦' },
     void: { name: 'VOID CATALYST', symbol: '❂' },
-    eternal: { name: 'ETERNAL CORE', symbol: '✵' }
+    eternal: { name: 'ETERNAL CORE', symbol: '✵' },
+    divine: { name: 'DIVINE ESSENCE', symbol: '✷' },
+    singularity: { name: 'SINGULARITY POINT', symbol: '✺' }
 };
 
-export const MeteoriteTooltip: React.FC<MeteoriteTooltipProps> = ({ meteorite, gameState, meteoriteIdx = -1, x }) => {
+const getMeteoriteImage = (m: Meteorite) => {
+    return `/assets/meteorites/M${m.visualIndex}${m.quality}.png`;
+};
+
+export const MeteoriteTooltip: React.FC<MeteoriteTooltipProps> = ({
+    meteorite, gameState, meteoriteIdx = -1, x,
+    onRemove, canRemove, removeCost, isInteractive,
+    onMouseEnter, onMouseLeave
+}) => {
+    const [shake, setShake] = React.useState(false);
     const rarityColor = RARITY_COLORS[meteorite.rarity];
     const info = RARITY_INFO[meteorite.rarity];
 
@@ -47,7 +63,7 @@ export const MeteoriteTooltip: React.FC<MeteoriteTooltipProps> = ({ meteorite, g
 
     const CARD_WIDTH = 350;
     // Tighter height calculation to remove empty space
-    const CARD_HEIGHT = 300 + (activeStatsCount * 42);
+    const CARD_HEIGHT = 240 + (activeStatsCount * 32) + (onRemove ? 50 : 0); // Reduced base and per-perk height
     const OFFSET = 20;
 
     // Final positioning: Centered vertically on screen, horizontal follows cursor
@@ -63,20 +79,37 @@ export const MeteoriteTooltip: React.FC<MeteoriteTooltipProps> = ({ meteorite, g
         left: finalX,
         top: finalY,
         width: `${CARD_WIDTH}px`,
-        height: `${CARD_HEIGHT}px`,
+        height: 'auto', // Allow content to dictate height to ensure border wraps everything
+        minHeight: `${CARD_HEIGHT}px`,
         zIndex: 5000,
-        pointerEvents: 'none',
+        pointerEvents: isInteractive ? 'auto' : 'none',
         display: 'flex',
         flexDirection: 'column',
         boxSizing: 'border-box',
-        border: `3px solid ${rarityColor}`,
+        border: `3px solid ${shake ? '#ef4444' : rarityColor}`,
         background: 'linear-gradient(135deg, #0f172a 0%, #020617 100%)',
-        boxShadow: `0 0 30px ${rarityColor}44`,
-        ['--rarity-color' as any]: rarityColor
+        boxShadow: `0 0 30px ${shake ? '#ef4444' : rarityColor}44`,
+        ['--rarity-color' as any]: rarityColor,
+        animation: shake ? 'shake 0.4s cubic-bezier(.36,.07,.19,.97) both' : undefined,
+        transform: shake ? 'translate3d(0, 0, 0)' : undefined
     };
 
     return (
-        <div style={tooltipStyle} className="meteorite-card-pulse">
+        <div
+            style={tooltipStyle}
+            className="meteorite-card-pulse"
+            onMouseEnter={onMouseEnter}
+            onMouseLeave={onMouseLeave}
+        >
+            <style>{`
+                @keyframes shake {
+                    10%, 90% { transform: translate3d(-1px, 0, 0); }
+                    20%, 80% { transform: translate3d(2px, 0, 0); }
+                    30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+                    40%, 60% { transform: translate3d(4px, 0, 0); }
+                }
+            `}</style>
+
             {/* Header: Name + Symbol + Total Power */}
             <div style={{
                 padding: '12px 10px',
@@ -228,6 +261,7 @@ export const MeteoriteTooltip: React.FC<MeteoriteTooltipProps> = ({ meteorite, g
                 display: 'flex',
                 flexDirection: 'column',
                 gap: '4px',
+                marginTop: '10px', // Added spacing per request
                 borderTop: `1px solid ${rarityColor}33`,
                 background: 'rgba(0,0,0,0.5)',
                 fontSize: '11px',
@@ -236,13 +270,53 @@ export const MeteoriteTooltip: React.FC<MeteoriteTooltipProps> = ({ meteorite, g
                 textTransform: 'uppercase'
             }}>
                 <div style={{ color: '#fff' }}>
-                    <span style={{ color: rarityColor, opacity: 0.8 }}>TYPE:</span> {meteorite.quality === 'New' ? 'PRISTINE' : meteorite.quality.toUpperCase()}
+                    <span style={{ color: rarityColor, opacity: 0.8 }}>TYPE:</span> <span style={{
+                        color: meteorite.quality === 'New' ? '#4ade80' : (meteorite.quality === 'Broken' ? '#ef4444' : '#fbbf24'),
+                        fontSize: '12px',
+                        textShadow: `0 0 10px ${meteorite.quality === 'New' ? '#4ade80' : (meteorite.quality === 'Broken' ? '#ef4444' : '#fbbf24')}66`
+                    }}>{meteorite.quality === 'New' ? 'PRISTINE' : meteorite.quality.toUpperCase()}</span>
                 </div>
                 <div style={{ color: '#fff' }}>
                     <span style={{ color: rarityColor, opacity: 0.8 }}>DISCOVERED IN:</span> {meteorite.discoveredIn}
                 </div>
-                {/* Rarity text removed by user request to save space and fix cut-off */}
             </div>
+
+            {/* Remove Button if Applicable */}
+            {onRemove && canRemove && (
+                <div
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        // If onRemove returns explicit false, we shake.
+                        // If it returns nothing (undefined) or true, we don't shake.
+                        const success = onRemove();
+                        if (success === false) {
+                            setShake(true);
+                            setTimeout(() => setShake(false), 500);
+                        }
+                    }}
+                    style={{
+                        marginTop: 'auto',
+                        padding: '12px',
+                        background: 'rgba(239, 68, 68, 0.2)',
+                        borderTop: '1px solid #ef4444',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px',
+                        transition: 'background 0.2s',
+                        pointerEvents: 'auto'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.4)'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)'}
+                >
+                    <span style={{ fontSize: '14px', color: '#ef4444', fontWeight: 900 }}>REMOVE</span>
+                    <div style={{ display: 'flex', alignItems: 'center', background: 'rgba(0,0,0,0.5)', padding: '2px 6px', borderRadius: '4px' }}>
+                        <span style={{ fontSize: '12px', color: '#fff', fontWeight: 'bold' }}>{removeCost || 5}</span>
+                        <img src="/assets/Icons/MeteoriteDust.png" alt="Dust" style={{ width: '16px', height: '16px', marginLeft: '4px' }} />
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

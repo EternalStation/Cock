@@ -35,7 +35,7 @@ export const BASE_UPGRADE_VALUES: Record<string, number> = {
     atk_s: 25,
     hp_f: 40,
     hp_m: 20,
-    reg_f: 5,
+    reg_f: 2.5,
     reg_m: 15,
     xp_f: 15, // Defaulted based on context (User left blank)
     xp_m: 5,
@@ -52,7 +52,7 @@ export const SHAPE_DEFS: Record<string, { type: string; hpMult: number; speedMul
     triangle: { type: 'triangle', hpMult: 0.8, speedMult: 1.3, sizeMult: 0.9, spawnWeight: 1.2 },
     square: { type: 'square', hpMult: 2.0, speedMult: 0.6, sizeMult: 1.2, spawnWeight: 0.8 },
     diamond: { type: 'diamond', hpMult: 0.6, speedMult: 1.5, sizeMult: 0.8, spawnWeight: 1.0 },
-    pentagon: { type: 'pentagon', hpMult: 2.0, speedMult: 0.8, sizeMult: 1.5, spawnWeight: 0.4 }
+    pentagon: { type: 'pentagon', hpMult: 2.0, speedMult: 0.8, sizeMult: 1.5, spawnWeight: 0.25 }
 };
 
 // Core, Medium, Dark (for Cycle Logic)

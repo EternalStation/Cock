@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import type { GameState, Meteorite, MeteoriteRarity, LegendaryHex, LegendaryCategory } from '../logic/types';
 import { calculateMeteoriteEfficiency } from '../logic/EfficiencyLogic';
 import { MeteoriteTooltip } from './MeteoriteTooltip';
@@ -10,34 +10,67 @@ interface ModuleMenuProps {
     onClose: () => void;
     onSocketUpdate: (type: 'hex' | 'diamond', index: number, item: any) => void;
     onInventoryUpdate: (index: number, item: any) => void;
+    onRecycle: (source: 'inventory' | 'diamond', index: number, amount: number) => void;
+    spendDust: (amount: number) => boolean;
 }
 
 const RARITY_COLORS: Record<MeteoriteRarity, string> = {
-    scrap: '#9ca3af',
-    anomalous: '#14b8a6',
-    quantum: '#06b6d4',
-    astral: '#a855f7',
-    radiant: '#eab308',
-    void: '#7c3aed',
-    eternal: '#f43f5e'
+    scrap: '#7FFF00',
+    anomalous: '#00C0C0',
+    quantum: '#00FFFF',
+    astral: '#7B68EE',
+    radiant: '#FFD700',
+    void: '#8B0000',
+    eternal: '#B8860B',
+    divine: '#FFFFFF',
+    singularity: '#E942FF'
+};
+
+// Rarity Order for Dust Value (1 to 9)
+const RARITY_ORDER: MeteoriteRarity[] = ['scrap', 'anomalous', 'quantum', 'astral', 'radiant', 'void', 'eternal', 'divine', 'singularity'];
+
+const getDustValue = (rarity: MeteoriteRarity) => {
+    // 1-Based Dust Value based on Rarity Index
+    return RARITY_ORDER.indexOf(rarity) + 1;
 };
 
 const getMeteoriteImage = (m: Meteorite) => {
     return `/assets/meteorites/M${m.visualIndex}${m.quality}.png`;
 };
 
-export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClose, onSocketUpdate, onInventoryUpdate }) => {
-    const [draggedItem, setDraggedItem] = useState<{ item: Meteorite | any, source: 'inventory' | 'diamond' | 'hex', index: number } | null>(null);
+export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClose, onSocketUpdate, onInventoryUpdate, onRecycle, spendDust }) => {
+    const [movedItem, setMovedItem] = useState<{ item: Meteorite | any, source: 'inventory' | 'diamond' | 'hex', index: number } | null>(null);
+    const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+    const [lockedItem, setLockedItem] = useState<{ item: Meteorite | any, x: number, y: number } | null>(null);
     const [hoveredItem, setHoveredItem] = useState<{ item: Meteorite | any, x: number, y: number } | null>(null);
     const [hoveredHex, setHoveredHex] = useState<{ hex: LegendaryHex, index: number, x: number, y: number } | null>(null);
+    const [recyclingAnim, setRecyclingAnim] = useState(false);
+
+    const hoverTimeout = useRef<number | null>(null);
+
+    const handleMouseEnterItem = (item: any, x: number, y: number) => {
+        if (hoverTimeout.current) {
+            clearTimeout(hoverTimeout.current);
+            hoverTimeout.current = null;
+        }
+        setHoveredItem({ item, x, y });
+    };
+
+    const handleMouseLeaveItem = (delay: number = 300) => {
+        hoverTimeout.current = window.setTimeout(() => {
+            setHoveredItem(null);
+            setLockedItem(null);
+        }, delay);
+    };
 
     if (!isOpen) return null;
 
-    const { moduleSockets, inventory } = gameState;
+    const { moduleSockets, inventory, meteoriteDust } = gameState;
     const centerX = 540;
     const centerY = 540;
     const innerRadius = 170;
     const outerRadius = 260;
+
     const edgeRadius = 350;
 
     const getHexPoints = (x: number, y: number, r: number) => {
@@ -146,12 +179,35 @@ export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClo
     };
 
     return (
-        <div style={{
-            position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
-            background: 'radial-gradient(circle, rgb(10, 10, 30) 0%, rgb(2, 2, 5) 100%)',
-            zIndex: 2000, color: 'white', fontFamily: 'Orbitron, sans-serif',
-            overflow: 'hidden'
-        }}>
+        <div
+            onMouseMove={(e) => {
+                const rect = e.currentTarget.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                setMousePos({ x, y });
+            }}
+            onClick={() => {
+                // Global Drop Cancel or handle drop if clicked empty space?
+                // Actually, let's keep it simple. Clicking empty space does nothing or drops back to source?
+                // User didn't specify. Let's stick to click-target logic.
+            }}
+            onMouseUp={() => {
+                if (movedItem) {
+                    // Cancel Drag / Drop back to source
+                    if (movedItem.source === 'diamond') {
+                        onSocketUpdate('diamond', movedItem.index, movedItem.item);
+                    } else if (movedItem.source === 'inventory') {
+                        onInventoryUpdate(movedItem.index, movedItem.item);
+                    }
+                    setMovedItem(null);
+                }
+            }}
+            style={{
+                position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
+                background: 'radial-gradient(circle, rgb(10, 10, 30) 0%, rgb(2, 2, 5) 100%)',
+                zIndex: 2000, color: 'white', fontFamily: 'Orbitron, sans-serif',
+                overflow: 'hidden'
+            }}>
             <svg width="100%" height="100%" viewBox="0 0 1920 1080">
                 <text x={centerX} y={centerY - 480} textAnchor="middle" fill="#22d3ee" fontSize="32" fontWeight="900" style={{ letterSpacing: '8px', opacity: 0.8 }}>MODULE MATRIX</text>
                 <text x={centerX} y={centerY - 440} textAnchor="middle" fill="#94a3b8" fontSize="12" style={{ letterSpacing: '2px', opacity: 0.6 }}>CONSTRUCT SYNERGIES BY SLOTTING METEORITES AND RECOVERED MODULES</text>
@@ -336,7 +392,7 @@ export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClo
                                 }
                             }}
                             onMouseMove={(e) => {
-                                if (hex && !draggedItem) {
+                                if (hex && !movedItem) {
                                     setHoveredHex({ hex, index: i, x: e.clientX, y: e.clientY });
                                 }
                             }}
@@ -418,24 +474,33 @@ export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClo
 
                 {allDiamondPositions.map((pos, i) => (
                     <g key={`diamond-socket-${i}`}
-                        onDragOver={(e) => e.preventDefault()}
-                        onDrop={() => {
-                            if (draggedItem) {
-                                if (draggedItem.source === 'inventory') {
+                        onClick={(e) => {
+                            // Only Click-Lock tooltip if not dragging
+                            if (!movedItem) {
+                                setLockedItem({ item: moduleSockets.diamonds[i], x: e.clientX, y: e.clientY });
+                            }
+                        }}
+                        onMouseUp={(e) => {
+                            e.stopPropagation();
+                            if (movedItem) {
+                                // Handle Drop on Socket from Release
+                                if (movedItem.source === 'inventory') {
                                     const itemAtTarget = moduleSockets.diamonds[i];
-                                    onSocketUpdate('diamond', i, draggedItem.item);
-                                    onInventoryUpdate(draggedItem.index, itemAtTarget);
-                                } else if (draggedItem.source === 'diamond' && draggedItem.index !== i) {
-                                    const itemAtSource = moduleSockets.diamonds[draggedItem.index];
+                                    onSocketUpdate('diamond', i, movedItem.item);
+                                    onInventoryUpdate(movedItem.index, itemAtTarget);
+                                } else if (movedItem.source === 'diamond') {
+                                    // Swap or Move
                                     const itemAtTarget = moduleSockets.diamonds[i];
-                                    onSocketUpdate('diamond', i, itemAtSource);
-                                    onSocketUpdate('diamond', draggedItem.index, itemAtTarget);
+                                    onSocketUpdate('diamond', i, movedItem.item);
+                                    onSocketUpdate('diamond', movedItem.index, itemAtTarget);
                                 }
-                                setDraggedItem(null);
+                                setMovedItem(null);
+                                setHoveredItem(null);
+                                setLockedItem(null);
                             }
                         }}
                     >
-                        {draggedItem && !moduleSockets.diamonds[i] && (
+                        {movedItem && !moduleSockets.diamonds[i] && (
                             <circle
                                 cx={pos.x} cy={pos.y} r="50"
                                 fill="none"
@@ -452,29 +517,31 @@ export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClo
 
                         {moduleSockets.diamonds[i] && (
                             <>
-                                <foreignObject x={pos.x - 35} y={pos.y - 35} width="70" height="70">
+                                <foreignObject x={pos.x - 35} y={pos.y - 35} width="70" height="70" style={{ pointerEvents: 'none' }}>
                                     <div
-                                        style={{ width: '100%', height: '100%', cursor: 'grab', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                                        draggable="true"
-                                        onDragStart={() => {
-                                            const item = moduleSockets.diamonds[i];
-                                            if (item) {
-                                                setDraggedItem({ item, source: 'diamond', index: i });
-                                                setHoveredItem(null);
-                                            }
-                                        }}
-                                        onDragEnd={() => setDraggedItem(null)}
+                                        style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                                         onMouseMove={(e) => {
                                             const item = moduleSockets.diamonds[i];
-                                            if (item && !draggedItem) {
-                                                setHoveredItem({ item, x: e.clientX, y: e.clientY });
+                                            if (item && !movedItem) {
+                                                handleMouseEnterItem(item, e.clientX, e.clientY);
                                                 if (item.isNew) {
                                                     item.isNew = false;
                                                     onSocketUpdate('diamond', i, item);
                                                 }
                                             }
                                         }}
-                                        onMouseLeave={() => setHoveredItem(null)}
+                                        onMouseDown={(e) => {
+                                            if (e.button === 0 && !movedItem) {
+                                                const item = moduleSockets.diamonds[i];
+                                                if (item) {
+                                                    // Allow direct dragging
+                                                    onSocketUpdate('diamond', i, null);
+                                                    setMovedItem({ item, source: 'diamond', index: i });
+                                                    setHoveredItem(null);
+                                                }
+                                            }
+                                        }}
+                                        onMouseLeave={() => handleMouseLeaveItem(100)}
                                     >
                                         {moduleSockets.diamonds[i]?.isNew && (
                                             <div style={{
@@ -501,7 +568,8 @@ export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClo
                                                 width: '100%',
                                                 height: '100%',
                                                 objectFit: 'contain',
-                                                pointerEvents: 'none'
+                                                pointerEvents: 'auto', // Allow mouse events for hover
+                                                cursor: movedItem ? 'copy' : 'default' // Indicate valid drop target
                                             }}
                                             alt="meteorite"
                                         />
@@ -542,45 +610,59 @@ export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClo
             <div style={{
                 position: 'absolute', right: 0, top: 0, height: '100%', width: '450px',
                 background: 'rgba(5, 5, 15, 0.98)', borderLeft: '4px solid #3b82f6',
-                padding: '30px', display: 'flex', flexDirection: 'column', gap: '20px',
+                padding: '20px', display: 'flex', flexDirection: 'column', gap: '10px',
                 backdropFilter: 'blur(30px)', boxShadow: '-30px 0 60px rgba(0,0,0,0.9)'
             }}>
-                <h2 style={{ color: '#22d3ee', margin: '0 0 10px 0', fontSize: '1.5rem', letterSpacing: '4px', textAlign: 'center' }}>INVENTORY</h2>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '8px', alignContent: 'start' }}>
+                <h2 style={{ color: '#22d3ee', margin: '0 0 5px 0', fontSize: '1.5rem', letterSpacing: '4px', textAlign: 'center' }}>INVENTORY</h2>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '6px', alignContent: 'start', overflowY: 'auto', maxHeight: '500px', paddingRight: '5px' }}>
                     {inventory.map((item, idx) => (
                         <div key={idx}
-                            draggable={!!item}
-                            onDragStart={() => {
-                                if (item) {
-                                    setDraggedItem({ item, source: 'inventory', index: idx });
-                                    setHoveredItem(null);
-                                }
+                            onClick={() => {
+                                // No click-to-move
                             }}
-                            onDragEnd={() => setDraggedItem(null)}
                             onMouseMove={(e) => {
-                                if (item && !draggedItem) {
-                                    setHoveredItem({ item, x: e.clientX, y: e.clientY });
+                                if (item && !movedItem) {
+                                    handleMouseEnterItem(item, e.clientX, e.clientY);
                                     if (item.isNew) {
                                         item.isNew = false;
                                         onInventoryUpdate(idx, item);
                                     }
                                 }
                             }}
-                            onMouseLeave={() => setHoveredItem(null)}
-                            onDragOver={(e) => e.preventDefault()}
-                            onDrop={() => {
-                                if (draggedItem && draggedItem.source === 'diamond') {
-                                    const itemAtTarget = inventory[idx];
-                                    onInventoryUpdate(idx, draggedItem.item);
-                                    onSocketUpdate('diamond', draggedItem.index, itemAtTarget);
-                                    setDraggedItem(null);
+                            onMouseLeave={() => handleMouseLeaveItem(0)}
+                            onMouseDown={(e) => {
+                                if (e.button === 0 && item && !movedItem) {
+                                    // Drag Start logic
+                                    onInventoryUpdate(idx, null); // Remove from inventory visual
+                                    setMovedItem({ item, source: 'inventory', index: idx });
+                                    setHoveredItem(null);
+                                }
+                            }}
+                            onMouseUp={(e) => {
+                                e.stopPropagation();
+                                if (movedItem) {
+                                    // Drop Logic (Inventory Target)
+                                    if (movedItem.source === 'diamond') {
+                                        const itemAtTarget = inventory[idx];
+                                        onInventoryUpdate(idx, movedItem.item);
+                                        onSocketUpdate('diamond', movedItem.index, itemAtTarget);
+                                    } else if (movedItem.source === 'inventory') {
+                                        const itemAtTarget = inventory[idx];
+                                        onInventoryUpdate(idx, movedItem.item);
+                                        onInventoryUpdate(movedItem.index, itemAtTarget);
+                                    }
+                                    setMovedItem(null);
+                                    setHoveredItem(null);
+                                    setLockedItem(null);
                                 }
                             }}
                             style={{
-                                width: '100%', height: '80px', background: '#0f172a',
-                                border: `2px solid ${item ? RARITY_COLORS[item.rarity] : '#1e293b'}`,
-                                borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                position: 'relative'
+                                width: '100%', height: '70px', background: '#0f172a',
+                                border: `2px solid ${movedItem?.index === idx && movedItem.source === 'inventory' ? '#3b82f6' : (item ? RARITY_COLORS[item.rarity] : '#1e293b')}`,
+                                borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                position: 'relative',
+                                cursor: 'pointer',
+                                opacity: movedItem?.index === idx && movedItem.source === 'inventory' ? 0.3 : 1
                             }}>
                             {item?.isNew && (
                                 <div style={{
@@ -606,7 +688,8 @@ export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClo
                                     style={{
                                         width: '80%',
                                         height: '80%',
-                                        objectFit: 'contain'
+                                        objectFit: 'contain',
+                                        pointerEvents: 'none'
                                     }}
                                     alt="meteorite"
                                 />
@@ -614,6 +697,74 @@ export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClo
                         </div>
                     ))}
                 </div>
+
+                {/* RECYCLER SECTION */}
+                <div style={{ marginTop: '20px', borderTop: '1px solid #3b82f6', paddingTop: '15px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', marginBottom: '10px' }}>
+                        <h2 style={{ color: '#ef4444', margin: 0, fontSize: '1.2rem', letterSpacing: '4px' }}>RECYCLER</h2>
+                        <div style={{ display: 'flex', alignItems: 'center', background: 'rgba(0,0,0,0.6)', padding: '4px 10px', borderRadius: '12px', border: '1px solid #475569' }}>
+                            <img src="/assets/Icons/MeteoriteDust.png" alt="Dust" style={{ width: '24px', height: '24px', marginRight: '6px' }} />
+                            <span style={{ color: '#ffffff', fontWeight: 'bold', fontSize: '14px' }}>{meteoriteDust}</span>
+                        </div>
+                    </div>
+
+                    <div
+                        onMouseUp={(e) => {
+                            e.stopPropagation();
+                            if (movedItem) {
+                                const dustAmount = getDustValue(movedItem.item.rarity);
+                                const source = movedItem.source === 'inventory' ? 'inventory' : (movedItem.source === 'diamond' ? 'diamond' : null);
+
+                                if (source) {
+                                    onRecycle(source, movedItem.index, dustAmount);
+                                    setRecyclingAnim(true);
+                                    setTimeout(() => setRecyclingAnim(false), 500);
+                                    setMovedItem(null);
+                                }
+                            }
+                        }}
+                        style={{
+                            width: '100%',
+                            height: '80px',
+                            background: recyclingAnim ? 'rgba(239, 68, 68, 0.2)' : 'rgba(0,0,0,0.5)',
+                            border: `2px dashed ${recyclingAnim ? '#ffffff' : '#ef4444'}`,
+                            borderRadius: '8px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: '#ef4444',
+                            fontSize: '10px',
+                            letterSpacing: '2px',
+                            transition: 'all 0.1s',
+                            cursor: movedItem ? 'copy' : 'default',
+                            transform: recyclingAnim ? 'scale(0.98)' : 'scale(1)',
+                            boxShadow: recyclingAnim ? 'inset 0 0 30px #ef4444' : 'none',
+                            position: 'relative',
+                            overflow: 'hidden'
+                        }}
+                    >
+                        {recyclingAnim && (
+                            <div style={{
+                                position: 'absolute', width: '100%', height: '100%',
+                                background: 'radial-gradient(circle, transparent 20%, #ef4444 100%)',
+                                animation: 'pulse-crimson 0.2s infinite'
+                            }} />
+                        )}
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginBottom: '4px', opacity: recyclingAnim ? 0 : 1 }}>
+                            <polyline points="3 6 5 6 21 6"></polyline>
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                            <line x1="10" y1="11" x2="10" y2="17"></line>
+                            <line x1="14" y1="11" x2="14" y2="17"></line>
+                        </svg>
+                        {recyclingAnim ? (
+                            <span style={{ color: '#fff', fontWeight: '900', fontSize: '14px', textShadow: '0 0 10px #ef4444' }}>DESTROYING...</span>
+                        ) : (
+                            <span>CLICK TO RECYCLE</span>
+                        )}
+                    </div>
+                </div>
+
                 <button onClick={onClose} style={{
                     background: '#3b82f6',
                     border: 'none',
@@ -622,37 +773,114 @@ export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClo
                     borderRadius: '4px',
                     cursor: 'pointer',
                     fontWeight: 'bold',
-                    marginTop: '20px',
+                    marginTop: '5px',
                     width: '100%',
                     letterSpacing: '2px',
                     transition: 'background 0.2s'
                 }}>CLOSE (X)</button>
             </div>
 
-            {hoveredItem && (
-                <MeteoriteTooltip
-                    meteorite={hoveredItem.item}
-                    gameState={gameState}
-                    meteoriteIdx={moduleSockets.diamonds.indexOf(hoveredItem.item)}
-                    x={hoveredItem.x}
-                    y={hoveredItem.y}
-                />
-            )}
-            {hoveredHex && (
-                <HexTooltip
-                    hex={hoveredHex.hex}
-                    gameState={gameState}
-                    hexIdx={hoveredHex.index}
-                    x={hoveredHex.x}
-                    y={hoveredHex.y}
-                    neighbors={[
-                        moduleSockets.diamonds[hoveredHex.index],
-                        moduleSockets.diamonds[(hoveredHex.index + 5) % 6],
-                        moduleSockets.diamonds[hoveredHex.index + 6],
-                        moduleSockets.diamonds[((hoveredHex.index + 5) % 6) + 6]
-                    ]}
-                />
-            )}
+            {/* Ghost Item Rendering */}
+            {
+                movedItem && (
+                    <div style={{
+                        position: 'absolute',
+                        top: mousePos.y,
+                        left: mousePos.x,
+                        width: '60px',
+                        height: '60px',
+                        pointerEvents: 'none',
+                        transform: 'translate(-50%, -50%)',
+                        zIndex: 9999,
+                        filter: 'drop-shadow(0 0 15px cyan)'
+                    }}>
+                        <img
+                            src={getMeteoriteImage(movedItem.item)}
+                            alt="moved"
+                            style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                        />
+                    </div>
+                )
+            }
+
+            {/* Ghost Item Rendering */}
+            {
+                movedItem && (
+                    <div style={{
+                        position: 'absolute',
+                        top: mousePos.y,
+                        left: mousePos.x,
+                        width: '60px',
+                        height: '60px',
+                        pointerEvents: 'none',
+                        transform: 'translate(-50%, -50%)',
+                        zIndex: 9999,
+                        filter: 'drop-shadow(0 0 15px cyan)'
+                    }}>
+                        <img
+                            src={getMeteoriteImage(movedItem.item)}
+                            alt="moved"
+                            style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                        />
+                    </div>
+                )
+            }
+
+            {
+                (hoveredItem || lockedItem) && (
+                    <MeteoriteTooltip
+                        meteorite={(lockedItem || hoveredItem)!.item}
+                        gameState={gameState}
+                        meteoriteIdx={moduleSockets.diamonds.indexOf((lockedItem || hoveredItem)!.item)}
+                        x={(lockedItem || hoveredItem)!.x}
+                        y={(lockedItem || hoveredItem)!.y}
+                        isInteractive={true}
+                        onRemove={() => {
+                            const target = lockedItem || hoveredItem;
+                            if (!target) return false;
+                            const idx = moduleSockets.diamonds.indexOf(target.item);
+                            // Force Remove Logic
+                            if (idx !== -1 && !movedItem) {
+                                if (spendDust(5)) {
+                                    const item = moduleSockets.diamonds[idx];
+                                    onSocketUpdate('diamond', idx, null); // Remove from socket
+                                    setMovedItem({ item, source: 'diamond', index: idx }); // Start Move
+                                    setHoveredItem(null); // Clear Tooltip
+                                    setLockedItem(null);
+                                    return true;
+                                }
+                            }
+                            return false;
+                        }}
+                        canRemove={moduleSockets.diamonds.includes((lockedItem || hoveredItem)!.item)}
+                        removeCost={5}
+                        onMouseEnter={() => {
+                            if (hoverTimeout.current) {
+                                clearTimeout(hoverTimeout.current);
+                                hoverTimeout.current = null;
+                            }
+                        }}
+                        onMouseLeave={() => handleMouseLeaveItem(100)}
+                    />
+                )
+            }
+            {
+                hoveredHex && (
+                    <HexTooltip
+                        hex={hoveredHex.hex}
+                        gameState={gameState}
+                        hexIdx={hoveredHex.index}
+                        x={hoveredHex.x}
+                        y={hoveredHex.y}
+                        neighbors={[
+                            moduleSockets.diamonds[hoveredHex.index],
+                            moduleSockets.diamonds[(hoveredHex.index + 5) % 6],
+                            moduleSockets.diamonds[hoveredHex.index + 6],
+                            moduleSockets.diamonds[((hoveredHex.index + 5) % 6) + 6]
+                        ]}
+                    />
+                )
+            }
 
             <style>{`
                 .glow-cyan { filter: drop-shadow(0 0 10px #22d3ee); }
@@ -737,6 +965,6 @@ export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClo
                     animation: floatUpFade 1.5s forwards ease-out;
                 }
             `}</style>
-        </div>
+        </div >
     );
 };

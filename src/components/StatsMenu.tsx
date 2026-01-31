@@ -155,6 +155,21 @@ const EnemyPreview: React.FC<{ shape: string; color: string }> = ({ shape, color
 export const StatsMenu: React.FC<StatsMenuProps> = ({ gameState }) => {
     const { player } = gameState;
     const [tab, setTab] = useState<'stats' | 'blueprint'>('stats');
+    // Keyboard Navigation
+    useEffect(() => {
+        const handleKeys = (e: KeyboardEvent) => {
+            const key = e.key.toLowerCase();
+            const code = e.code.toLowerCase();
+            if (key === 'a' || code === 'keya' || key === 'arrowleft' || code === 'arrowleft') {
+                setTab('stats');
+            }
+            if (key === 'd' || code === 'keyd' || key === 'arrowright' || code === 'arrowright') {
+                setTab('blueprint');
+            }
+        };
+        window.addEventListener('keydown', handleKeys);
+        return () => window.removeEventListener('keydown', handleKeys);
+    }, []);
 
     // Enemy Intel Data
     const enemyIntel = [
@@ -252,8 +267,13 @@ export const StatsMenu: React.FC<StatsMenuProps> = ({ gameState }) => {
                         <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 4 }}>
                             {(() => {
                                 const arenaIdx = getArenaIndex(player.x, player.y);
-                                const hpMult = arenaIdx === 2 ? 1.2 : 1;
-                                const regMult = arenaIdx === 2 ? 1.2 : 1;
+                                let hpMult = arenaIdx === 2 ? 1.2 : 1;
+                                let regMult = arenaIdx === 2 ? 1.2 : 1;
+
+                                if (player.buffs?.puddleRegen) {
+                                    hpMult *= 1.25;
+                                    regMult *= 1.25;
+                                }
 
                                 return (
                                     <>
@@ -267,13 +287,56 @@ export const StatsMenu: React.FC<StatsMenuProps> = ({ gameState }) => {
                                             extraInfo={`(${(((calcStat(player.atk) + calculateLegendaryBonus(gameState, 'ats_per_kill')) * (1 + calculateLegendaryBonus(gameState, 'ats_pct_per_kill') / 100)) / 200).toFixed(1)}/s)`}
                                         />
                                         <StatRow label="Regeneration" stat={player.reg} legendaryBonusFlat={calculateLegendaryBonus(gameState, 'reg_per_kill')} legendaryBonusPct={calculateLegendaryBonus(gameState, 'reg_pct_per_kill')} arenaMult={regMult} />
+                                        <StatRow
+                                            label="Armor"
+                                            stat={player.arm}
+                                            legendaryBonusFlat={calculateLegendaryBonus(gameState, 'arm_per_kill')}
+                                            legendaryBonusPct={calculateLegendaryBonus(gameState, 'arm_pct_per_kill')}
+                                            extraInfo={`(${(0.95 * (calcStat(player.arm) / (calcStat(player.arm) + 5263)) * 100).toFixed(1)}%)`}
+                                        />
+                                        {(() => {
+                                            const colRed = calculateLegendaryBonus(gameState, 'col_red_per_kill');
+                                            if (colRed <= 0) return null;
+                                            return (
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', borderBottom: '1px solid #1e293b' }}>
+                                                    <span style={{ color: '#94a3b8', fontSize: 12, fontWeight: 700 }}>Collision Reduction</span>
+                                                    <span style={{ color: '#fbbf24', fontSize: 12, fontWeight: 900 }}>
+                                                        {Math.min(80, colRed).toFixed(1)}%
+                                                    </span>
+                                                </div>
+                                            );
+                                        })()}
+                                        {(() => {
+                                            const projRed = calculateLegendaryBonus(gameState, 'proj_red_per_kill');
+                                            if (projRed <= 0) return null;
+                                            return (
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', borderBottom: '1px solid #1e293b' }}>
+                                                    <span style={{ color: '#94a3b8', fontSize: 12, fontWeight: 700 }}>Projectile Reduction</span>
+                                                    <span style={{ color: '#fbbf24', fontSize: 12, fontWeight: 900 }}>
+                                                        {Math.min(80, projRed).toFixed(1)}%
+                                                    </span>
+                                                </div>
+                                            );
+                                        })()}
+                                        {(() => {
+                                            const lifesteal = calculateLegendaryBonus(gameState, 'lifesteal');
+                                            if (lifesteal <= 0) return null;
+                                            return (
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', borderBottom: '1px solid #1e293b' }}>
+                                                    <span style={{ color: '#94a3b8', fontSize: 12, fontWeight: 700 }}>Lifesteal</span>
+                                                    <span style={{ color: '#fbbf24', fontSize: 12, fontWeight: 900 }}>
+                                                        {lifesteal.toFixed(1)}%
+                                                    </span>
+                                                </div>
+                                            );
+                                        })()}
                                     </>
                                 );
                             })()}
-                            <StatRow label="Armor" stat={player.arm} extraInfo={`(${(0.95 * (calcStat(player.arm) / (calcStat(player.arm) + 5263)) * 100).toFixed(1)}%)`} />
+
                             {/* XP Display: Explicit Breakdown */}
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', borderBottom: '1px solid #1e293b' }}>
-                                <span style={{ color: '#94a3b8', fontSize: 12, fontWeight: 700 }}>XP Gain</span>
+                                <span style={{ color: '#94a3b8', fontSize: 12, fontWeight: 700 }}>XP Gain per kill</span>
                                 <div style={{ display: 'flex', gap: 6, alignItems: 'center', justifyContent: 'flex-end' }}>
                                     {(() => {
                                         const flatBase = 40 + (player.level * 3) + player.xp_per_kill.flat;
