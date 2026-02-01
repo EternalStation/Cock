@@ -11,9 +11,10 @@ interface GameInputProps {
     setShowStats: React.Dispatch<React.SetStateAction<boolean>>;
     setShowModuleMenu: React.Dispatch<React.SetStateAction<boolean>>;
     setGameOver: React.Dispatch<React.SetStateAction<boolean>>;
+    showStats: boolean;
 }
 
-export function useGameInput({ gameState, setShowSettings, setShowStats, setShowModuleMenu, setGameOver }: GameInputProps) {
+export function useGameInput({ gameState, setShowSettings, setShowStats, setShowModuleMenu, setGameOver, showStats }: GameInputProps) {
     const keys = useRef<Record<string, boolean>>({});
     const inputVector = useRef({ x: 0, y: 0 });
 
@@ -27,7 +28,18 @@ export function useGameInput({ gameState, setShowSettings, setShowStats, setShow
             startBGM(gameState.current.currentArena);
 
             if (key === 'escape' || code === 'escape') {
-                setShowSettings(p => !p);
+                // Priority: If any other menu is open, close it and open Settings
+                // If Settings is already open, close it (toggle behavior)
+                // If nothing is open, open Settings
+                const otherMenuOpen = gameState.current.showModuleMenu || showStats;
+
+                if (otherMenuOpen) {
+                    setShowModuleMenu(false);
+                    setShowStats(false);
+                    setShowSettings(true);
+                } else {
+                    setShowSettings(p => !p);
+                }
             }
 
             // Handle C key for stats toggle (Always allow if gameStarted or in Main Menu)

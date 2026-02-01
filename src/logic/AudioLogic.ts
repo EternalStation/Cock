@@ -285,6 +285,13 @@ export function stopPortalAmbience() {
     }, 600);
 }
 
+export function stopAllLoops() {
+    stopBossAmbience();
+    stopPortalAmbience();
+    // Assuming we also want to stop any skill loops if they were exported/tracked globally
+    // For now, Boss and Portal are the main "stuck" culprits
+}
+
 export { playShootDing, playUpgradeSfx, playSfx } from './SfxLogic';
 export type { SfxType } from './SfxLogic';
 

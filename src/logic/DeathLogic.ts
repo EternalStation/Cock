@@ -25,9 +25,8 @@ export function handleEnemyDeath(state: GameState, e: Enemy, onEvent?: (event: s
 
     if (e.isRare && e.rareReal) {
         playSfx('rare-kill');
-        state.rareRewardActive = true;
         state.rareSpawnActive = false;
-        state.player.xp.current += state.player.xp.needed;
+        if (onEvent) onEvent('snitch_kill');
     } else {
         // Consolidated XP Logic (Matches PlayerLogic/ProjectileLogic advanced formula)
         let xpBase = state.player.xp_per_kill.base;

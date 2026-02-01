@@ -54,7 +54,7 @@ export const TopLeftPanel: React.FC<TopLeftPanelProps> = ({ gameState }) => {
             <style>{`
                 @keyframes hud-breath {
                     0% { transform: scale(1); opacity: 0.85; filter: brightness(1); }
-                    50% { transform: scale(1.1); opacity: 1; filter: brightness(1.5); }
+                    50% { transform: scale(1.02); opacity: 1; filter: brightness(1.5); }
                     100% { transform: scale(1); opacity: 0.85; filter: brightness(1); }
                 }
             `}</style>

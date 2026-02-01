@@ -117,6 +117,38 @@ export function spawnUpgrades(state: GameState, isBoss: boolean = false): Upgrad
     return choices;
 }
 
+export function spawnSnitchUpgrades(state: GameState): UpgradeChoice[] {
+    state.isPaused = true;
+    const choices: UpgradeChoice[] = [];
+
+    // Calculate Snitch Forced Rarity
+    // 0-5 mins -> Index 3 (Astral)
+    // Increases by 1 every 5 minutes
+    const minutes = state.gameTime / 60;
+    const rarityIndex = Math.min(8, 3 + Math.floor(minutes / 5));
+    const targetRarity = RARITIES[rarityIndex];
+
+    // Select 3 Unique Upgrades
+    const selectedIds = new Set<string>();
+    const selectedNames = new Set<string>();
+    const potentialTypes = [...UPGRADE_TYPES];
+
+    for (let i = 0; i < 3; i++) {
+        const available = potentialTypes.filter(t => !selectedIds.has(t.id) && !selectedNames.has(t.name));
+        if (available.length === 0) break;
+
+        const idx = Math.floor(Math.random() * available.length);
+        const type = available[idx];
+
+        selectedIds.add(type.id);
+        selectedNames.add(type.name);
+
+        choices.push({ type, rarity: targetRarity });
+    }
+
+    return choices;
+}
+
 export function applyUpgrade(state: GameState, choice: UpgradeChoice) {
     const { player } = state;
 

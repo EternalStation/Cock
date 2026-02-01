@@ -150,7 +150,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onStart }) => {
                         <div className="blueprint-container" onClick={(e) => e.stopPropagation()}>
                             <div className="blueprint-header">
                                 <div className="blueprint-title">NEON SURVIVOR - BLUEPRINT & LOGIC</div>
-                                <button className="btn-close-blueprint" onClick={() => setShowBlueprint(false)}>CLOSE [ESC]</button>
+                                <button className="btn-close-blueprint" onClick={() => setShowBlueprint(false)} autoFocus>CLOSE [ESC]</button>
                             </div>
                             <iframe
                                 src="/blueprint.html"

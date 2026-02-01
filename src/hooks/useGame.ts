@@ -6,7 +6,7 @@ import { updatePlayer } from '../logic/PlayerLogic';
 import { updateEnemies } from '../logic/EnemyLogic';
 import { updateProjectiles, spawnBullet } from '../logic/ProjectileLogic';
 
-import { spawnUpgrades, applyUpgrade } from '../logic/UpgradeLogic';
+import { spawnUpgrades, spawnSnitchUpgrades, applyUpgrade } from '../logic/UpgradeLogic';
 import { calcStat } from '../logic/MathUtils';
 import { updateLoot } from '../logic/LootLogic';
 import { updateParticles, spawnParticles, spawnFloatingNumber } from '../logic/ParticleLogic'; // Added spawnParticles import
@@ -111,7 +111,8 @@ export function useGameLoop(gameStarted: boolean) {
         setShowSettings,
         setShowStats,
         setShowModuleMenu,
-        setGameOver
+        setGameOver,
+        showStats
     });
 
     const restartGame = () => {
@@ -176,8 +177,14 @@ export function useGameLoop(gameStarted: boolean) {
                 // but we trigger the React UI here.
                 setShowLegendarySelection(true);
             }
+            if (event === 'snitch_kill') {
+                const choices = spawnSnitchUpgrades(state);
+                setUpgradeChoices(choices);
+                playSfx('level');
+            }
             if (event === 'game_over') {
                 setGameOver(true);
+                import('../logic/AudioLogic').then(mod => mod.stopAllLoops());
 
             }
         };

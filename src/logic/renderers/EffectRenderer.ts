@@ -201,14 +201,28 @@ export function renderScreenEffects(ctx: CanvasRenderingContext2D, state: GameSt
         if (elapsed < 2.6) {
             const alpha = elapsed < 0.3 ? elapsed / 0.3 : elapsed < 2.3 ? 1 : 1 - (elapsed - 2.3) / 0.3;
             ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
-            ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.05})`; ctx.fillRect(0, 0, width, height);
-            for (let i = 0; i < 20; i++) {
+
+            // Base haze (Keep this full screen but very light, 1 rect)
+            ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.05})`;
+            ctx.fillRect(0, 0, width, height);
+
+            // Optimized Puffs: Reduced count 20 -> 8
+            for (let i = 0; i < 8; i++) {
                 const x = i % 2 === 0 ? Math.random() * width : (Math.random() < 0.5 ? Math.random() * 150 : width - Math.random() * 150);
                 const y = i % 2 !== 0 ? Math.random() * height : (Math.random() < 0.5 ? Math.random() * 150 : height - Math.random() * 150);
-                const drift = Math.sin(state.gameTime * 0.5 + i) * 60; const size = 150 + Math.abs(Math.sin(i)) * 250;
+
+                const drift = Math.sin(state.gameTime * 0.5 + i) * 60;
+                // Reduced Size: 100-250 instead of 150-400
+                const size = 100 + Math.abs(Math.sin(i)) * 150;
+
                 const grad = ctx.createRadialGradient(x + drift, y + drift, 0, x + drift, y + drift, size);
-                grad.addColorStop(0, `rgba(255, 255, 255, ${alpha * 0.1})`); grad.addColorStop(1, `rgba(255, 255, 255, 0)`);
-                ctx.fillStyle = grad; ctx.fillRect(0, 0, width, height);
+                // Increased alpha slightly to compensate for fewer particles
+                grad.addColorStop(0, `rgba(255, 255, 255, ${alpha * 0.2})`);
+                grad.addColorStop(1, `rgba(255, 255, 255, 0)`);
+
+                ctx.fillStyle = grad;
+                // Optimization: Draw only the puff area, not full screen
+                ctx.fillRect((x + drift) - size, (y + drift) - size, size * 2, size * 2);
             }
             ctx.restore();
         }
