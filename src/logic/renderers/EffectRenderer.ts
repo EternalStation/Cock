@@ -229,23 +229,38 @@ export function renderScreenEffects(ctx: CanvasRenderingContext2D, state: GameSt
     }
 }
 
+// Cache to avoid recreating gradient and fill every frame
+let cachedVignetteCanvas: HTMLCanvasElement | null = null;
+let lastWidth = 0;
+let lastHeight = 0;
+
 export function renderVignette(ctx: CanvasRenderingContext2D, width: number, height: number) {
+    // Only recreate if dimensions change significantly (e.g. resize)
+    if (!cachedVignetteCanvas || width !== lastWidth || height !== lastHeight) {
+        cachedVignetteCanvas = document.createElement('canvas');
+        cachedVignetteCanvas.width = width;
+        cachedVignetteCanvas.height = height;
+        const cCtx = cachedVignetteCanvas.getContext('2d');
+        if (cCtx) {
+            const radius = Math.max(width, height) * 0.8;
+            const cx = width / 2;
+            const cy = height / 2;
+            const grad = cCtx.createRadialGradient(cx, cy, radius * 0.4, cx, cy, radius);
+            grad.addColorStop(0, 'rgba(0, 0, 0, 0)');
+            grad.addColorStop(0.6, 'rgba(2, 6, 23, 0.2)');
+            grad.addColorStop(1, 'rgba(2, 6, 23, 0.9)');
+            cCtx.fillStyle = grad;
+            cCtx.fillRect(0, 0, width, height);
+        }
+        lastWidth = width;
+        lastHeight = height;
+    }
+
     ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset transform to screen space
-
-    // Create Radial Gradient for Vignette
-    // Center is transparent, edges are dark
-    const radius = Math.max(width, height) * 0.8;
-    const cx = width / 2;
-    const cy = height / 2;
-
-    const grad = ctx.createRadialGradient(cx, cy, radius * 0.4, cx, cy, radius);
-    grad.addColorStop(0, 'rgba(0, 0, 0, 0)');
-    grad.addColorStop(0.6, 'rgba(2, 6, 23, 0.2)'); // Subtle fade start (dark blue-ish)
-    grad.addColorStop(1, 'rgba(2, 6, 23, 0.9)');   // Dark edges
-
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, width, height);
-
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    // Drawing an image is much faster than calculating gradient per pixel
+    if (cachedVignetteCanvas) {
+        ctx.drawImage(cachedVignetteCanvas, 0, 0);
+    }
     ctx.restore();
 }

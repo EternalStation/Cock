@@ -71,18 +71,27 @@ export function renderMapBoundaries(ctx: CanvasRenderingContext2D) {
 }
 
 
+// Reusable path builder for performance
+function buildHexPath(ctx: CanvasRenderingContext2D, center: { x: number, y: number }, r: number) {
+    for (let i = 0; i < 6; i++) {
+        const ang = Math.PI / 3 * i;
+        const hx = center.x + r * Math.cos(ang);
+        const hy = center.y + r * Math.sin(ang);
+        if (i === 0) ctx.moveTo(hx, hy);
+        else ctx.lineTo(hx, hy);
+    }
+    ctx.closePath();
+}
+
 export function renderArenaVignette(ctx: CanvasRenderingContext2D, state: GameState, logicalWidth: number, logicalHeight: number) {
     const { camera } = state;
-
-    // Bounds check to avoid drawing huge fog when far (though camera is locked)
-    // We draw a large rectangle covering the viewport and subtract the arenas.
 
     const scale = 0.58;
     const vW = logicalWidth / scale;
     const vH = logicalHeight / scale;
 
     // Safety margin
-    const margin = 500;
+    const margin = 200;
     const left = camera.x - vW / 2 - margin;
     const top = camera.y - vH / 2 - margin;
     const w = vW + margin * 2;
@@ -90,33 +99,42 @@ export function renderArenaVignette(ctx: CanvasRenderingContext2D, state: GameSt
 
     ctx.save();
 
-    // Dark Fog Color
-    ctx.fillStyle = '#020617'; // Match background deep dark
-
-    // Shadow to create soft "Depth" falloff at the edge
-    ctx.shadowColor = '#020617';
-    ctx.shadowBlur = 150; // Large soft blur
-
+    // 1. Draw Solid Void (Hard Cutoff) - FAST
+    // We fill the screen with black, excluding the arenas
+    ctx.fillStyle = '#020617';
     ctx.beginPath();
-    // 1. Outer Box (The Fog)
     ctx.rect(left, top, w, h);
 
-    // 2. Cutouts (The Arenas)
     ARENA_CENTERS.forEach((c) => {
-        // Hexagon Path
-        const r = ARENA_RADIUS;
-        for (let i = 0; i < 6; i++) {
-            const ang = Math.PI / 3 * i;
-            const hx = c.x + r * Math.cos(ang);
-            const hy = c.y + r * Math.sin(ang);
-            if (i === 0) ctx.moveTo(hx, hy);
-            else ctx.lineTo(hx, hy);
-        }
-        ctx.closePath();
+        buildHexPath(ctx, c, ARENA_RADIUS);
     });
 
-    // Fill using even-odd rule (Rect is filled, Hexes are holes)
+    // Fill "evenodd" creates the holes
     ctx.fill("evenodd");
+
+    // 2. Draw "Soft Fade" Edge (Cheaper than shadowBlur)
+    // We draw semi-transparent strokes centered on the boundary.
+    // Half extends into the arena (fog), half extends into the void (invisible).
+    // This creates the atmospheric falloff.
+
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    // Single pass "Glow" using a wider stroke with low opacity is usually enough and fastest
+    // Using 2 layers for better quality
+
+    // Layer 1: Wide, very faint
+    ctx.lineWidth = 160;
+    ctx.strokeStyle = 'rgba(2, 6, 23, 0.4)';
+    ctx.beginPath();
+    ARENA_CENTERS.forEach(c => buildHexPath(ctx, c, ARENA_RADIUS));
+    ctx.stroke();
+
+    // Layer 2: Narrower, denser (closer to wall)
+    ctx.lineWidth = 80;
+    ctx.strokeStyle = 'rgba(2, 6, 23, 0.5)';
+    ctx.beginPath();
+    ARENA_CENTERS.forEach(c => buildHexPath(ctx, c, ARENA_RADIUS));
+    ctx.stroke();
 
     ctx.restore();
 }
