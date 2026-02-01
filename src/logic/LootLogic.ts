@@ -141,7 +141,7 @@ export function createMeteorite(state: GameState, rarity: MeteoriteRarity, x: nu
         singularity: 9
     };
     const rarityLevel = rarityMap[rarity];
-    const visualIndex = Math.min(rarityLevel, 7); // Cap visual index at 7 assets for now if 8/9 happen
+    const visualIndex = rarityLevel;
 
     // Quality adjustment: New +2, Damaged +0, Broken -2
     const qualityAdj = quality === 'New' ? 2 : (quality === 'Broken' ? -2 : 0);

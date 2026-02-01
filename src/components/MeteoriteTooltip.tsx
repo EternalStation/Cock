@@ -115,6 +115,19 @@ export const MeteoriteTooltip: React.FC<MeteoriteTooltipProps> = ({
                     30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
                     40%, 60% { transform: translate3d(4px, 0, 0); }
                 }
+                .custom-scrollbar::-webkit-scrollbar {
+                    width: 4px;
+                }
+                .custom-scrollbar::-webkit-scrollbar-track {
+                    background: rgba(0, 0, 0, 0.2);
+                }
+                .custom-scrollbar::-webkit-scrollbar-thumb {
+                    background: ${rarityColor}66;
+                    border-radius: 2px;
+                }
+                .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+                    background: ${rarityColor};
+                }
             `}</style>
 
             {/* Header: Name + Symbol + Total Power */}
@@ -198,13 +211,15 @@ export const MeteoriteTooltip: React.FC<MeteoriteTooltipProps> = ({
             </div>
 
             {/* Stats Area with Active/Inactive Logic */}
-            <div style={{
+            <div className="custom-scrollbar" style={{
                 flex: 1,
                 padding: '12px 15px',
                 display: 'flex',
                 flexDirection: 'column',
                 gap: '8px',
                 background: 'rgba(0, 0, 0, 0.4)',
+                overflowY: 'auto',
+                minHeight: 0
             }}>
                 {meteorite.perks && meteorite.perks.map((perk, idx) => {
                     const perkResult = efficiency.perkResults[perk.id];

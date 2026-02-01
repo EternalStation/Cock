@@ -31,15 +31,15 @@ export const InventoryPanel: React.FC<InventoryPanelProps> = ({
             flex: 1, // Fill remaining space in bottom bar
             height: '100%',
             display: 'flex', flexDirection: 'column', gap: '5px',
-            paddingLeft: '20px',
+            paddingLeft: '0px', // REMOVED PADDING
             // borderLeft removed to avoid double line with ModuleMenu container
         }}>
             {/* Removed Title Header to make room for full-size grid */}
 
             <div className="inventory-grid" style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(10, 1fr)',
-                gridTemplateRows: 'repeat(3, auto)',     // Auto height to pack tightly
+                gridTemplateColumns: 'repeat(5, 1fr)',
+                gridTemplateRows: 'repeat(6, 1fr)',     // 5x6 = 30 slots
                 gap: '8px', // Uniform gap as requested
                 width: '100%',
                 height: '100%',

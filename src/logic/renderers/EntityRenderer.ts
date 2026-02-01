@@ -391,6 +391,32 @@ export function renderEnemies(ctx: CanvasRenderingContext2D, state: GameState, m
                 const sPulse = 1 + Math.sin(state.gameTime * 5) * 0.1; ctx.scale(sPulse, sPulse); ctx.drawImage(dmImg, -s / 2, -s / 2, s, s); ctx.restore();
             }
         }
+
+        // ELITE HP BAR
+        if (e.isElite && e.maxHp > 0 && e.hp < e.maxHp) {
+            ctx.save();
+            ctx.rotate(-(e.rotationPhase || 0)); // Counter-rotate so bar is horizontal
+            const barWidth = e.size * 2.5;
+            const barHeight = 4;
+            const yOffset = -e.size * 1.8;
+
+            // BG
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+            ctx.fillRect(-barWidth / 2, yOffset, barWidth, barHeight);
+
+            // Fill
+            const pct = Math.max(0, e.hp / e.maxHp);
+            ctx.fillStyle = e.palette[1] || '#ff0000'; // Use inner color or red
+            ctx.fillRect(-barWidth / 2, yOffset, barWidth * pct, barHeight);
+
+            // Border/Glow for visibility
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+            ctx.lineWidth = 0.5;
+            ctx.strokeRect(-barWidth / 2, yOffset, barWidth, barHeight);
+
+            ctx.restore();
+        }
+
         ctx.restore();
     });
 

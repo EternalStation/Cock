@@ -38,7 +38,16 @@ export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClo
             setIsRecycleMode(false);
             setRemovalCandidate(null);
         }
-    }, [isOpen]);
+
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape' && isOpen) {
+                onClose();
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isOpen, onClose]);
 
     const handleMouseEnterItem = (item: any, x: number, y: number) => {
         if (hoverTimeout.current) {
@@ -155,72 +164,76 @@ export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClo
                     width: '55%',
                     height: '100%',
                     display: 'flex',
-                    flexDirection: 'column'
+                    flexDirection: 'row', // CHANGED TO ROW
+                    borderLeft: '2px solid rgba(59, 130, 246, 0.3)'
                 }}>
 
-                    {/* TOP SECTION: BUTTONS + DATA PANEL */}
-                    {/* TOP SECTION: BUTTONS + DATA PANEL */}
+                    {/* COL 1: DATA PANEL (TOOLTIP) - 50% */}
                     <div style={{
-                        flex: 1.4, // Increased flex to give more space/height
+                        flex: 1,
+                        height: '100%',
                         display: 'flex',
-                        position: 'relative',
-                        borderBottom: '2px solid rgba(59, 130, 246, 0.3)'
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        padding: '20px',
+                        background: 'radial-gradient(circle at 50% 50%, rgba(15, 23, 42, 0.6) 0%, rgba(2, 2, 5, 0.2) 100%)',
+                        borderRight: '1px solid rgba(59, 130, 246, 0.1)'
                     }}>
-
-                        {/* DATA PANEL (Centered Left) */}
-                        <div style={{
-                            flex: 1,
+                        <div className="data-panel" style={{
+                            width: '100%',
+                            maxWidth: '380px',
+                            height: '90%', // Increased height
+                            background: 'rgba(5, 5, 15, 0.95)',
+                            border: '2px solid #3b82f6',
+                            borderRadius: '8px',
+                            boxShadow: '0 0 20px rgba(59, 130, 246, 0.3)',
                             display: 'flex',
-                            justifyContent: 'center',
-                            alignItems: 'center',
-                            pointerEvents: 'auto'
+                            overflow: 'hidden'
                         }}>
-                            <div className="data-panel" style={{
-                                width: '320px',
-                                height: '420px',
-                                background: 'rgba(5, 5, 15, 0.95)',
-                                border: '2px solid #3b82f6',
-                                borderRadius: '8px',
-                                boxShadow: '0 0 20px rgba(59, 130, 246, 0.3)',
-                                display: 'flex',
-                                overflow: 'hidden'
-                            }}>
-                                {(hoveredItem || lockedItem) && !movedItem ? (
-                                    <MeteoriteTooltip
-                                        meteorite={(lockedItem?.item || hoveredItem?.item) as Meteorite}
-                                        gameState={gameState}
-                                        x={0} y={0}
-                                        meteoriteIdx={moduleSockets.diamonds.indexOf((lockedItem?.item || hoveredItem?.item))}
-                                        isEmbedded={true}
-                                        isInteractive={true}
-                                        onMouseEnter={() => { if (hoverTimeout.current) clearTimeout(hoverTimeout.current); }}
-                                        onMouseLeave={() => handleMouseLeaveItem(100)}
-                                    />
-                                ) : (
-                                    <div style={{
-                                        width: '100%', height: '100%',
-                                        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                                        color: '#3b82f6', opacity: 0.5, gap: '10px'
-                                    }}>
-                                        <div style={{ fontSize: '30px', animation: 'spin-slow 10s infinite linear' }}>⬡</div>
-                                        <div style={{ fontWeight: 900, letterSpacing: '2px' }}>SYSTEM IDLE</div>
-                                        <div style={{ fontSize: '10px' }}>HOVER OVER MODULE TO SCAN</div>
-                                        <style>{`@keyframes spin-slow { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
-                                    </div>
-                                )}
-                            </div>
+                            {(hoveredItem || lockedItem) && !movedItem ? (
+                                <MeteoriteTooltip
+                                    meteorite={(lockedItem?.item || hoveredItem?.item) as Meteorite}
+                                    gameState={gameState}
+                                    x={0} y={0}
+                                    meteoriteIdx={moduleSockets.diamonds.indexOf((lockedItem?.item || hoveredItem?.item))}
+                                    isEmbedded={true}
+                                    isInteractive={true}
+                                    onMouseEnter={() => { if (hoverTimeout.current) clearTimeout(hoverTimeout.current); }}
+                                    onMouseLeave={() => handleMouseLeaveItem(100)}
+                                />
+                            ) : (
+                                <div style={{
+                                    width: '100%', height: '100%',
+                                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                                    color: '#3b82f6', opacity: 0.5, gap: '10px'
+                                }}>
+                                    <div style={{ fontSize: '30px', animation: 'spin-slow 10s infinite linear' }}>⬡</div>
+                                    <div style={{ fontWeight: 900, letterSpacing: '2px' }}>SYSTEM IDLE</div>
+                                    <div style={{ fontSize: '10px' }}>HOVER OVER MODULE TO SCAN</div>
+                                    <style>{`@keyframes spin-slow { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
+                                </div>
+                            )}
                         </div>
+                    </div>
 
-                        {/* BUTTON CLUSTER (Centered Right) */}
+                    {/* COL 2: CONTROLS + INVENTORY - 50% */}
+                    <div style={{
+                        flex: 1,
+                        height: '100%',
+                        display: 'flex',
+                        flexDirection: 'column'
+                    }}>
+                        {/* BUTTON CLUSTER */}
                         <div style={{
-                            flex: 1,
+                            padding: '10px 8px', // Ultra-compact padding
                             display: 'flex',
                             flexDirection: 'column',
                             justifyContent: 'center',
                             alignItems: 'center',
-                            gap: '25px', // Increased gap for better spacing
-                            pointerEvents: 'auto',
-                            padding: '40px'
+                            gap: '6px', // Tight gap
+                            borderBottom: '1px solid rgba(59, 130, 246, 0.2)',
+                            background: 'rgba(15, 23, 42, 0.3)',
+                            pointerEvents: 'auto' // ADDED: Enable interactions
                         }}>
                             {/* DUST RESOURCE DISPLAY */}
                             <div style={{
@@ -229,30 +242,23 @@ export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClo
                                 border: '1px solid #475569',
                                 borderLeft: '4px solid #22d3ee',
                                 borderRadius: '4px',
-                                padding: '15px',
+                                padding: '4px 8px', // Slim padding
                                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                                boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-                                marginBottom: '10px'
+                                boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+                                minHeight: '32px'
                             }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                    <img src="/assets/Icons/MeteoriteDust.png" alt="Dust" style={{ width: '32px', height: '32px', filter: 'drop-shadow(0 0 5px #22d3ee)' }} />
-                                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                        <span style={{ fontSize: '10px', color: '#94a3b8', letterSpacing: '1px' }}>METEORITE DUST</span>
-                                        <span style={{ fontSize: '24px', fontWeight: '900', color: '#fff', textShadow: '0 0 10px rgba(34, 211, 238, 0.5)' }}>{meteoriteDust}</span>
-                                    </div>
-                                </div>
-                                <div style={{ width: '1px', height: '30px', background: 'rgba(255,255,255,0.1)' }}></div>
-                                <div style={{ fontSize: '10px', color: '#64748b', textAlign: 'right' }}>
-                                    <div>CURRENCY</div>
-                                    <div>AVAILABLE</div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <img src="/assets/Icons/MeteoriteDust.png" alt="Dust" style={{ width: '20px', height: '20px', filter: 'drop-shadow(0 0 5px #22d3ee)' }} />
+                                    <span style={{ fontSize: '9px', color: '#94a3b8', letterSpacing: '1px', fontWeight: 700 }}>DUST:</span>
+                                    <span style={{ fontSize: '16px', fontWeight: '900', color: '#fff', textShadow: '0 0 10px rgba(34, 211, 238, 0.5)' }}>{meteoriteDust}</span>
                                 </div>
                             </div>
 
-                            {/* RECYCLER TOGGLE - CRIMSON HOLOGRAPHIC */}
+                            {/* RECYCLER TOGGLE */}
                             <button
                                 onClick={() => setIsRecycleMode(!isRecycleMode)}
                                 style={{
-                                    width: '100%', maxWidth: '280px', height: '60px',
+                                    width: '100%', maxWidth: '280px', height: '32px', // Ultra-compact height
                                     background: isRecycleMode
                                         ? 'linear-gradient(135deg, rgba(220, 38, 38, 0.2) 0%, rgba(153, 27, 27, 0.3) 100%)'
                                         : 'linear-gradient(135deg, rgba(15, 23, 42, 0.8) 0%, rgba(30, 41, 59, 0.4) 100%)',
@@ -261,40 +267,23 @@ export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClo
                                     borderRadius: '2px',
                                     position: 'relative',
                                     color: isRecycleMode ? '#ef4444' : '#94a3b8',
-                                    fontSize: '12px', fontWeight: 900, letterSpacing: '2px',
+                                    fontSize: '10px', fontWeight: 900, letterSpacing: '1px',
                                     cursor: 'pointer', transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                                    boxShadow: isRecycleMode ? '0 0 25px rgba(220, 38, 38, 0.3), inset 0 0 10px rgba(220, 38, 38, 0.2)' : '0 4px 6px rgba(0,0,0,0.2)',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                                    boxShadow: isRecycleMode ? '0 0 10px rgba(220, 38, 38, 0.3)' : '0 1px 2px rgba(0,0,0,0.2)',
                                     transform: recyclingAnim ? 'scale(0.98)' : 'scale(1)'
                                 }}
-                                onMouseEnter={(e) => {
-                                    if (!isRecycleMode) {
-                                        e.currentTarget.style.borderColor = '#ef4444';
-                                        e.currentTarget.style.color = '#fca5a5';
-                                        e.currentTarget.style.boxShadow = '0 0 15px rgba(220, 38, 38, 0.2)';
-                                    }
-                                }}
-                                onMouseLeave={(e) => {
-                                    if (!isRecycleMode) {
-                                        e.currentTarget.style.borderColor = '#475569';
-                                        e.currentTarget.style.color = '#94a3b8';
-                                        e.currentTarget.style.boxShadow = '0 4px 6px rgba(0,0,0,0.2)';
-                                    }
-                                }}
                             >
-                                <div style={{ fontSize: '16px', marginBottom: '4px', textShadow: isRecycleMode ? '0 0 10px #ef4444' : 'none', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    <span style={{ fontSize: '18px' }}>{isRecycleMode ? '⚠' : '♻'}</span>
-                                    {isRecycleMode ? 'RECYCLER ACTIVE' : 'ENABLE RECYCLER'}
-                                </div>
-                                <div style={{ width: '60%', height: '2px', background: isRecycleMode ? '#ef4444' : '#475569', opacity: 0.5, marginTop: '2px' }}></div>
+                                <span style={{ fontSize: '12px' }}>{isRecycleMode ? '⚠' : '♻'}</span>
+                                {isRecycleMode ? 'RECYCLER ACTIVE' : 'ENABLE RECYCLER'}
                             </button>
 
-                            {/* PORTAL BUTTON - VOID HOLOGRAPHIC */}
+                            {/* PORTAL BUTTON */}
                             <button
                                 onClick={() => triggerPortal()}
                                 disabled={portalState !== 'closed' || meteoriteDust < 5}
                                 style={{
-                                    width: '100%', maxWidth: '280px', height: '60px',
+                                    width: '100%', maxWidth: '280px', height: '32px', // Ultra-compact height
                                     background: portalState !== 'closed'
                                         ? 'rgba(0,0,0,0.5)'
                                         : (meteoriteDust >= 5
@@ -308,91 +297,73 @@ export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClo
                                     color: portalState !== 'closed'
                                         ? '#475569'
                                         : (meteoriteDust >= 5 ? '#d8b4fe' : '#ef4444'),
-                                    fontSize: '12px',
+                                    fontSize: '10px',
                                     fontWeight: 900,
                                     letterSpacing: '1px',
                                     textTransform: 'uppercase',
                                     cursor: (portalState === 'closed' && meteoriteDust >= 5) ? 'pointer' : 'not-allowed',
                                     transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                                    boxShadow: (portalState === 'closed' && meteoriteDust >= 5) ? '0 0 25px rgba(124, 58, 237, 0.3), inset 0 0 10px rgba(124, 58, 237, 0.2)' : '0 4px 6px rgba(0,0,0,0.2)'
-                                }}
-                                className={portalState !== 'closed' ? '' : (meteoriteDust >= 5 ? 'pulse-purple' : '')}
-                                onMouseEnter={(e) => {
-                                    if (portalState === 'closed' && meteoriteDust >= 5) {
-                                        e.currentTarget.style.borderColor = '#d8b4fe';
-                                        e.currentTarget.style.boxShadow = '0 0 30px rgba(124, 58, 237, 0.5), inset 0 0 15px rgba(124, 58, 237, 0.3)';
-                                        e.currentTarget.style.color = '#fff';
-                                    }
-                                }}
-                                onMouseLeave={(e) => {
-                                    if (portalState === 'closed' && meteoriteDust >= 5) {
-                                        e.currentTarget.style.borderColor = '#a855f7';
-                                        e.currentTarget.style.boxShadow = '0 0 25px rgba(124, 58, 237, 0.3), inset 0 0 10px rgba(124, 58, 237, 0.2)';
-                                        e.currentTarget.style.color = '#d8b4fe';
-                                    }
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
                                 }}
                             >
                                 {portalState === 'closed' ? (
-                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
-                                            <span style={{ fontSize: '18px' }}>⚛</span>
-                                            ACTIVATE PORTAL
+                                    <>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                            <span style={{ fontSize: '12px' }}>⚛</span>
+                                            PORTAL
                                         </div>
-                                        <div style={{ fontSize: '9px', background: 'rgba(0,0,0,0.4)', padding: '2px 6px', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.1)' }}>
-                                            COST: 5 DUST
-                                        </div>
-                                    </div>
+                                        <span style={{ fontSize: '8px', opacity: 0.6, background: 'rgba(0,0,0,0.3)', padding: '0px 3px', borderRadius: '2px' }}>5 DUST</span>
+                                    </>
                                 ) : 'PORTAL ACTIVE'}
                             </button>
 
-                            {/* CLOSE BUTTON - TECH FRAME */}
+                            {/* CLOSE BUTTON */}
                             <button
                                 onClick={onClose}
                                 style={{
-                                    width: '100%', maxWidth: '280px', height: '40px',
+                                    width: '100%', maxWidth: '280px', height: '24px', // Ultra-compact height
                                     background: 'linear-gradient(90deg, rgba(59, 130, 246, 0.1) 0%, rgba(37, 99, 235, 0.05) 100%)',
                                     border: '1px solid #3b82f6',
                                     color: '#60a5fa',
                                     borderRadius: '2px',
-                                    cursor: 'pointer', fontWeight: 'bold', letterSpacing: '2px',
-                                    fontSize: '10px',
-                                    transition: 'all 0.2s',
-                                    marginTop: '10px' // Separation
-                                }}
-                                onMouseEnter={(e) => {
-                                    e.currentTarget.style.background = 'rgba(59, 130, 246, 0.3)';
-                                    e.currentTarget.style.color = '#fff';
-                                    e.currentTarget.style.boxShadow = '0 0 15px rgba(59, 130, 246, 0.3)';
-                                }}
-                                onMouseLeave={(e) => {
-                                    e.currentTarget.style.background = 'rgba(59, 130, 246, 0.1)';
-                                    e.currentTarget.style.color = '#60a5fa';
-                                    e.currentTarget.style.boxShadow = 'none';
+                                    cursor: 'pointer', fontWeight: 'bold', letterSpacing: '1px',
+                                    fontSize: '9px'
                                 }}
                             >
-                                CLOSE MODULE MATRIX (X)
+                                CLOSE (ESC)
                             </button>
                         </div>
-                    </div>
 
-                    {/* BOTTOM SECTION: INVENTORY */}
-                    <div style={{
-                        height: '40%', // Approx 400px of 1080p
-                        background: 'rgba(5, 5, 15, 0.98)',
-                        pointerEvents: 'auto',
-                        padding: '10px'
-                    }}>
-                        <InventoryPanel
-                            inventory={gameState.inventory}
-                            movedItem={movedItem}
-                            onInventoryUpdate={onInventoryUpdate}
-                            onSocketUpdate={onSocketUpdate}
-                            setMovedItem={setMovedItem}
-                            handleMouseEnterItem={handleMouseEnterItem}
-                            handleMouseLeaveItem={handleMouseLeaveItem}
-                            isRecycleMode={isRecycleMode}
-                            onRecycleClick={handleRecycleClick}
-                        />
+                        {/* INVENTORY PANEL - Flex 1 to take remaining space */}
+                        <div style={{
+                            flex: 1, // Changed from fixed height to flex 1
+                            width: '100%',
+                            background: 'rgba(5, 5, 15, 0.98)',
+                            pointerEvents: 'auto',
+                            padding: '10px',
+                            borderTop: '1px solid rgba(59, 130, 246, 0.1)',
+                            display: 'flex',
+                            flexDirection: 'column'
+                        }}>
+                            <div style={{
+                                width: '100%', padding: '5px 0',
+                                textAlign: 'center', fontSize: '12px',
+                                color: '#94a3b8', letterSpacing: '2px', fontWeight: 900
+                            }}>
+                                M.E.T.E.O.R. STORAGE
+                            </div>
+                            <InventoryPanel
+                                inventory={gameState.inventory}
+                                movedItem={movedItem}
+                                onInventoryUpdate={onInventoryUpdate}
+                                onSocketUpdate={onSocketUpdate}
+                                setMovedItem={setMovedItem}
+                                handleMouseEnterItem={handleMouseEnterItem}
+                                handleMouseLeaveItem={handleMouseLeaveItem}
+                                isRecycleMode={isRecycleMode}
+                                onRecycleClick={handleRecycleClick}
+                            />
+                        </div>
                     </div>
                 </div>
             </div>
