@@ -44,7 +44,14 @@ export function renderBackground(ctx: CanvasRenderingContext2D, state: GameState
         ctx.globalAlpha = 1.0;
     };
 
+    // Clip the grid to only draw inside arenas (Optimizes fill rate and avoids drawing in void)
+    ctx.save();
+    ctx.beginPath();
+    ARENA_CENTERS.forEach(c => buildHexPath(ctx, c, ARENA_RADIUS));
+    ctx.clip();
+
     drawHexGrid(120);
+    ctx.restore();
 }
 
 export function renderMapBoundaries(ctx: CanvasRenderingContext2D) {
@@ -83,34 +90,17 @@ function buildHexPath(ctx: CanvasRenderingContext2D, center: { x: number, y: num
     ctx.closePath();
 }
 
-export function renderArenaVignette(ctx: CanvasRenderingContext2D, state: GameState, logicalWidth: number, logicalHeight: number) {
-    const { camera } = state;
+export function renderArenaVignette(ctx: CanvasRenderingContext2D) {
+    // Unused: const { camera } = state;
 
-    const scale = 0.58;
-    const vW = logicalWidth / scale;
-    const vH = logicalHeight / scale;
-
-    // Safety margin
-    const margin = 200;
-    const left = camera.x - vW / 2 - margin;
-    const top = camera.y - vH / 2 - margin;
-    const w = vW + margin * 2;
-    const h = vH + margin * 2;
+    // Variables left, top, w, h were used for the full-screen void fill which is now removed.
+    // We don't need viewport calculations anymore as we just draw the vignette strokes around the static arenas.
 
     ctx.save();
 
-    // 1. Draw Solid Void (Hard Cutoff) - FAST
-    // We fill the screen with black, excluding the arenas
-    ctx.fillStyle = '#020617';
-    ctx.beginPath();
-    ctx.rect(left, top, w, h);
-
-    ARENA_CENTERS.forEach((c) => {
-        buildHexPath(ctx, c, ARENA_RADIUS);
-    });
-
-    // Fill "evenodd" creates the holes
-    ctx.fill("evenodd");
+    // OPTIMIZATION: "Solid Void" removed.
+    // The background grid is now clipped to the arenas, and the screen is cleared to black.
+    // So the void is naturally black without needing this expensive "evenodd" fill.
 
     // 2. Draw "Soft Fade" Edge (Cheaper than shadowBlur)
     // We draw semi-transparent strokes centered on the boundary.

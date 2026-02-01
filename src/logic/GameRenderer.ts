@@ -64,7 +64,7 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, mete
         // If so, draw it LATER.
         // Let's draw it AFTER entities (Layer 8.5) so they fade out when leaving?
         // No, let's draw it HERE to hide the "grid" outside.
-        renderArenaVignette(ctx, state, logicalWidth, logicalHeight);
+        renderArenaVignette(ctx);
 
         // 3. Ground Effects (Area Effects)
         renderAreaEffects(ctx, state);
