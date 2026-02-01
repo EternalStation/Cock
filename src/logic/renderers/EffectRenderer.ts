@@ -228,3 +228,24 @@ export function renderScreenEffects(ctx: CanvasRenderingContext2D, state: GameSt
         }
     }
 }
+
+export function renderVignette(ctx: CanvasRenderingContext2D, width: number, height: number) {
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset transform to screen space
+
+    // Create Radial Gradient for Vignette
+    // Center is transparent, edges are dark
+    const radius = Math.max(width, height) * 0.8;
+    const cx = width / 2;
+    const cy = height / 2;
+
+    const grad = ctx.createRadialGradient(cx, cy, radius * 0.4, cx, cy, radius);
+    grad.addColorStop(0, 'rgba(0, 0, 0, 0)');
+    grad.addColorStop(0.6, 'rgba(2, 6, 23, 0.2)'); // Subtle fade start (dark blue-ish)
+    grad.addColorStop(1, 'rgba(2, 6, 23, 0.9)');   // Dark edges
+
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, width, height);
+
+    ctx.restore();
+}

@@ -9,10 +9,8 @@ interface MeteoriteTooltipProps {
     meteoriteIdx?: number; // Optional index if placed in socket
     x: number;
     y: number;
-    onRemove?: () => boolean; // Return success status
-    canRemove?: boolean;
-    removeCost?: number;
     isInteractive?: boolean;
+    isEmbedded?: boolean;
     onMouseEnter?: () => void;
     onMouseLeave?: () => void;
 }
@@ -47,13 +45,15 @@ const getMeteoriteImage = (m: Meteorite) => {
 
 export const MeteoriteTooltip: React.FC<MeteoriteTooltipProps> = ({
     meteorite, gameState, meteoriteIdx = -1, x,
-    onRemove, canRemove, removeCost, isInteractive,
+    isInteractive,
+    isEmbedded,
     onMouseEnter, onMouseLeave
 }) => {
-    const [shake, setShake] = React.useState(false);
+    // const [shake, setShake] = React.useState(false); // Unused
     const rarityColor = RARITY_COLORS[meteorite.rarity];
     const info = RARITY_INFO[meteorite.rarity];
 
+    // ... efficiency logic remains ...
     const efficiency = meteoriteIdx !== -1
         ? calculateMeteoriteEfficiency(gameState, meteoriteIdx)
         : { totalBoost: 0, perkResults: {} };
@@ -61,20 +61,28 @@ export const MeteoriteTooltip: React.FC<MeteoriteTooltipProps> = ({
     // Calculate how many stats we have
     const activeStatsCount = meteorite.perks ? meteorite.perks.length : 0;
 
-    const CARD_WIDTH = 350;
+    const CARD_WIDTH = isEmbedded ? '100%' : 350;
     // Tighter height calculation to remove empty space
-    const CARD_HEIGHT = 240 + (activeStatsCount * 32) + (onRemove ? 50 : 0); // Reduced base and per-perk height
+    const CARD_HEIGHT = isEmbedded ? '100%' : 240 + (activeStatsCount * 32);
     const OFFSET = 20;
 
     // Final positioning: Centered vertically on screen, horizontal follows cursor
     let finalX = x + OFFSET;
-    const finalY = (window.innerHeight - CARD_HEIGHT) / 2;
+    const finalY = (window.innerHeight - (typeof CARD_HEIGHT === 'number' ? CARD_HEIGHT : 400)) / 2;
 
-    if (finalX + CARD_WIDTH > window.innerWidth) {
-        finalX = x - CARD_WIDTH - OFFSET;
+    if (!isEmbedded && finalX + (typeof CARD_WIDTH === 'number' ? CARD_WIDTH : 350) > window.innerWidth) {
+        finalX = x - (typeof CARD_WIDTH === 'number' ? CARD_WIDTH : 350) - OFFSET;
     }
 
-    const tooltipStyle: React.CSSProperties = {
+    const tooltipStyle: React.CSSProperties = isEmbedded ? {
+        width: '100%',
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        boxSizing: 'border-box',
+        background: 'transparent',
+        ['--rarity-color' as any]: rarityColor
+    } : {
         position: 'fixed',
         left: finalX,
         top: finalY,
@@ -86,12 +94,11 @@ export const MeteoriteTooltip: React.FC<MeteoriteTooltipProps> = ({
         display: 'flex',
         flexDirection: 'column',
         boxSizing: 'border-box',
-        border: `3px solid ${shake ? '#ef4444' : rarityColor}`,
+        border: `3px solid ${rarityColor}`,
         background: 'linear-gradient(135deg, #0f172a 0%, #020617 100%)',
-        boxShadow: `0 0 30px ${shake ? '#ef4444' : rarityColor}44`,
+        boxShadow: `0 0 30px ${rarityColor}44`,
         ['--rarity-color' as any]: rarityColor,
-        animation: shake ? 'shake 0.4s cubic-bezier(.36,.07,.19,.97) both' : undefined,
-        transform: shake ? 'translate3d(0, 0, 0)' : undefined
+        // Animation removed
     };
 
     return (
@@ -282,41 +289,7 @@ export const MeteoriteTooltip: React.FC<MeteoriteTooltipProps> = ({
             </div>
 
             {/* Remove Button if Applicable */}
-            {onRemove && canRemove && (
-                <div
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        // If onRemove returns explicit false, we shake.
-                        // If it returns nothing (undefined) or true, we don't shake.
-                        const success = onRemove();
-                        if (success === false) {
-                            setShake(true);
-                            setTimeout(() => setShake(false), 500);
-                        }
-                    }}
-                    style={{
-                        marginTop: 'auto',
-                        padding: '12px',
-                        background: 'rgba(239, 68, 68, 0.2)',
-                        borderTop: '1px solid #ef4444',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '8px',
-                        transition: 'background 0.2s',
-                        pointerEvents: 'auto'
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.4)'}
-                    onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)'}
-                >
-                    <span style={{ fontSize: '14px', color: '#ef4444', fontWeight: 900 }}>REMOVE</span>
-                    <div style={{ display: 'flex', alignItems: 'center', background: 'rgba(0,0,0,0.5)', padding: '2px 6px', borderRadius: '4px' }}>
-                        <span style={{ fontSize: '12px', color: '#fff', fontWeight: 'bold' }}>{removeCost || 5}</span>
-                        <img src="/assets/Icons/MeteoriteDust.png" alt="Dust" style={{ width: '16px', height: '16px', marginLeft: '4px' }} />
-                    </div>
-                </div>
-            )}
+            {/* Remove Button removed as per request to move logic to drag interaction */}
         </div>
     );
 };

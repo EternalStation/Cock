@@ -15,6 +15,7 @@ interface HexGridProps {
     handleMouseEnterItem: (item: any, x: number, y: number) => void;
     handleMouseLeaveItem: (delay?: number) => void;
     setHoveredHex: (hex: { hex: LegendaryHex, index: number, x: number, y: number } | null) => void;
+    onAttemptRemove: (index: number, item: any) => void;
 }
 
 export const HexGrid: React.FC<HexGridProps> = ({
@@ -27,11 +28,12 @@ export const HexGrid: React.FC<HexGridProps> = ({
     setLockedItem,
     handleMouseEnterItem,
     handleMouseLeaveItem,
-    setHoveredHex
+    setHoveredHex,
+    onAttemptRemove
 }) => {
     const { moduleSockets } = gameState;
-    const centerX = 540;
-    const centerY = 540;
+    const centerX = 432; // Centered in 45% of 1920 (864px wide)
+    const centerY = 540; // True Vertical Centering
     const innerRadius = 170;
     const outerRadius = 260;
     const edgeRadius = 350;
@@ -90,11 +92,10 @@ export const HexGrid: React.FC<HexGridProps> = ({
         const angle = (Math.PI / 3) * i + Math.PI / 6;
         return { x: centerX + 69.28 * Math.cos(angle), y: centerY + 69.28 * Math.sin(angle) };
     });
-
     const allDiamondPositions = [...innerDiamondPositions, ...edgeDiamondPositions];
 
     return (
-        <svg width="100%" height="100%" viewBox="0 0 1920 1080">
+        <svg width="100%" height="100%" viewBox="0 0 864 1080">
             <text x={centerX} y={centerY - 480} textAnchor="middle" fill="#22d3ee" fontSize="32" fontWeight="900" style={{ letterSpacing: '8px', opacity: 0.8 }}>MODULE MATRIX</text>
             <text x={centerX} y={centerY - 440} textAnchor="middle" fill="#94a3b8" fontSize="12" style={{ letterSpacing: '2px', opacity: 0.6 }}>CONSTRUCT SYNERGIES BY SLOTTING METEORITES AND RECOVERED MODULES</text>
             <line x1={centerX - 250} y1={centerY - 425} x2={centerX + 250} y2={centerY - 425} stroke="#22d3ee" strokeWidth="1" opacity="0.2" />
@@ -358,14 +359,29 @@ export const HexGrid: React.FC<HexGridProps> = ({
 
             {allDiamondPositions.map((pos, i) => (
                 <g key={`diamond-socket-${i}`}
-                    onClick={(e) => {
-                        // Only Click-Lock tooltip if not dragging
-                        if (!movedItem) {
-                            setLockedItem({ item: moduleSockets.diamonds[i], x: e.clientX, y: e.clientY });
+                    onMouseDown={(e) => {
+                        if (!movedItem && moduleSockets.diamonds[i]) {
+                            e.stopPropagation();
+                            onAttemptRemove(i, moduleSockets.diamonds[i]);
+                            return;
                         }
                     }}
-                    onMouseUp={(e) => {
-                        e.stopPropagation();
+                    onClick={() => {
+                        // Only Click-Lock tooltip if not dragging
+                        if (!movedItem && moduleSockets.diamonds[i]) {
+                            // Note: onMouseDown usually fires before onClick, so this might be redundant or unreachable if handled above.
+                            // However, if we want dragging logic separate from locking, we need to be careful.
+                            // Current request is "try to drag" -> show popup.
+                            // If we assume interaction starts with mousedown, we use that.
+                            // We'll keep setLockedItem here for explicit clicks that don't trigger drag threshold (if we had one),
+                            // BUT since we are popping up a modal on ANY attempt to "pick up" (which assumes mousedown),
+                            // we might block the lock info.
+                            // Actually, if a modal pops up, you can't lock the item instructions anyway.
+                            // Let's rely on onMouseDown for the "Remove" flow.
+                        }
+                    }}
+                    onMouseUp={(_e) => {
+                        _e.stopPropagation();
                         if (movedItem) {
                             // Handle Drop on Socket from Release
                             if (movedItem.source === 'inventory') {

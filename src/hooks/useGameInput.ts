@@ -11,10 +11,10 @@ interface GameInputProps {
     setShowStats: React.Dispatch<React.SetStateAction<boolean>>;
     setShowModuleMenu: React.Dispatch<React.SetStateAction<boolean>>;
     setGameOver: React.Dispatch<React.SetStateAction<boolean>>;
-    showStats: boolean;
+    // showStats: boolean; // Removed as unused
 }
 
-export function useGameInput({ gameState, setShowSettings, setShowStats, setShowModuleMenu, setGameOver, showStats }: GameInputProps) {
+export function useGameInput({ gameState, setShowSettings, setShowStats, setShowModuleMenu, setGameOver }: GameInputProps) {
     const keys = useRef<Record<string, boolean>>({});
     const inputVector = useRef({ x: 0, y: 0 });
 
@@ -28,18 +28,13 @@ export function useGameInput({ gameState, setShowSettings, setShowStats, setShow
             startBGM(gameState.current.currentArena);
 
             if (key === 'escape' || code === 'escape') {
-                // Priority: If any other menu is open, close it and open Settings
-                // If Settings is already open, close it (toggle behavior)
-                // If nothing is open, open Settings
-                const otherMenuOpen = gameState.current.showModuleMenu || showStats;
+                // Settings Menu Toggle Logic
+                // If Settings is open -> Close it (Resume)
+                // If Settings is closed -> Open it (Pause) - This will overlay other menus due to z-index
+                setShowSettings(prev => !prev);
 
-                if (otherMenuOpen) {
-                    setShowModuleMenu(false);
-                    setShowStats(false);
-                    setShowSettings(true);
-                } else {
-                    setShowSettings(p => !p);
-                }
+                // Note: We deliberately do NOT close other menus (Module/Stats) here,
+                // so Settings can overlay them.
             }
 
             // Handle C key for stats toggle (Always allow if gameStarted or in Main Menu)

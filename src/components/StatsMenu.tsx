@@ -11,7 +11,7 @@ interface StatsMenuProps {
     gameState: GameState;
 }
 
-export const StatRow: React.FC<{ label: string; stat: PlayerStats; isPercent?: boolean; inverse?: boolean; extraInfo?: string; legendaryBonusFlat?: number; legendaryBonusPct?: number; arenaMult?: number }> = ({ label, stat, isPercent, inverse, extraInfo, legendaryBonusFlat = 0, legendaryBonusPct = 0, arenaMult = 1 }) => {
+export const StatRow: React.FC<{ label: string; stat: PlayerStats; isPercent?: boolean; extraInfo?: string; legendaryBonusFlat?: number; legendaryBonusPct?: number; arenaMult?: number }> = ({ label, stat, isPercent, extraInfo, legendaryBonusFlat = 0, legendaryBonusPct = 0, arenaMult = 1 }) => {
     // Formula: (Base + Flat + HexFlat) * (1 + NormalMult%) * (1 + HexMult%)
     const baseSum = stat.base + stat.flat + legendaryBonusFlat;
     const upgradeMult = 1 + (stat.mult || 0) / 100;
@@ -23,52 +23,51 @@ export const StatRow: React.FC<{ label: string; stat: PlayerStats; isPercent?: b
 
     // Color logic
     const isBuffed = arenaMult > 1;
-    const totalColor = isBuffed ? '#3b82f6' : (inverse
-        ? (total < stat.base ? '#4ade80' : '#ef4444') // Lower is better (cooldown)
-        : (total > stat.base ? '#4ade80' : '#ef4444')); // Higher is better
+    // User requested Green for all non-buffed stats (avoiding Red for base stats)
+    const totalColor = isBuffed ? '#3b82f6' : '#4ade80';
 
     return (
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', borderBottom: '1px solid #1e293b' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #1e293b' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ color: '#94a3b8', fontSize: 12, fontWeight: 700 }}>{label}</span>
-                {extraInfo && <span style={{ color: '#64748b', fontSize: 10 }}>{extraInfo}</span>}
+                <span style={{ color: '#94a3b8', fontSize: 16, fontWeight: 700 }}>{label}</span>
+                {extraInfo && <span style={{ color: '#64748b', fontSize: 12 }}>{extraInfo}</span>}
             </div>
             <div style={{ display: 'flex', gap: 6, alignItems: 'center', justifyContent: 'flex-end' }}>
 
                 {/* 1. Base (Sum of Base + Flat + HexFlat) */}
                 {legendaryBonusFlat > 0 ? (
-                    <span style={{ color: '#64748b', fontSize: 10 }}>
+                    <span style={{ color: '#64748b', fontSize: 12 }}>
                         ({Math.round((stat.base + stat.flat) * 10) / 10} <span style={{ color: '#fbbf24' }}>+{Math.round(legendaryBonusFlat * 10) / 10}</span>)
                     </span>
                 ) : (
-                    <span style={{ color: '#64748b', fontSize: 10 }}>
+                    <span style={{ color: '#64748b', fontSize: 12 }}>
                         {Math.round(baseSum * 10) / 10}
                     </span>
                 )}
 
                 {/* 2. Upgrade Mult */}
-                <span style={{ color: '#64748b', fontSize: 10 }}> x </span>
-                <span style={{ color: '#94a3b8', fontSize: 10 }}>{Math.round(upgradeMult * 100)}%</span>
+                <span style={{ color: '#64748b', fontSize: 12 }}> x </span>
+                <span style={{ color: '#94a3b8', fontSize: 12 }}>{Math.round(upgradeMult * 100)}%</span>
 
                 {/* 3. Hex Mult (Only if > 0% boost, i.e. > 100% scale) */}
                 {legendaryBonusPct > 0 && (
                     <>
-                        <span style={{ color: '#64748b', fontSize: 10 }}> x </span>
-                        <span style={{ color: '#fbbf24', fontSize: 10 }}>{Math.round(hexScaling * 100)}%</span>
+                        <span style={{ color: '#64748b', fontSize: 12 }}> x </span>
+                        <span style={{ color: '#fbbf24', fontSize: 12 }}>{Math.round(hexScaling * 100)}%</span>
                     </>
                 )}
 
                 {/* 4. Arena Mult (Only if != 1) */}
                 {arenaMult !== 1 && (
                     <>
-                        <span style={{ color: '#64748b', fontSize: 10 }}> x </span>
-                        <span style={{ color: '#3b82f6', fontSize: 10 }}>{Math.round(arenaMult * 100)}%</span>
+                        <span style={{ color: '#64748b', fontSize: 12 }}> x </span>
+                        <span style={{ color: '#3b82f6', fontSize: 12 }}>{Math.round(arenaMult * 100)}%</span>
                     </>
                 )}
 
                 {/* 5. Equals Total */}
-                <span style={{ color: '#64748b', fontSize: 10 }}> = </span>
-                <span style={{ color: totalColor, fontSize: 12, fontWeight: 900, minWidth: 30, textAlign: 'right' }}>
+                <span style={{ color: '#64748b', fontSize: 12 }}> = </span>
+                <span style={{ color: totalColor, fontSize: 18, fontWeight: 600, minWidth: 30, textAlign: 'right' }}>
                     {displayTotal}
                 </span>
             </div>
@@ -126,7 +125,7 @@ const EnemyPreview: React.FC<{ shape: string; color: string }> = ({ shape, color
             ctx.closePath();
         } else if (shape === 'minion') {
             // Chevron / Dart (Stealth Bomber)
-            const p1 = { x: cx + size, y: cy };
+            const p1 = { x: cx + size * 0.8, y: cy };
             const p2 = { x: cx - size, y: cy + size * 0.7 };
             const p3 = { x: cx - size * 0.3, y: cy };
             const p4 = { x: cx - size, y: cy - size * 0.7 };
@@ -136,6 +135,25 @@ const EnemyPreview: React.FC<{ shape: string; color: string }> = ({ shape, color
             ctx.lineTo(p3.x, p3.y);
             ctx.lineTo(p4.x, p4.y);
             ctx.closePath();
+        } else if (shape === 'snitch') {
+            // Snitch (Circle with Blades)
+            const bodyR = size * 0.6;
+            ctx.arc(cx, cy, bodyR, 0, Math.PI * 2);
+            ctx.closePath();
+
+            // Blades
+            const drawBlade = (angle: number) => {
+                const bx = cx + Math.cos(angle) * bodyR;
+                const by = cy + Math.sin(angle) * bodyR;
+                const tipX = cx + Math.cos(angle) * size * 1.5;
+                const tipY = cy + Math.sin(angle) * size * 1.5;
+                ctx.moveTo(bx, by);
+                ctx.lineTo(tipX, tipY);
+            };
+            // 6 Blades roughly
+            for (let i = 0; i < 6; i++) {
+                drawBlade(i * Math.PI / 3);
+            }
         }
 
         // Fill & Stroke
@@ -209,7 +227,7 @@ export const StatsMenu: React.FC<StatsMenuProps> = ({ gameState }) => {
             id: 'pentagon',
             name: 'HIVE OVERLORD',
             role: 'Summoner',
-            desc: 'Maintains 500-700px command distance. Enters stationary casting state to spawn. (5s Cast Time).',
+            desc: 'Maintains distance. Spawns Minions. SELF-DESTRUCTS after 60s (Huge Area Damage). Enrages/Guards if player gets close.',
             stats: 'HP: Very High | Spd: Medium',
             color: '#FF0000'
         },
@@ -217,10 +235,19 @@ export const StatsMenu: React.FC<StatsMenuProps> = ({ gameState }) => {
             id: 'minion', // Special
             name: 'SWARM MINION',
             role: 'Minion',
-            desc: 'Spawned by Hive Overlords. Spirals towards target. Weak but numerous.',
+            desc: 'Spawned by Hive Overlords. Weak but numerous. Aggressively LAUNCHES at player if player nears the Hive.',
             stats: 'HP: Very Low | Spd: Very Fast',
             color: '#FFD700',
             shape: 'minion'
+        },
+        {
+            id: 'snitch',
+            name: 'LOOT SNITCH',
+            role: 'Rare',
+            desc: 'Flees from player. Swaps positions with other enemies to escape. Despawns after 30s if not killed.',
+            stats: 'HP: Low | Spd: Extreme',
+            color: '#f97316',
+            shape: 'snitch'
         }
     ];
 
@@ -299,8 +326,8 @@ export const StatsMenu: React.FC<StatsMenuProps> = ({ gameState }) => {
                                             if (colRed <= 0) return null;
                                             return (
                                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', borderBottom: '1px solid #1e293b' }}>
-                                                    <span style={{ color: '#94a3b8', fontSize: 12, fontWeight: 700 }}>Collision Reduction</span>
-                                                    <span style={{ color: '#fbbf24', fontSize: 12, fontWeight: 900 }}>
+                                                    <span style={{ color: '#94a3b8', fontSize: 16, fontWeight: 700 }}>Collision Reduction</span>
+                                                    <span style={{ color: '#fbbf24', fontSize: 18, fontWeight: 600 }}>
                                                         {Math.min(80, colRed).toFixed(1)}%
                                                     </span>
                                                 </div>
@@ -311,8 +338,8 @@ export const StatsMenu: React.FC<StatsMenuProps> = ({ gameState }) => {
                                             if (projRed <= 0) return null;
                                             return (
                                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', borderBottom: '1px solid #1e293b' }}>
-                                                    <span style={{ color: '#94a3b8', fontSize: 12, fontWeight: 700 }}>Projectile Reduction</span>
-                                                    <span style={{ color: '#fbbf24', fontSize: 12, fontWeight: 900 }}>
+                                                    <span style={{ color: '#94a3b8', fontSize: 16, fontWeight: 700 }}>Projectile Reduction</span>
+                                                    <span style={{ color: '#fbbf24', fontSize: 18, fontWeight: 600 }}>
                                                         {Math.min(80, projRed).toFixed(1)}%
                                                     </span>
                                                 </div>
@@ -323,8 +350,8 @@ export const StatsMenu: React.FC<StatsMenuProps> = ({ gameState }) => {
                                             if (lifesteal <= 0) return null;
                                             return (
                                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', borderBottom: '1px solid #1e293b' }}>
-                                                    <span style={{ color: '#94a3b8', fontSize: 12, fontWeight: 700 }}>Lifesteal</span>
-                                                    <span style={{ color: '#fbbf24', fontSize: 12, fontWeight: 900 }}>
+                                                    <span style={{ color: '#94a3b8', fontSize: 16, fontWeight: 700 }}>Lifesteal</span>
+                                                    <span style={{ color: '#fbbf24', fontSize: 18, fontWeight: 600 }}>
                                                         {lifesteal.toFixed(1)}%
                                                     </span>
                                                 </div>
@@ -335,8 +362,8 @@ export const StatsMenu: React.FC<StatsMenuProps> = ({ gameState }) => {
                             })()}
 
                             {/* XP Display: Explicit Breakdown */}
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', borderBottom: '1px solid #1e293b' }}>
-                                <span style={{ color: '#94a3b8', fontSize: 12, fontWeight: 700 }}>XP Gain per kill</span>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #1e293b' }}>
+                                <span style={{ color: '#94a3b8', fontSize: 16, fontWeight: 700 }}>XP Gain per kill</span>
                                 <div style={{ display: 'flex', gap: 6, alignItems: 'center', justifyContent: 'flex-end' }}>
                                     {(() => {
                                         const flatBase = 40 + (player.level * 3) + player.xp_per_kill.flat;
@@ -354,25 +381,25 @@ export const StatsMenu: React.FC<StatsMenuProps> = ({ gameState }) => {
                                         return (
                                             <>
                                                 {showBreakdown ? (
-                                                    <span style={{ color: '#64748b', fontSize: 10 }}>
+                                                    <span style={{ color: '#64748b', fontSize: 12 }}>
                                                         ({Math.round(flatBase)} <span style={{ color: '#fbbf24' }}>+{Math.round(hexFlat)}</span>)
                                                     </span>
                                                 ) : (
-                                                    <span style={{ color: '#64748b', fontSize: 10 }}>{Math.round(baseSum)}</span>
+                                                    <span style={{ color: '#64748b', fontSize: 12 }}>{Math.round(baseSum)}</span>
                                                 )}
 
-                                                <span style={{ color: '#64748b', fontSize: 10 }}> x </span>
-                                                <span style={{ color: '#94a3b8', fontSize: 10 }}>{Math.round(normalMult * 100)}%</span>
+                                                <span style={{ color: '#64748b', fontSize: 12 }}> x </span>
+                                                <span style={{ color: '#94a3b8', fontSize: 12 }}>{Math.round(normalMult * 100)}%</span>
 
                                                 {hexMult > 1 && (
                                                     <>
-                                                        <span style={{ color: '#64748b', fontSize: 10 }}> x </span>
-                                                        <span style={{ color: '#fbbf24', fontSize: 10 }}>{Math.round(hexMult * 100)}%</span>
+                                                        <span style={{ color: '#64748b', fontSize: 12 }}> x </span>
+                                                        <span style={{ color: '#fbbf24', fontSize: 12 }}>{Math.round(hexMult * 100)}%</span>
                                                     </>
                                                 )}
 
-                                                <span style={{ color: '#64748b', fontSize: 10 }}> = </span>
-                                                <span style={{ color: '#4ade80', fontSize: 12, fontWeight: 900, minWidth: 30, textAlign: 'right' }}>
+                                                <span style={{ color: '#64748b', fontSize: 12 }}> = </span>
+                                                <span style={{ color: '#4ade80', fontSize: 18, fontWeight: 600, minWidth: 30, textAlign: 'right' }}>
                                                     {Math.round(total)}
                                                 </span>
                                             </>
@@ -382,13 +409,13 @@ export const StatsMenu: React.FC<StatsMenuProps> = ({ gameState }) => {
                             </div>
 
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderTop: '1px solid #333', marginTop: 10 }}>
-                                <span style={{ color: '#94a3b8', fontSize: 12, fontWeight: 700 }}>PROJECTILES</span>
-                                <span style={{ color: '#fff', fontSize: 12, fontWeight: 900 }}>{player.multi} <span style={{ color: '#666' }}>(Pierce: {player.pierce})</span></span>
+                                <span style={{ color: '#94a3b8', fontSize: 16, fontWeight: 700 }}>PROJECTILES</span>
+                                <span style={{ color: '#fff', fontSize: 16, fontWeight: 900 }}>{player.multi} <span style={{ color: '#666', fontWeight: 600 }}>(Pierce: {player.pierce})</span></span>
                             </div>
 
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0' }}>
-                                <span style={{ color: '#94a3b8', fontSize: 12, fontWeight: 700 }}>LEVEL</span>
-                                <span style={{ color: '#00FF88', fontSize: 14, fontWeight: 900 }}>{player.level}</span>
+                                <span style={{ color: '#94a3b8', fontSize: 16, fontWeight: 700 }}>LEVEL</span>
+                                <span style={{ color: '#00FF88', fontSize: 18, fontWeight: 600 }}>{player.level}</span>
                             </div>
                         </div>
                     </div>
@@ -410,10 +437,10 @@ export const StatsMenu: React.FC<StatsMenuProps> = ({ gameState }) => {
                                             {intel.role}
                                         </div>
                                     </div>
-                                    <div style={{ color: '#cbd5e1', fontSize: 11, marginTop: 4, lineHeight: 1.3 }}>
+                                    <div style={{ color: '#cbd5e1', fontSize: 13, marginTop: 4, lineHeight: 1.3 }}>
                                         {intel.desc}
                                     </div>
-                                    <div style={{ color: '#64748b', fontSize: 10, marginTop: 4, fontWeight: 700 }}>
+                                    <div style={{ color: '#64748b', fontSize: 12, marginTop: 4, fontWeight: 700 }}>
                                         {intel.stats}
                                     </div>
                                 </div>

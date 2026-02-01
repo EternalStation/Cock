@@ -112,7 +112,7 @@ export function useGameLoop(gameStarted: boolean) {
         setShowStats,
         setShowModuleMenu,
         setGameOver,
-        showStats
+        // showStats: removed
     });
 
     const restartGame = () => {

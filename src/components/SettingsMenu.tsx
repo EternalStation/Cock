@@ -24,7 +24,7 @@ export const SettingsMenu = ({ onClose, onRestart, onQuit }: SettingsMenuProps) 
     };
 
     return (
-        <div className="modal-overlay overlay-blur" style={{ zIndex: 100 }}>
+        <div className="modal-overlay overlay-blur" style={{ zIndex: 3000 }}>
             <h2 style={{ color: '#fff', fontSize: 24, letterSpacing: 4, marginBottom: 40, borderBottom: '2px solid #22d3ee', paddingBottom: 10, textShadow: '0 0 10px #22d3ee' }}>PAUSED</h2>
 
             <div style={{ width: '100%', maxWidth: 300, display: 'flex', flexDirection: 'column', gap: 20 }}>

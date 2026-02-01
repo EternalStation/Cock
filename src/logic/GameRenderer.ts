@@ -1,7 +1,7 @@
 import type { GameState } from './types';
-import { renderBackground, renderMapBoundaries, renderPortals } from './renderers/MapRenderer';
+import { renderBackground, renderMapBoundaries, renderPortals, renderArenaVignette } from './renderers/MapRenderer';
 import { renderPlayer, renderEnemies, renderProjectiles, renderDrones, renderMeteorites, renderBossIndicator } from './renderers/EntityRenderer';
-import { renderAreaEffects, renderEpicenterShield, renderParticles, renderFloatingNumbers, renderScreenEffects } from './renderers/EffectRenderer';
+import { renderAreaEffects, renderEpicenterShield, renderParticles, renderFloatingNumbers, renderScreenEffects, renderVignette } from './renderers/EffectRenderer';
 
 export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, meteoriteImages: Record<string, HTMLImageElement>, scaleFactor: number = 1) {
     const { width, height } = ctx.canvas;
@@ -53,11 +53,21 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, mete
         // 1. Background
         renderBackground(ctx, state, logicalWidth, logicalHeight);
 
-        // 2. Ground Effects (Area Effects)
-        renderAreaEffects(ctx, state);
-
-        // 3. Map Boundaries
+        // 2. Map Boundaries
         renderMapBoundaries(ctx);
+
+        // 2.5 Arena Fog (Vignette for Arena) - Draws ON TOP of background but BELOW entities if we want entities to pop? 
+        // User wants "atmosphere" so fog should probably be below entities to simulate ground fog?
+        // But "depth of field off screen" implies hiding things.
+        // Let's draw it HERE so the grid is hidden, but entities are visible on top of the black void?
+        // If entities walk into the void, they should be hidden?
+        // If so, draw it LATER.
+        // Let's draw it AFTER entities (Layer 8.5) so they fade out when leaving?
+        // No, let's draw it HERE to hide the "grid" outside.
+        renderArenaVignette(ctx, state, logicalWidth, logicalHeight);
+
+        // 3. Ground Effects (Area Effects)
+        renderAreaEffects(ctx, state);
 
         // 4. Portals
         renderPortals(ctx, state);
@@ -85,6 +95,9 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, mete
         // --- OVERLAYS (Screen Space) ---
         renderBossIndicator(ctx, state, width, height, camera, scaleFactor);
         renderScreenEffects(ctx, state, width, height);
+
+        // Atmospheric Vignette (Tunnel Vision)
+        renderVignette(ctx, width, height);
 
     } catch (e) {
         // Prevent console spam causing freeze
