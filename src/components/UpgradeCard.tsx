@@ -37,10 +37,6 @@ export const UpgradeCard: React.FC<UpgradeCardProps> = ({ choice: c, index, isSe
 
     let baseColor = RARITY_COLORS[rId] || '#00FFFF';
 
-    // Override for Regen Upgrades (User Request: Green Icon)
-    if (c.type?.id?.startsWith('reg_')) {
-        baseColor = '#4ade80'; // Bright Green
-    }
     const rawName = c.type?.name || 'UNKNOWN';
     const displayName = rawName.replace('Multiplier', 'MULTP');
     const label = c.rarity?.label || 'QUANTUM'; // Default to uppercase in case
@@ -88,6 +84,7 @@ export const UpgradeCard: React.FC<UpgradeCardProps> = ({ choice: c, index, isSe
             onClick={handleClick}
             style={{
                 ['--card-glow' as any]: baseColor,
+                borderColor: baseColor
             }}
         >
             {/* Background Effect Layer */}

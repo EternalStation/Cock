@@ -1,6 +1,5 @@
-
 import React from 'react';
-import type { GameState, LegendaryHex } from '../../logic/types';
+import type { GameState, LegendaryHex, PlayerClass } from '../../logic/types';
 import { calculateMeteoriteEfficiency } from '../../logic/EfficiencyLogic';
 import { getHexPoints, getMeteoriteImage, getLegendaryInfo, findClosestVertices, RARITY_COLORS } from './ModuleUtils';
 
@@ -15,6 +14,7 @@ interface HexGridProps {
     handleMouseEnterItem: (item: any, x: number, y: number) => void;
     handleMouseLeaveItem: (delay?: number) => void;
     setHoveredHex: (hex: { hex: LegendaryHex, index: number, x: number, y: number } | null) => void;
+    onShowClassDetail: (playerClass: PlayerClass) => void;
     onAttemptRemove: (index: number, item: any) => void;
 }
 
@@ -29,6 +29,7 @@ export const HexGrid: React.FC<HexGridProps> = ({
     handleMouseEnterItem,
     handleMouseLeaveItem,
     setHoveredHex,
+    onShowClassDetail,
     onAttemptRemove
 }) => {
     const { moduleSockets } = gameState;
@@ -109,25 +110,6 @@ export const HexGrid: React.FC<HexGridProps> = ({
                 const v2 = nextPos;
                 return (
                     <g key={`ms-ii-adj-group-${i}`}>
-                        <line x1={v1.x} y1={v1.y} x2={v2.x} y2={v2.y} stroke={active ? "#EF4444" : INACTIVE_STROKE} strokeWidth={active ? "3" : "2"} opacity={active ? 0.3 : 1} className={active ? "pulse-crimson" : ""} />
-                        {active && (
-                            <>
-                                <line x1={v1.x} y1={v1.y} x2={v2.x} y2={v2.y} stroke="#F87171" strokeWidth="5" strokeLinecap="round" strokeDasharray="2, 120" className="energy-dot-forward" />
-                                <line x1={v1.x} y1={v1.y} x2={v2.x} y2={v2.y} stroke="#F87171" strokeWidth="5" strokeLinecap="round" strokeDasharray="2, 120" className="energy-dot-reverse" />
-                            </>
-                        )}
-                    </g>
-                );
-            })}
-            {/* 2.2 Inner-Inner Opposite (3) */}
-            {innerDiamondPositions.slice(0, 3).map((pos, i) => {
-                const oppIdx = i + 3;
-                const oppPos = innerDiamondPositions[oppIdx];
-                const active = moduleSockets.diamonds[i] && moduleSockets.diamonds[oppIdx];
-                const v1 = pos;
-                const v2 = oppPos;
-                return (
-                    <g key={`ms-ii-opp-group-${i}`}>
                         <line x1={v1.x} y1={v1.y} x2={v2.x} y2={v2.y} stroke={active ? "#EF4444" : INACTIVE_STROKE} strokeWidth={active ? "3" : "2"} opacity={active ? 0.3 : 1} className={active ? "pulse-crimson" : ""} />
                         {active && (
                             <>
@@ -258,13 +240,88 @@ export const HexGrid: React.FC<HexGridProps> = ({
                 </filter>
             </defs>
 
-            <polygon
-                points={getHexPoints(centerX, centerY, 80)}
-                fill="url(#core-grad)"
-                stroke="#22d3ee"
-                strokeWidth="4"
-                className="glow-cyan"
-            />
+            <g
+                style={{ cursor: 'pointer' }}
+                onClick={() => {
+                    const centerClass = gameState.moduleSockets.center;
+                    if (centerClass) {
+                        onShowClassDetail(centerClass);
+                    }
+                }}
+            >
+                {/* Attention Pulse for First-Time Players */}
+                {!gameState.chassisDetailViewed && (
+                    <polygon
+                        points={getHexPoints(centerX, centerY, 90)}
+                        fill="none"
+                        stroke="#22d3ee"
+                        strokeWidth="2"
+                        className="pulse-attention"
+                        pointerEvents="none"
+                    />
+                )}
+
+                {/* Invisible click target for the central hex area */}
+                <polygon
+                    points={getHexPoints(centerX, centerY, 80)}
+                    fill="transparent"
+                    pointerEvents="all"
+                />
+
+                {!gameState.moduleSockets.center?.iconUrl && (
+                    <polygon
+                        points={getHexPoints(centerX, centerY, 80)}
+                        fill="url(#core-grad)"
+                        stroke={gameState.moduleSockets.center ? gameState.moduleSockets.center.icon : "#22d3ee"}
+                        strokeWidth="4"
+                        className={gameState.moduleSockets.center ? "glow-hex" : "glow-cyan"}
+                        style={{ '--hex-color': gameState.moduleSockets.center?.icon } as any}
+                        pointerEvents="none"
+                    />
+                )}
+                {gameState.moduleSockets.center && (
+                    <>
+                        {gameState.moduleSockets.center.iconUrl ? (
+                            <image
+                                href={gameState.moduleSockets.center.iconUrl}
+                                x={centerX - 80}
+                                y={centerY - 80}
+                                width="160"
+                                height="160"
+                                pointerEvents="none"
+                                style={{ filter: `drop-shadow(0 0 20px ${gameState.moduleSockets.center.icon})` }}
+                            />
+                        ) : (
+                            <>
+                                <text
+                                    x={centerX}
+                                    y={centerY - 5}
+                                    textAnchor="middle"
+                                    fill={gameState.moduleSockets.center.icon}
+                                    fontSize="24"
+                                    fontWeight="900"
+                                    style={{ filter: `drop-shadow(0 0 10px ${gameState.moduleSockets.center.icon})`, letterSpacing: '2px' }}
+                                    pointerEvents="none"
+                                >
+                                    {gameState.moduleSockets.center.name.toUpperCase()}
+                                </text>
+                                <text
+                                    x={centerX}
+                                    y={centerY + 25}
+                                    textAnchor="middle"
+                                    fill="#94a3b8"
+                                    fontSize="10"
+                                    fontWeight="700"
+                                    style={{ letterSpacing: '1px' }}
+                                    pointerEvents="none"
+                                >
+                                    CHASSIS
+                                </text>
+                            </>
+                        )}
+                    </>
+                )}
+            </g>
 
             {hexPositions.map((pos, i) => {
                 const hex = gameState.moduleSockets.hexagons[i];
@@ -359,7 +416,9 @@ export const HexGrid: React.FC<HexGridProps> = ({
 
             {allDiamondPositions.map((pos, i) => (
                 <g key={`diamond-socket-${i}`}
+                    style={{ pointerEvents: gameState.pendingLegendaryHex ? 'none' : 'auto' }}
                     onMouseDown={(e) => {
+                        if (gameState.pendingLegendaryHex) return; // Disable during placement
                         if (!movedItem && moduleSockets.diamonds[i]) {
                             e.stopPropagation();
                             onAttemptRemove(i, moduleSockets.diamonds[i]);
@@ -383,16 +442,23 @@ export const HexGrid: React.FC<HexGridProps> = ({
                     onMouseUp={(_e) => {
                         _e.stopPropagation();
                         if (movedItem) {
-                            // Handle Drop on Socket from Release
+                            const itemAtTarget = moduleSockets.diamonds[i];
+                            // FIX: If target is filled, force removal check (5-dust fee) instead of free swap
+                            if (itemAtTarget) {
+                                onAttemptRemove(i, itemAtTarget);
+                                // We don't drop the new item yet; user must pay to clear the slot first
+                                setMovedItem(null);
+                                return;
+                            }
+
+                            // Handle Drop on Empty Socket
                             if (movedItem.source === 'inventory') {
-                                const itemAtTarget = moduleSockets.diamonds[i];
                                 onSocketUpdate('diamond', i, movedItem.item);
-                                onInventoryUpdate(movedItem.index, itemAtTarget);
+                                onInventoryUpdate(movedItem.index, null);
                             } else if (movedItem.source === 'diamond') {
-                                // Swap or Move
-                                const itemAtTarget = moduleSockets.diamonds[i];
+                                // Move from socket to socket (both were empty or source index is reset)
                                 onSocketUpdate('diamond', i, movedItem.item);
-                                onSocketUpdate('diamond', movedItem.index, itemAtTarget);
+                                onSocketUpdate('diamond', movedItem.index, null);
                             }
                             setMovedItem(null);
                             setHoveredItem(null);

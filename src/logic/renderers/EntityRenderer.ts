@@ -1,3 +1,4 @@
+import { PLAYER_CLASSES } from '../classes';
 import type { GameState } from '../types';
 
 export function renderPlayer(ctx: CanvasRenderingContext2D, state: GameState) {
@@ -22,7 +23,8 @@ export function renderPlayer(ctx: CanvasRenderingContext2D, state: GameState) {
         ctx.stroke();
     };
 
-    ctx.strokeStyle = '#22d3ee';
+    const themeColor = PLAYER_CLASSES.find(c => c.id === player.playerClass)?.themeColor || '#22d3ee';
+    ctx.strokeStyle = themeColor;
     ctx.fillStyle = '#020617';
     ctx.lineWidth = 2.5;
     ctx.setLineDash([]);
@@ -31,7 +33,7 @@ export function renderPlayer(ctx: CanvasRenderingContext2D, state: GameState) {
 
     if (state.spawnTimer > 0) {
         ctx.shadowBlur = 30 * (state.spawnTimer / 3.0);
-        ctx.shadowColor = '#22d3ee';
+        ctx.shadowColor = themeColor;
 
         const progress = Math.max(0, 3.0 - state.spawnTimer) / 3.0;
         const ease = 1 - Math.pow(1 - progress, 3);
@@ -221,8 +223,7 @@ export function renderEnemies(ctx: CanvasRenderingContext2D, state: GameState, m
             ctx.rotate(-(e.rotationPhase || 0) * 2);
             ctx.strokeStyle = e.palette[0];
             ctx.lineWidth = 4;
-            ctx.globalAlpha = 0.6;
-            ctx.beginPath();
+            ctx.globalAlpha = 1;
             const r = e.size * 1.5;
             for (let i = 0; i < 8; i++) {
                 const angle = (Math.PI * 2 / 8) * i;
@@ -237,13 +238,45 @@ export function renderEnemies(ctx: CanvasRenderingContext2D, state: GameState, m
         const pulse = 1.0 + (Math.sin(e.pulsePhase || 0) * 0.05);
         ctx.scale(pulse, pulse);
 
-        let coreColor = e.palette[0];
-        let innerColor = e.palette[1];
-        let outerColor = e.palette[2];
+        // --- Spectral Flux: Color Logic ---
+        let coreColor = e.eraPalette?.[2] || e.palette[0];
+        let innerColor = e.eraPalette?.[1] || e.palette[1];
+        let outerColor = e.eraPalette?.[0] || e.palette[2];
+
+        const fState = e.fluxState || 0;
+        if (fState === 0) {
+            // Prime: High Contrast (Stable)
+            coreColor = e.eraPalette?.[0] || e.palette[0];
+            innerColor = e.eraPalette?.[2] || e.palette[1];
+            outerColor = e.eraPalette?.[1] || e.palette[2];
+        } else if (fState === 1) {
+            // Resonance: Inner Pulse (Solid)
+            coreColor = e.eraPalette?.[1] || e.palette[0];
+            innerColor = e.eraPalette?.[0] || e.palette[1];
+            outerColor = e.eraPalette?.[2] || e.palette[2];
+        } else if (fState === 2) {
+            // Radiance: Overloaded Aura (Static Glow)
+            coreColor = '#FFFFFF'; // White Hot
+            innerColor = e.eraPalette?.[0] || e.palette[0];
+            outerColor = e.eraPalette?.[1] || e.palette[1];
+            ctx.shadowColor = innerColor;
+            ctx.shadowBlur = 15;
+        }
 
         let chaosLevel = 0;
+        const minutes = state.gameTime / 60;
         if (e.boss) {
-            chaosLevel = Math.min(1, Math.max(0, (state.gameTime / 60 - 2) / 10));
+            chaosLevel = Math.min(1, Math.max(0, (minutes - 2) / 10));
+        }
+
+        // --- Era Corruption: Glitch (30-60m) ---
+        if (minutes > 30 && !e.boss) {
+            const glitchAmount = Math.min(1, (minutes - 30) / 30);
+            if (Math.random() < glitchAmount * 0.2) {
+                const shift = glitchAmount * 8;
+                ctx.translate((Math.random() - 0.5) * shift, (Math.random() - 0.5) * shift);
+                if (Math.random() > 0.5) ctx.globalAlpha = 0.7;
+            }
         }
 
         const drawShape = (size: number, isWarpedLimit: boolean = false) => {
@@ -339,6 +372,24 @@ export function renderEnemies(ctx: CanvasRenderingContext2D, state: GameState, m
             ctx.strokeStyle = '#FFFFFF'; ctx.lineWidth = 4; drawShape(e.size * 1.1); ctx.stroke();
             ctx.restore();
             ctx.translate((Math.random() - 0.5) * 10, (Math.random() - 0.5) * 10);
+        }
+
+        // Blackhole Vortex Glitch Effect
+        const inBlackhole = state.areaEffects.some(effect => {
+            if (effect.type !== 'blackhole') return false;
+            const dist = Math.hypot(e.x - effect.x, e.y - effect.y);
+            return dist < effect.radius;
+        });
+
+        if (inBlackhole) {
+            const shift = 3 + Math.random() * 3;
+            ctx.save();
+            ctx.translate((Math.random() - 0.5) * shift, (Math.random() - 0.5) * shift);
+            ctx.globalAlpha = 0.4;
+            ctx.strokeStyle = '#7e22ce';
+            drawShape(e.size * 1.05);
+            ctx.stroke();
+            ctx.restore();
         }
 
         if ((e.glitchPhase && e.glitchPhase > 0) || e.boss) {
@@ -441,7 +492,52 @@ export function renderEnemies(ctx: CanvasRenderingContext2D, state: GameState, m
 
 export function renderProjectiles(ctx: CanvasRenderingContext2D, state: GameState) {
     state.bullets.forEach(b => {
-        ctx.fillStyle = '#22d3ee'; ctx.beginPath(); ctx.arc(b.x, b.y, b.size, 0, Math.PI * 2); ctx.fill();
+        if (b.isNanite) {
+            ctx.save();
+            // Nanite Spec: Swarm of tiny micro-bots
+            // Use the bullet's color (which is set to class theme color)
+            const naniteColor = b.color || '#4ade80';
+            ctx.shadowColor = naniteColor;
+            ctx.shadowBlur = 5;
+            ctx.fillStyle = naniteColor;
+
+            const count = 6;
+            const swarmRadius = b.size * 2.5; // Spread out a bit
+
+            // Draw multiple tiny specks buzzing around the center
+            for (let i = 0; i < count; i++) {
+                // Chaotic movement: Orbit + Jitter
+                const t = state.gameTime * 5 + b.id;
+                const offsetPhase = i * ((Math.PI * 2) / count);
+
+                // Orbiting with varying radius
+                const r = swarmRadius * (0.4 + 0.3 * Math.sin(t * 3 + offsetPhase));
+                const theta = t * 2 + offsetPhase;
+
+                const nx = b.x + Math.cos(theta) * r;
+                const ny = b.y + Math.sin(theta) * r;
+
+                ctx.beginPath();
+                // Tiny distinct robots
+                ctx.rect(nx - 1, ny - 1, 2, 2);
+                ctx.fill();
+            }
+
+            // Central guiding light (faint)
+            ctx.globalAlpha = 0.5;
+            ctx.beginPath();
+            ctx.arc(b.x, b.y, 2, 0, Math.PI * 2);
+            ctx.fillStyle = '#ffffff';
+            ctx.fill();
+
+            ctx.restore();
+        } else {
+            // Standard Bullet (corrected to use b.color)
+            ctx.fillStyle = b.color || '#22d3ee';
+            ctx.beginPath();
+            ctx.arc(b.x, b.y, b.size, 0, Math.PI * 2);
+            ctx.fill();
+        }
     });
     state.enemyBullets.forEach(b => {
         ctx.fillStyle = b.color || '#ef4444'; ctx.beginPath(); ctx.arc(b.x, b.y, b.size, 0, Math.PI * 2); ctx.fill();
@@ -493,13 +589,13 @@ export function renderBossIndicator(ctx: CanvasRenderingContext2D, state: GameSt
     state.enemies.filter(e => e.boss && !e.dead).forEach(e => {
         const screenX = (e.x - camera.x) * zoom + width / 2;
         const screenY = (e.y - camera.y) * zoom + height / 2;
-        const pad = 40 * dpr;
+        const pad = 50 * dpr;
         if (screenX < pad || screenX > width - pad || screenY < pad || screenY > height - pad) {
             const ix = Math.max(pad, Math.min(width - pad, screenX));
             const iy = Math.max(pad, Math.min(height - pad, screenY));
             ctx.save(); ctx.translate(ix, iy); ctx.scale(1 + Math.sin(Date.now() / 150) * 0.15, 1 + Math.sin(Date.now() / 150) * 0.15);
             ctx.fillStyle = '#ef4444'; ctx.shadowBlur = 10; ctx.shadowColor = '#ef4444';
-            const size = 15;
+            const size = 50;
             ctx.beginPath(); ctx.arc(0, -size * 0.2, size * 0.8, 0, Math.PI * 2); ctx.fill();
             ctx.fillRect(-size * 0.4, size * 0.3, size * 0.8, size * 0.4);
             ctx.fillStyle = '#000000'; ctx.beginPath(); ctx.arc(-size * 0.3, 0, size * 0.2, 0, Math.PI * 2); ctx.arc(size * 0.3, 0, size * 0.2, 0, Math.PI * 2); ctx.fill();

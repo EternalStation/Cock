@@ -53,7 +53,7 @@ export const UpgradeMenu: React.FC<UpgradeMenuProps> = ({ upgradeChoices, onUpgr
     }, [upgradeChoices, selectedIndex, onUpgradeSelect]);
 
     return (
-        <div className="upgrade-menu-overlay" style={{ zIndex: 1000 }}>
+        <div className="upgrade-menu-overlay" style={{ zIndex: 1000, pointerEvents: 'auto' }}>
             <div className="fog-layer" />
             <div className="fog-pulse" />
             <div className="honeycomb-layer">

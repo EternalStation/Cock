@@ -1,15 +1,60 @@
-import type { GameState, Enemy } from './types';
-import { spawnParticles } from './ParticleLogic';
+import type { GameState, Enemy, ShapeType } from './types';
 import { playSfx } from './AudioLogic';
 import { getLegendaryOptions, getHexLevel, calculateLegendaryBonus } from './LegendaryLogic';
 import { trySpawnMeteorite } from './LootLogic';
+import { getChassisResonance } from './EfficiencyLogic';
 
 export function handleEnemyDeath(state: GameState, e: Enemy, onEvent?: (event: string, data?: any) => void) {
     if (e.dead) return;
     e.dead = true; e.hp = 0;
     state.killCount++; state.score++;
-    if (!e.isExecuted) {
-        spawnParticles(state, e.x, e.y, e.palette[0], 12);
+    // --- CLASS CAPABILITY: REAPER (SOUL SIPHON) ---
+    // (Deprecated/Removed as per user request for new classes)
+
+    // --- CLASS MODIFIER: Hive-Mother Nanite Spread ---
+    if (e.infectedUntil && state.gameTime * 1000 < e.infectedUntil) {
+        const resonance = getChassisResonance(state);
+        const multiplier = 1 + resonance;
+        const totalInfectionRate = 30 * multiplier;
+
+        let jumpCount = Math.floor(totalInfectionRate / 100);
+        const jumpChance = (totalInfectionRate % 100) / 100;
+        if (Math.random() < jumpChance) jumpCount++;
+
+        if (jumpCount > 0) {
+            // Find multiple nearest enemies
+            const candidates = state.enemies
+                .filter(other => !other.dead && other.id !== e.id && !other.isFriendly)
+                .map(other => ({
+                    enemy: other,
+                    dist: Math.hypot(other.x - e.x, other.y - e.y)
+                }))
+                .filter(c => c.dist < 400)
+                .sort((a, b) => a.dist - b.dist);
+
+            const targets = candidates.slice(0, jumpCount);
+
+            targets.forEach(t => {
+                const other = t.enemy;
+                // Spawn Nanite Projectile
+                state.bullets.push({
+                    id: Math.random(),
+                    x: e.x,
+                    y: e.y,
+                    vx: (Math.random() - 0.5) * 2, // Initial Jitter
+                    vy: (Math.random() - 0.5) * 2,
+                    dmg: e.infectionDmg || 5, // Carry over damage (already adjusted to per-tick in ProjectileLogic)
+                    pierce: 1,
+                    life: 120, // 2 Seconds to find target
+                    isEnemy: false,
+                    hits: new Set([e.id]),
+                    color: '#4ade80',
+                    size: 4,
+                    isNanite: true,
+                    naniteTargetId: other.id
+                });
+            });
+        }
     }
 
     // Meteorite Drop Check
@@ -26,6 +71,7 @@ export function handleEnemyDeath(state: GameState, e: Enemy, onEvent?: (event: s
     if (e.isRare && e.rareReal) {
         playSfx('rare-kill');
         state.rareSpawnActive = false;
+        state.snitchCaught++;
         if (onEvent) onEvent('snitch_kill');
     } else {
         // Consolidated XP Logic (Matches PlayerLogic/ProjectileLogic advanced formula)
@@ -38,6 +84,7 @@ export function handleEnemyDeath(state: GameState, e: Enemy, onEvent?: (event: s
         }
 
         if (state.currentArena === 0) xpBase *= 1.15; // +15% XP in Economic Hex
+        if (state.activeEvent?.type === 'red_moon') xpBase *= 3.0; // 3x XP during Red Moon
 
         // Legendary XP Bonuses
         const hexFlat = calculateLegendaryBonus(state, 'xp_per_kill');
@@ -66,43 +113,71 @@ export function handleEnemyDeath(state: GameState, e: Enemy, onEvent?: (event: s
         comLifeLevel = getHexLevel(state, 'ComLife');
     }
 
-    if (!e.isZombie && comLifeLevel >= 4) {
-        if (Math.random() < 0.10) { // 10% Chance
-            shouldSpawnZombie = true;
+    if (!e.isZombie && !e.boss && !e.isRare) {
+        if (comLifeLevel >= 4) {
+            if (Math.random() < 0.10) { // 10% Chance
+                shouldSpawnZombie = true;
+            }
+        } else if (state.activeEvent?.type === 'necrotic_surge') {
+            shouldSpawnZombie = true; // 100% chance during surge
         }
     }
 
     if (shouldSpawnZombie) {
-        const zombie: Enemy = {
-            id: Math.random(),
-            type: e.type,
-            shape: e.shape, // Preserve shape of fallen enemy
-            x: e.x, y: e.y,
-            size: e.size,
-            hp: Math.floor(e.maxHp * 0.5), // 50% HP
-            maxHp: Math.floor(e.maxHp * 0.5),
-            spd: 1.92,
-            boss: false,
-            bossType: 0,
-            bossAttackPattern: 0,
-            lastAttack: 0,
-            dead: false,
-            shellStage: 0,
-            palette: ['#4ade80', '#22c55e', '#166534'], // Undead Green
-            pulsePhase: 0,
-            rotationPhase: 0,
-            isZombie: true,
-            zombieState: 'dead', // Starts as corpse (Invisible/Waiting)
-            zombieTimer: state.gameTime * 1000 + 2000, // 2s delay before rising (digging)
-            zombieSpd: 1.92,
-            vx: 0,
-            vy: 0,
-            knockback: { x: 0, y: 0 },
-            frozen: 0,
-            isElite: false,
-            isRare: false
-        } as any;
-        state.enemies.push(zombie);
+        const isEventZombie = state.activeEvent?.type === 'necrotic_surge';
+        const riseDelay = isEventZombie ? 3000 : 2000; // 3s for event, 2s for normal
+        const speedBoost = isEventZombie ? 1.25 : 1.0; // 25% speed boost for event zombies
+
+        if (isEventZombie) {
+            // SCHEDULE HOSTILE EVENT ZOMBIE (Necrotic Surge)
+            // Instead of spawning immediately, schedule it to spawn after 3 seconds
+            if (!state.activeEvent!.pendingZombieSpawns) {
+                state.activeEvent!.pendingZombieSpawns = [];
+            }
+            state.activeEvent!.pendingZombieSpawns.push({
+                x: e.x,
+                y: e.y,
+                shape: e.shape as ShapeType,
+                spd: e.spd * speedBoost,
+                maxHp: e.maxHp,
+                size: e.size,
+                spawnAt: state.gameTime + (riseDelay / 1000) // Spawn after 3 seconds
+            });
+        } else {
+            // FRIENDLY ZOMBIE (ComLife Legendary)
+            const zombie: Enemy = {
+                id: Math.random(),
+                type: e.type,
+                shape: e.shape, // Preserve shape of fallen enemy
+                x: e.x, y: e.y,
+                size: e.size,
+                hp: Math.floor(e.maxHp * 0.5), // 50% HP
+                maxHp: Math.floor(e.maxHp * 0.5),
+                spd: 1.92 * speedBoost,
+                boss: false,
+                bossType: 0,
+                bossAttackPattern: 0,
+                lastAttack: 0,
+                dead: false,
+                shellStage: 0,
+                zombieTimer: state.gameTime * 1000 + riseDelay,
+                zombieSpd: 1.92 * speedBoost,
+                palette: ['#4ade80', '#22c55e', '#166534'], // Undead Green for ComLife
+                pulsePhase: 0,
+                rotationPhase: 0,
+                isZombie: true,
+                zombieState: 'dead', // Starts as corpse (Invisible/Waiting)
+                vx: 0,
+                vy: 0,
+                knockback: { x: 0, y: 0 },
+                frozen: 0,
+                isElite: false,
+                isRare: false,
+                eraPalette: ['#4ade80', '#22c55e', '#166534'],
+                fluxState: 0
+            } as any;
+            state.enemies.push(zombie);
+        }
     }
 
     // Level Up Loop

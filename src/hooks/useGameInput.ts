@@ -4,6 +4,7 @@ import { spawnEnemy, spawnRareEnemy } from '../logic/EnemyLogic';
 import { createMeteorite } from '../logic/LootLogic';
 import { castSkill } from '../logic/SkillLogic';
 import { startBGM } from '../logic/AudioLogic';
+import { getKeybinds } from '../logic/Keybinds';
 
 interface GameInputProps {
     gameState: React.MutableRefObject<GameState>;
@@ -11,12 +12,22 @@ interface GameInputProps {
     setShowStats: React.Dispatch<React.SetStateAction<boolean>>;
     setShowModuleMenu: React.Dispatch<React.SetStateAction<boolean>>;
     setGameOver: React.Dispatch<React.SetStateAction<boolean>>;
-    // showStats: boolean; // Removed as unused
+    triggerPortal: () => boolean;
 }
 
-export function useGameInput({ gameState, setShowSettings, setShowStats, setShowModuleMenu, setGameOver }: GameInputProps) {
+export function useGameInput({ gameState, setShowSettings, setShowStats, setShowModuleMenu, setGameOver, triggerPortal }: GameInputProps) {
     const keys = useRef<Record<string, boolean>>({});
     const inputVector = useRef({ x: 0, y: 0 });
+    const mousePos = useRef({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
+    const currentKeybinds = useRef(getKeybinds());
+
+    useEffect(() => {
+        const updateKeybinds = () => {
+            currentKeybinds.current = getKeybinds();
+        };
+        window.addEventListener('keybindsChanged', updateKeybinds);
+        return () => window.removeEventListener('keybindsChanged', updateKeybinds);
+    }, []);
 
     useEffect(() => {
         const handleDown = (e: KeyboardEvent) => {
@@ -27,7 +38,15 @@ export function useGameInput({ gameState, setShowSettings, setShowStats, setShow
             // Start music on first interaction
             startBGM(gameState.current.currentArena);
 
+            // Get latest keybinds from ref
+            const keybinds = currentKeybinds.current;
+
             if (key === 'escape' || code === 'escape') {
+                // If Module Menu is open, let its own listener handle the close (and don't toggle settings)
+                if (gameState.current.showModuleMenu) {
+                    return;
+                }
+
                 // Settings Menu Toggle Logic
                 // If Settings is open -> Close it (Resume)
                 // If Settings is closed -> Open it (Pause) - This will overlay other menus due to z-index
@@ -35,10 +54,15 @@ export function useGameInput({ gameState, setShowSettings, setShowStats, setShow
 
                 // Note: We deliberately do NOT close other menus (Module/Stats) here,
                 // so Settings can overlay them.
+                return; // Ensure we don't process other logic for Escape
             }
 
-            // Handle C key for stats toggle (Always allow if gameStarted or in Main Menu)
-            if (key === 'c' || code === 'keyc') {
+            // CRITICAL: If Settings is open, ignore all other game logic keys
+            // to prevent interference with rebinding or accidentally triggering skills.
+            if (gameState.current.showSettings) return;
+
+            // Handle Stats toggle
+            if (key === keybinds.stats) {
                 setShowStats(prev => {
                     const next = !prev;
                     if (next) {
@@ -49,18 +73,10 @@ export function useGameInput({ gameState, setShowSettings, setShowStats, setShow
                 });
             }
 
-            // Handle X key for module matrix toggle
-            if (key === 'x' || code === 'keyx') {
-                setShowModuleMenu(prev => {
-                    const next = !prev;
-                    if (next) {
-                        setShowSettings(false);
-                        setShowStats(false);
-                        gameState.current.unseenMeteorites = 0;
-                    }
-                    return next;
-                });
-                gameState.current.showModuleMenu = !gameState.current.showModuleMenu;
+            // Handle Matrix toggle
+            if (key === keybinds.matrix) {
+                setShowModuleMenu(prev => !prev);
+                // Refs are synced in useGame loop
             }
 
             // Track movement keys - use both code and key for maximum compatibility
@@ -71,13 +87,25 @@ export function useGameInput({ gameState, setShowSettings, setShowStats, setShow
                 keys.current[key] = true;
             }
 
-            // Skill Input (1-5)
-            if (['1', '2', '3', '4', '5'].includes(key)) {
-                // Find skill with this keybind
-                const skillIndex = gameState.current.player.activeSkills.findIndex(s => s.keyBind === key);
-                if (skillIndex !== -1) {
-                    castSkill(gameState.current, skillIndex);
+            // Skill Input (1-6) - Check all matches to allow duplicate keybinds
+            const skillBindings = [
+                keybinds.skill1,
+                keybinds.skill2,
+                keybinds.skill3,
+                keybinds.skill4,
+                keybinds.skill5,
+                keybinds.skill6
+            ];
+
+            skillBindings.forEach((bind, index) => {
+                if (bind === key && gameState.current.player.activeSkills[index]) {
+                    castSkill(gameState.current, index);
                 }
+            });
+
+            // PORTAL TRIGGER (Configurable)
+            if (key === keybinds.portal) {
+                triggerPortal();
             }
         };
 
@@ -141,7 +169,6 @@ export function useGameInput({ gameState, setShowSettings, setShowStats, setShow
             for (let i = 1; i <= 9; i++) {
                 if (cheatBuffer.endsWith(`m${i}`)) {
                     const player = gameState.current.player;
-                    // Random position within 300 units
                     const angle = Math.random() * Math.PI * 2;
                     const dist = 50 + Math.random() * 250;
                     const x = player.x + Math.cos(angle) * dist;
@@ -149,6 +176,20 @@ export function useGameInput({ gameState, setShowSettings, setShowStats, setShow
 
                     const met = createMeteorite(gameState.current, rarities[i - 1], x, y);
                     gameState.current.meteorites.push(met);
+                    cheatBuffer = '';
+                }
+
+                // MI1-MI9 - Spawn Meteorite DIRECTLY to Inventory (Use for menu testing)
+                if (cheatBuffer.endsWith(`mi${i}`)) {
+                    const met = createMeteorite(gameState.current, rarities[i - 1], 0, 0);
+                    met.isNew = true;
+                    const inventory = gameState.current.inventory;
+                    const emptyIdx = inventory.findIndex(slot => slot === null);
+                    if (emptyIdx !== -1) {
+                        inventory[emptyIdx] = met;
+                    } else {
+                        inventory[inventory.length - 1] = met;
+                    }
                     cheatBuffer = '';
                 }
             }
@@ -160,39 +201,45 @@ export function useGameInput({ gameState, setShowSettings, setShowStats, setShow
                 cheatBuffer = '';
             }
 
-            // Z1 - Spawn Friendly Zombie
+            // Z1 - Trigger Necrotic Surge Event
             if (cheatBuffer.endsWith('z1')) {
-                const p = gameState.current.player;
-                const zombie = {
-                    id: Math.random(),
-                    x: p.x + 100,
-                    y: p.y + 100,
-                    size: 20,
-                    hp: 500, // Balanced testing HP
-                    maxHp: 500,
-                    dead: false,
-                    isZombie: true,
-                    zombieState: 'dead',
-                    zombieTimer: gameState.current.gameTime * 1000 + 5000,
-                    zombieSpd: 1.92,
-                    vx: 0,
-                    vy: 0,
-                    palette: ['#4ade80', '#22c55e', '#166534'],
-                    shape: 'circle',
-                    knockback: { x: 0, y: 0 }
+                // Import and use director logic to start event directly
+                gameState.current.activeEvent = {
+                    type: 'necrotic_surge',
+                    startTime: gameState.current.gameTime,
+                    duration: 30,
+                    endTime: gameState.current.gameTime + 30,
+                    data: {}
                 };
-                gameState.current.enemies.push(zombie as any);
+                console.log('Cheat: Necrotic Surge activated for 30 seconds');
                 cheatBuffer = '';
             }
+
+            // T5, T10, T15... Time Jump
+            const timeIntervals = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60];
+            timeIntervals.forEach(min => {
+                if (cheatBuffer.endsWith(`t${min}`)) {
+                    gameState.current.gameTime = min * 60;
+                    // Also warp the next boss spawn time so it doesn't trigger immediately if we jump past it
+                    gameState.current.nextBossSpawnTime = (min * 60) + 120;
+                    cheatBuffer = '';
+                }
+            });
+        };
+
+        const handleMouseMove = (e: MouseEvent) => {
+            mousePos.current = { x: e.clientX, y: e.clientY };
         };
 
         window.addEventListener('keydown', handleDown);
         window.addEventListener('keyup', handleUp);
         window.addEventListener('keydown', handleCheat);
+        window.addEventListener('mousemove', handleMouseMove);
         return () => {
             window.removeEventListener('keydown', handleDown);
             window.removeEventListener('keyup', handleUp);
             window.removeEventListener('keydown', handleCheat);
+            window.removeEventListener('mousemove', handleMouseMove);
         };
     }, []);
 
@@ -200,5 +247,5 @@ export function useGameInput({ gameState, setShowSettings, setShowStats, setShow
         inputVector.current = { x, y };
     };
 
-    return { keys, inputVector, handleJoystickInput };
+    return { keys, inputVector, mousePos, handleJoystickInput };
 }

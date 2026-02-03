@@ -8,14 +8,14 @@ export const GAME_CONFIG = {
         HITBOX_RADIUS: 56,
         WALL_BOUNCE_SPEED: 37.5,
         WALL_DAMAGE_PERCENT: 0.10, // 10% max HP
-        ARMOR_CONSTANT: 5263, // Divisor for armor reduction
+        ARMOR_CONSTANT: 171, // Precisely tuned: ~35% reduction at 100 armor, caps at 95%
         HISTORY_LENGTH: 60,
         KNOCKBACK_DECAY: 0.85,
     },
 
     // --- ENEMIES ---
     ENEMY: {
-        BASE_SPAWN_RATE: 1.4,
+        BASE_SPAWN_RATE: 1.6,
         SPAWN_RATE_PER_MINUTE: 0.1,
         BOSS_SPAWN_INTERVAL: 120, // Seconds
 

@@ -178,7 +178,7 @@ export async function playUpgradeSfx(rarityId: string) {
     }
 }
 
-export type SfxType = 'shoot' | 'laser' | 'ice-loop' | 'level' | 'rare-spawn' | 'rare-kill' | 'rare-despawn' | 'spawn' | 'smoke-puff' | 'wall-shock' | 'merge-start' | 'merge-complete' | 'stun-disrupt' | 'warning' | 'recycle' | 'socket-place' | 'impact' | 'sonic-wave' | 'zombie-rise';
+export type SfxType = 'shoot' | 'laser' | 'ice-loop' | 'level' | 'rare-spawn' | 'rare-kill' | 'rare-despawn' | 'spawn' | 'smoke-puff' | 'wall-shock' | 'merge-start' | 'merge-complete' | 'stun-disrupt' | 'warning' | 'recycle' | 'socket-place' | 'impact' | 'sonic-wave' | 'zombie-rise' | 'lock-on';
 
 export function playSfx(type: SfxType) {
     if (audioCtx.state === 'suspended') {
@@ -194,6 +194,17 @@ export function playSfx(type: SfxType) {
     const g = audioCtx.createGain();
     osc.connect(g);
     g.connect(masterSfxGain);
+
+    if (type === 'lock-on') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(880, t);
+        osc.frequency.exponentialRampToValueAtTime(1760, t + 0.05);
+        g.gain.setValueAtTime(0.15 * sfxVolume, t);
+        g.gain.linearRampToValueAtTime(0, t + 0.05);
+        osc.start(t);
+        osc.stop(t + 0.05);
+        return;
+    }
 
     if (type === 'shoot') {
         playShootDing();

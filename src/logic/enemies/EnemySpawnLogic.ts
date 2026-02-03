@@ -10,7 +10,7 @@ import { GAME_CONFIG } from '../GameConfig';
 export function getProgressionParams(gameTime: number) {
     const minutes = Math.floor(gameTime / 60);
     const eraIndex = Math.floor(minutes / 15);
-    const cycleIndex = Math.floor((minutes % 15) / 5);
+    const fluxState = Math.floor((minutes % 15) / 5); // 0: Containment, 1: Active Flux, 2: Overload
     const shapeIndex = minutes % 5;
 
     // Cycle shapes: Circle -> Triangle -> Square -> Diamond -> Pentagon
@@ -19,31 +19,26 @@ export function getProgressionParams(gameTime: number) {
 
     // Era Palette (Green -> Blue -> Purple -> Orange -> Red)
     const eraPalette = PALETTES[eraIndex % PALETTES.length];
-    const baseColors = eraPalette.colors; // [Bright, Medium, Dark]
-
-    // Determine Active Colors based on Cycle (0-5m, 5-10m, 10-15m)
-    let activeColors: string[];
-
-    if (cycleIndex === 0) {
-        // Cycle 1 (0-5m): Bright Core, Dim Inner, Dim Outer
-        activeColors = [baseColors[0], baseColors[2], baseColors[2]];
-    } else if (cycleIndex === 1) {
-        // Cycle 2 (5-10m): Dim Core, Bright Inner, Dim Outer
-        activeColors = [baseColors[2], baseColors[0], baseColors[2]];
-    } else {
-        // Cycle 3 (10-15m): Bright Core, Dim Inner, Bright Outer
-        activeColors = [baseColors[0], baseColors[2], baseColors[0]];
-    }
 
     // Pulse Speed
     const pulseDef = PULSE_RATES.find(p => minutes < p.time) || PULSE_RATES[PULSE_RATES.length - 1];
 
-    return { shapeDef, activeColors, pulseDef };
+    return { shapeDef, eraPalette, fluxState, pulseDef };
+}
+
+export function getEventPalette(state: GameState): [string, string, string] | null {
+    if (state.activeEvent?.type === 'red_moon') {
+        return ['#ef4444', '#b91c1c', '#7f1d1d']; // Crimson Red
+    }
+    if (state.activeEvent?.type === 'solar_emp') {
+        return ['#f59e0b', '#d97706', '#92400e']; // Amber/Warning
+    }
+    return null;
 }
 
 export function spawnEnemy(state: GameState, x?: number, y?: number, shape?: ShapeType, isBoss: boolean = false) {
     const { player, gameTime } = state;
-    const { shapeDef, activeColors } = getProgressionParams(gameTime);
+    const { shapeDef, eraPalette, fluxState } = getProgressionParams(gameTime);
 
     // Use provided shape OR respect game progression (shapeDef unlocks based on game time)
     const chosenShape: ShapeType = shape || shapeDef.type as ShapeType;
@@ -81,12 +76,22 @@ export function spawnEnemy(state: GameState, x?: number, y?: number, shape?: Sha
 
 
     // Scaling
-    const cycleCount = Math.floor(gameTime / 300);
-    const hpMult = Math.pow(1.2, cycleCount) * SHAPE_DEFS[chosenShape].hpMult;
-    const size = isBoss ? 60 : (20 * SHAPE_DEFS[chosenShape].sizeMult);
     const minutes = gameTime / 60;
-    const baseHp = 50 * Math.pow(1.15, Math.floor(minutes));
-    const hp = (isBoss ? baseHp * 15 : baseHp) * hpMult;
+    const cycleCount = Math.floor(minutes / 5);
+    const difficultyMult = 1 + (minutes * Math.log2(2 + minutes) / 30);
+    const hpMult = Math.pow(1.2, cycleCount) * SHAPE_DEFS[chosenShape].hpMult;
+    const baseHp = 50 * Math.pow(1.15, minutes) * difficultyMult;
+
+    const size = isBoss ? 60 : (20 * SHAPE_DEFS[chosenShape].sizeMult);
+    let hp = (isBoss ? baseHp * 15 : baseHp) * hpMult;
+
+    // EVENT BOOST: Red Moon +50% HP
+    if (state.activeEvent?.type === 'red_moon') {
+        hp *= 1.5;
+    }
+
+    const eventPalette = getEventPalette(state);
+    const finalPalette = eventPalette || eraPalette.colors;
 
     const newEnemy: Enemy = {
         id: Math.random(),
@@ -95,14 +100,16 @@ export function spawnEnemy(state: GameState, x?: number, y?: number, shape?: Sha
         size,
         hp,
         maxHp: hp,
-        spd: 2.4 * SHAPE_DEFS[chosenShape].speedMult,
+        spd: 2.4 * SHAPE_DEFS[chosenShape].speedMult * (state.activeEvent?.type === 'red_moon' ? 1.5 : 1),
         boss: isBoss,
         bossType: isBoss ? Math.floor(Math.random() * 2) : 0,
         bossAttackPattern: 0,
         dead: false,
         shape: chosenShape as ShapeType,
         shellStage: 2,
-        palette: activeColors,
+        palette: finalPalette,
+        eraPalette: finalPalette,
+        fluxState: fluxState,
         pulsePhase: 0,
         rotationPhase: Math.random() * Math.PI * 2,
         lastAttack: Date.now() + Math.random() * 2000,
@@ -155,6 +162,8 @@ export function spawnRareEnemy(state: GameState) {
         shape: 'snitch',
         shellStage: 2,
         palette: ['#FACC15', '#EAB308', '#CA8A04'],
+        eraPalette: ['#FACC15', '#EAB308', '#CA8A04'],
+        fluxState: 0,
         pulsePhase: 0, rotationPhase: 0, timer: Date.now(),
         isRare: true, size: 18,
         rarePhase: 0, rareTimer: state.gameTime, rareIntent: 0, rareReal: true, canBlock: false,
@@ -194,6 +203,8 @@ export function spawnShield(state: GameState, x: number, y: number) {
         shape: 'square',
         shellStage: 0,
         palette: ['#475569', '#334155', '#1e293b'], // Slate
+        eraPalette: ['#475569', '#334155', '#1e293b'],
+        fluxState: 0,
         pulsePhase: 0,
         rotationPhase: Math.random() * 6.28,
         spawnedAt: state.gameTime,

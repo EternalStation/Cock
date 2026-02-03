@@ -1,11 +1,12 @@
 
 import React, { useState, useRef } from 'react';
-import type { GameState, Meteorite, LegendaryHex } from '../logic/types';
+import type { GameState, Meteorite, LegendaryHex, PlayerClass } from '../logic/types';
 import { MeteoriteTooltip } from './MeteoriteTooltip';
-import { HexTooltip } from './HexTooltip';
 import { HexGrid } from './modules/HexGrid';
+import { LegendaryDetail } from './LegendaryDetail';
 import { InventoryPanel } from './modules/InventoryPanel';
-import { getMeteoriteImage, getDustValue } from './modules/ModuleUtils';
+import { ChassisDetail } from './modules/ChassisDetail';
+import { getMeteoriteImage, getDustValue, RARITY_ORDER } from './modules/ModuleUtils';
 
 interface ModuleMenuProps {
     gameState: GameState;
@@ -15,20 +16,22 @@ interface ModuleMenuProps {
     onInventoryUpdate: (index: number, item: any) => void;
     onRecycle: (source: 'inventory' | 'diamond', index: number, amount: number) => void;
     spendDust: (amount: number) => boolean;
-    triggerPortal: () => boolean;
+    onViewChassisDetail: () => void;
 }
 
-export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClose, onSocketUpdate, onInventoryUpdate, onRecycle, spendDust, triggerPortal }) => {
+export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClose, onSocketUpdate, onInventoryUpdate, onRecycle, spendDust, onViewChassisDetail }) => {
     const [movedItem, setMovedItem] = useState<{ item: Meteorite | any, source: 'inventory' | 'diamond' | 'hex', index: number } | null>(null);
     const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
     const [lockedItem, setLockedItem] = useState<{ item: Meteorite | any, x: number, y: number } | null>(null);
     const [hoveredItem, setHoveredItem] = useState<{ item: Meteorite | any, x: number, y: number } | null>(null);
     const [hoveredHex, setHoveredHex] = useState<{ hex: LegendaryHex, index: number, x: number, y: number } | null>(null);
+    const [selectedClassDetail, setSelectedClassDetail] = useState<PlayerClass | null>(null);
     const [isRecycleMode, setIsRecycleMode] = useState(false);
     const [recyclingAnim, setRecyclingAnim] = useState(false); // Used for visual feedback on button
 
     // Removal Confirmation State
     const [removalCandidate, setRemovalCandidate] = useState<{ index: number, item: any } | null>(null);
+    const [placementAlert, setPlacementAlert] = useState(false);
 
     const hoverTimeout = useRef<number | null>(null);
 
@@ -37,11 +40,15 @@ export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClo
         if (!isOpen) {
             setIsRecycleMode(false);
             setRemovalCandidate(null);
+            setSelectedClassDetail(null);
         }
 
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.key === 'Escape' && isOpen) {
-                onClose();
+                // Prevent closing if pending placement
+                if (!gameState.pendingLegendaryHex) {
+                    onClose();
+                }
             }
         };
 
@@ -85,6 +92,11 @@ export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClo
 
     // Destroy Item Logic
     const handleRecycleClick = (idx: number) => {
+        if (gameState.pendingLegendaryHex) {
+            setPlacementAlert(true);
+            setTimeout(() => setPlacementAlert(false), 2000);
+            return;
+        }
         const item = gameState.inventory[idx];
         if (item) {
             const dustAmount = getDustValue(item.rarity);
@@ -95,15 +107,66 @@ export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClo
         }
     };
 
+    const handleMassRecycle = (indices: number[]) => {
+        if (indices.length === 0) return;
+
+        let totalDust = 0;
+        indices.forEach(idx => {
+            const item = gameState.inventory[idx];
+            if (item) {
+                totalDust += getDustValue(item.rarity);
+            }
+        });
+
+        // Loop backwards to preserve indices? No, the onRecycle for inventory just sets it to null at that index.
+        indices.forEach(idx => {
+            onRecycle('inventory', idx, 0); // Amount 0 here because we'll update player dust separately or let the parent handle it
+        });
+
+        // Use the game logic to reward dust
+        gameState.player.dust += totalDust;
+
+        setRecyclingAnim(true);
+        setTimeout(() => setRecyclingAnim(false), 500);
+    };
+
+    const handleSortByRarity = () => {
+        if (gameState.pendingLegendaryHex) {
+            setPlacementAlert(true);
+            setTimeout(() => setPlacementAlert(false), 2000);
+            return;
+        }
+        // Collect all actual items
+        const items = gameState.inventory.filter((m): m is Meteorite => m !== null);
+
+        // Build rarity map for quick lookup
+        const rarityMap: Record<string, number> = {};
+        RARITY_ORDER.forEach((r, i) => rarityMap[r] = i);
+
+        // Sort: Highest rarity (highest index in RARITY_ORDER) comes first
+        items.sort((a, b) => rarityMap[b.rarity] - rarityMap[a.rarity]);
+
+        // Construct new inventory array with sorted items followed by nulls
+        const newInventory: (Meteorite | null)[] = [...items];
+        while (newInventory.length < gameState.inventory.length) {
+            newInventory.push(null);
+        }
+
+        // Apply updates to the state
+        newInventory.forEach((item, idx) => {
+            onInventoryUpdate(idx, item);
+        });
+    };
+
     if (!isOpen) return null;
 
     const { moduleSockets } = gameState;
     const meteoriteDust = gameState.player.dust;
-    const portalState = gameState.portalState;
 
     return (
         <div
             onMouseMove={(e) => {
+                if (!movedItem) return;
                 const rect = e.currentTarget.getBoundingClientRect();
                 const scaleX = e.currentTarget.offsetWidth / rect.width;
                 const scaleY = e.currentTarget.offsetHeight / rect.height;
@@ -135,122 +198,158 @@ export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClo
                 display: 'flex', pointerEvents: 'none' // Allow clicks only on interactive elements
             }}>
 
-                {/* LEFT: MATRIX (45%) */}
+                {/* LEFT: MATRIX (40%) - Shrunk slightly to give more room to right */}
                 <div style={{
-                    width: '45%',
+                    width: '40%',
                     height: '100%',
                     position: 'relative',
                     borderRight: '2px solid rgba(59, 130, 246, 0.3)',
                     background: 'radial-gradient(circle at 60% 50%, rgba(10, 10, 30, 0.9) 0%, rgba(2, 2, 5, 0.4) 100%)',
-                    pointerEvents: 'auto' // ENABLE INTERACTION FOR DRAG & DROP
+                    pointerEvents: 'auto'
                 }}>
                     <HexGrid
                         gameState={gameState}
                         movedItem={movedItem}
                         onSocketUpdate={onSocketUpdate}
                         onInventoryUpdate={onInventoryUpdate}
-                        setMovedItem={setMovedItem}
+                        setMovedItem={(item) => {
+                            if (gameState.pendingLegendaryHex) {
+                                setPlacementAlert(true);
+                                setTimeout(() => setPlacementAlert(false), 2000);
+                                return;
+                            }
+                            setMovedItem(item);
+                        }}
                         setHoveredItem={setHoveredItem}
                         setLockedItem={setLockedItem}
                         handleMouseEnterItem={handleMouseEnterItem}
                         handleMouseLeaveItem={handleMouseLeaveItem}
                         setHoveredHex={setHoveredHex}
-                        onAttemptRemove={handleAttemptRemove}
+                        onShowClassDetail={(cls) => {
+                            setSelectedClassDetail(cls);
+                            onViewChassisDetail();
+                        }}
+                        onAttemptRemove={(index, item) => {
+                            if (gameState.pendingLegendaryHex) {
+                                setPlacementAlert(true);
+                                setTimeout(() => setPlacementAlert(false), 2000);
+                                return;
+                            }
+                            handleAttemptRemove(index, item);
+                        }}
                     />
                 </div>
 
-                {/* RIGHT: CONTROLS & INVENTORY (55%) */}
+                {/* RIGHT: CONTROLS & INVENTORY (60%) - Expanded */}
                 <div style={{
-                    width: '55%',
+                    width: '60%',
                     height: '100%',
                     display: 'flex',
-                    flexDirection: 'row', // CHANGED TO ROW
-                    borderLeft: '2px solid rgba(59, 130, 246, 0.3)'
+                    flexDirection: 'row',
+                    borderLeft: '2px solid rgba(59, 130, 246, 0.3)',
+                    pointerEvents: 'auto'
                 }}>
 
-                    {/* COL 1: DATA PANEL (TOOLTIP) - 50% */}
                     <div style={{
-                        flex: 1,
+                        flex: '0 0 calc(40% + 50px)', // Increased significantly to handle Singularity tier perks without shifting
                         height: '100%',
                         display: 'flex',
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                        padding: '20px',
-                        background: 'radial-gradient(circle at 50% 50%, rgba(15, 23, 42, 0.6) 0%, rgba(2, 2, 5, 0.2) 100%)',
-                        borderRight: '1px solid rgba(59, 130, 246, 0.1)'
+                        flexDirection: 'column',
+                        paddingRight: '10px', // Add offset from inventory
+                        borderRight: 'none' // Remove separator line to use empty space as divider
                     }}>
-                        <div className="data-panel" style={{
-                            width: '100%',
-                            maxWidth: '380px',
-                            height: '90%', // Increased height
-                            background: 'rgba(5, 5, 15, 0.95)',
-                            border: '2px solid #3b82f6',
-                            borderRadius: '8px',
-                            boxShadow: '0 0 20px rgba(59, 130, 246, 0.3)',
-                            display: 'flex',
-                            overflow: 'hidden'
-                        }}>
-                            {(hoveredItem || lockedItem) && !movedItem ? (
-                                <MeteoriteTooltip
-                                    meteorite={(lockedItem?.item || hoveredItem?.item) as Meteorite}
-                                    gameState={gameState}
-                                    x={0} y={0}
-                                    meteoriteIdx={moduleSockets.diamonds.indexOf((lockedItem?.item || hoveredItem?.item))}
-                                    isEmbedded={true}
-                                    isInteractive={true}
-                                    onMouseEnter={() => { if (hoverTimeout.current) clearTimeout(hoverTimeout.current); }}
-                                    onMouseLeave={() => handleMouseLeaveItem(100)}
-                                />
-                            ) : (
-                                <div style={{
-                                    width: '100%', height: '100%',
-                                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                                    color: '#3b82f6', opacity: 0.5, gap: '10px'
-                                }}>
-                                    <div style={{ fontSize: '30px', animation: 'spin-slow 10s infinite linear' }}>⬡</div>
-                                    <div style={{ fontWeight: 900, letterSpacing: '2px' }}>SYSTEM IDLE</div>
-                                    <div style={{ fontSize: '10px' }}>HOVER OVER MODULE TO SCAN</div>
-                                    <style>{`@keyframes spin-slow { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* COL 2: CONTROLS + INVENTORY - 50% */}
-                    <div style={{
-                        flex: 1,
-                        height: '100%',
-                        display: 'flex',
-                        flexDirection: 'column'
-                    }}>
-                        {/* BUTTON CLUSTER */}
+                        {/* DATA PANEL (Top - 9:16 tactical area) */}
                         <div style={{
-                            padding: '10px 8px', // Ultra-compact padding
+                            flex: 1,
+                            width: '100%',
                             display: 'flex',
-                            flexDirection: 'column',
                             justifyContent: 'center',
                             alignItems: 'center',
-                            gap: '6px', // Tight gap
-                            borderBottom: '1px solid rgba(59, 130, 246, 0.2)',
-                            background: 'rgba(15, 23, 42, 0.3)',
-                            pointerEvents: 'auto' // ADDED: Enable interactions
+                            // padding: '10px 0 10px 15px', // Adjust padding -> CHANGED back to uniform
+                            padding: '10px',
+                            background: 'radial-gradient(circle at 50% 50%, rgba(15, 23, 42, 0.6) 0%, rgba(2, 2, 5, 0.2) 100%)',
+                            // overflow: 'hidden' -> REMOVED to show borders
+                        }}>
+                            <div className="data-panel" style={{
+                                width: '100%',
+                                height: '100%',
+                                background: 'rgba(5, 5, 15, 0.95)',
+                                border: '2px solid #3b82f6',
+                                borderRadius: '8px',
+                                boxShadow: '0 0 20px rgba(59, 130, 246, 0.3)',
+                                display: 'flex',
+                                overflow: 'hidden',
+                                boxSizing: 'border-box',
+                                position: 'relative'
+                            }}>
+                                {gameState.pendingLegendaryHex ? (
+                                    <LegendaryDetail
+                                        hex={gameState.pendingLegendaryHex}
+                                        gameState={gameState}
+                                        hexIdx={-1}
+                                        pending={true}
+                                        placementAlert={placementAlert}
+                                    />
+                                ) : (hoveredHex && !movedItem) ? (
+                                    <LegendaryDetail
+                                        hex={hoveredHex.hex}
+                                        gameState={gameState}
+                                        hexIdx={hoveredHex.index}
+                                    />
+                                ) : (hoveredItem || lockedItem) && !movedItem ? (
+                                    <MeteoriteTooltip
+                                        meteorite={(lockedItem?.item || hoveredItem?.item) as Meteorite}
+                                        gameState={gameState}
+                                        x={0} y={0}
+                                        meteoriteIdx={moduleSockets.diamonds.indexOf((lockedItem?.item || hoveredItem?.item))}
+                                        isEmbedded={true}
+                                        isInteractive={true}
+                                        onMouseEnter={() => { if (hoverTimeout.current) clearTimeout(hoverTimeout.current); }}
+                                        onMouseLeave={() => handleMouseLeaveItem(100)}
+                                    />
+                                ) : (
+                                    <div style={{
+                                        width: '100%', height: '100%',
+                                        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                                        color: '#3b82f6', opacity: 0.5, gap: '6px'
+                                    }}>
+                                        <div style={{ fontSize: '20px', animation: 'spin-slow 10s infinite linear' }}>⬡</div>
+                                        <div style={{ fontWeight: 900, letterSpacing: '1px', fontSize: '12px' }}>SYSTEM IDLE</div>
+                                        <div style={{ fontSize: '8px' }}>HOVER OVER MODULE TO SCAN</div>
+                                        <style>{`@keyframes spin-slow { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* BUTTON CLUSTER (Bottom - Metadata & Recycler) */}
+                        <div style={{
+                            padding: '10px',
+                            display: 'flex',
+                            flexDirection: 'row', // Horizontal layout
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            gap: '10px',
+                            borderTop: '1px solid rgba(59, 130, 246, 0.2)', // Separator from panel
+                            background: 'rgba(15, 23, 42, 0.5)',
+                            pointerEvents: 'auto'
                         }}>
                             {/* DUST RESOURCE DISPLAY */}
                             <div style={{
-                                width: '100%', maxWidth: '280px',
+                                flex: '1',
                                 background: 'linear-gradient(90deg, rgba(15, 23, 42, 0.9) 0%, rgba(30, 41, 59, 0.8) 100%)',
                                 border: '1px solid #475569',
                                 borderLeft: '4px solid #22d3ee',
                                 borderRadius: '4px',
-                                padding: '4px 8px', // Slim padding
+                                padding: '6px 10px',
                                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                                 boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
-                                minHeight: '32px'
+                                minHeight: '36px'
                             }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                     <img src="/assets/Icons/MeteoriteDust.png" alt="Dust" style={{ width: '20px', height: '20px', filter: 'drop-shadow(0 0 5px #22d3ee)' }} />
-                                    <span style={{ fontSize: '9px', color: '#94a3b8', letterSpacing: '1px', fontWeight: 700 }}>DUST:</span>
-                                    <span style={{ fontSize: '16px', fontWeight: '900', color: '#fff', textShadow: '0 0 10px rgba(34, 211, 238, 0.5)' }}>{meteoriteDust}</span>
+                                    <span style={{ fontSize: '10px', color: '#94a3b8', letterSpacing: '1px', fontWeight: 700 }}>DUST:</span>
+                                    <span style={{ fontSize: '18px', fontWeight: '900', color: '#fff', textShadow: '0 0 10px rgba(34, 211, 238, 0.5)' }}>{meteoriteDust}</span>
                                 </div>
                             </div>
 
@@ -258,14 +357,14 @@ export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClo
                             <button
                                 onClick={() => setIsRecycleMode(!isRecycleMode)}
                                 style={{
-                                    width: '100%', maxWidth: '280px', height: '32px', // Ultra-compact height
+                                    flex: '0 0 160px', // Fixed width for the button
+                                    height: '36px',
                                     background: isRecycleMode
                                         ? 'linear-gradient(135deg, rgba(220, 38, 38, 0.2) 0%, rgba(153, 27, 27, 0.3) 100%)'
                                         : 'linear-gradient(135deg, rgba(15, 23, 42, 0.8) 0%, rgba(30, 41, 59, 0.4) 100%)',
                                     border: '1px solid',
                                     borderColor: isRecycleMode ? '#ef4444' : '#475569',
                                     borderRadius: '2px',
-                                    position: 'relative',
                                     color: isRecycleMode ? '#ef4444' : '#94a3b8',
                                     fontSize: '10px', fontWeight: 900, letterSpacing: '1px',
                                     cursor: 'pointer', transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
@@ -274,121 +373,72 @@ export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClo
                                     transform: recyclingAnim ? 'scale(0.98)' : 'scale(1)'
                                 }}
                             >
-                                <span style={{ fontSize: '12px' }}>{isRecycleMode ? '⚠' : '♻'}</span>
-                                {isRecycleMode ? 'RECYCLER ACTIVE' : 'ENABLE RECYCLER'}
-                            </button>
-
-                            {/* PORTAL BUTTON */}
-                            <button
-                                onClick={() => triggerPortal()}
-                                disabled={portalState !== 'closed' || meteoriteDust < 5}
-                                style={{
-                                    width: '100%', maxWidth: '280px', height: '32px', // Ultra-compact height
-                                    background: portalState !== 'closed'
-                                        ? 'rgba(0,0,0,0.5)'
-                                        : (meteoriteDust >= 5
-                                            ? 'linear-gradient(135deg, rgba(88, 28, 135, 0.2) 0%, rgba(124, 58, 237, 0.2) 100%)'
-                                            : 'linear-gradient(135deg, rgba(15, 23, 42, 0.8) 0%, rgba(30, 41, 59, 0.4) 100%)'),
-                                    border: '1px solid',
-                                    borderColor: portalState !== 'closed'
-                                        ? '#334155'
-                                        : (meteoriteDust >= 5 ? '#a855f7' : '#ef4444'),
-                                    borderRadius: '2px',
-                                    color: portalState !== 'closed'
-                                        ? '#475569'
-                                        : (meteoriteDust >= 5 ? '#d8b4fe' : '#ef4444'),
-                                    fontSize: '10px',
-                                    fontWeight: 900,
-                                    letterSpacing: '1px',
-                                    textTransform: 'uppercase',
-                                    cursor: (portalState === 'closed' && meteoriteDust >= 5) ? 'pointer' : 'not-allowed',
-                                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
-                                }}
-                            >
-                                {portalState === 'closed' ? (
-                                    <>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                            <span style={{ fontSize: '12px' }}>⚛</span>
-                                            PORTAL
-                                        </div>
-                                        <span style={{ fontSize: '8px', opacity: 0.6, background: 'rgba(0,0,0,0.3)', padding: '0px 3px', borderRadius: '2px' }}>5 DUST</span>
-                                    </>
-                                ) : 'PORTAL ACTIVE'}
-                            </button>
-
-                            {/* CLOSE BUTTON */}
-                            <button
-                                onClick={onClose}
-                                style={{
-                                    width: '100%', maxWidth: '280px', height: '24px', // Ultra-compact height
-                                    background: 'linear-gradient(90deg, rgba(59, 130, 246, 0.1) 0%, rgba(37, 99, 235, 0.05) 100%)',
-                                    border: '1px solid #3b82f6',
-                                    color: '#60a5fa',
-                                    borderRadius: '2px',
-                                    cursor: 'pointer', fontWeight: 'bold', letterSpacing: '1px',
-                                    fontSize: '9px'
-                                }}
-                            >
-                                CLOSE (ESC)
+                                <span style={{ fontSize: '14px' }}>{isRecycleMode ? '⚠' : '♻'}</span>
+                                {isRecycleMode ? 'ACTIVE' : 'RECYCLER'}
                             </button>
                         </div>
+                    </div>
 
-                        {/* INVENTORY PANEL - Flex 1 to take remaining space */}
-                        <div style={{
-                            flex: 1, // Changed from fixed height to flex 1
-                            width: '100%',
-                            background: 'rgba(5, 5, 15, 0.98)',
-                            pointerEvents: 'auto',
-                            padding: '10px',
-                            borderTop: '1px solid rgba(59, 130, 246, 0.1)',
-                            display: 'flex',
-                            flexDirection: 'column'
-                        }}>
-                            <div style={{
-                                width: '100%', padding: '5px 0',
-                                textAlign: 'center', fontSize: '12px',
-                                color: '#94a3b8', letterSpacing: '2px', fontWeight: 900
-                            }}>
-                                M.E.T.E.O.R. STORAGE
-                            </div>
-                            <InventoryPanel
-                                inventory={gameState.inventory}
-                                movedItem={movedItem}
-                                onInventoryUpdate={onInventoryUpdate}
-                                onSocketUpdate={onSocketUpdate}
-                                setMovedItem={setMovedItem}
-                                handleMouseEnterItem={handleMouseEnterItem}
-                                handleMouseLeaveItem={handleMouseLeaveItem}
-                                isRecycleMode={isRecycleMode}
-                                onRecycleClick={handleRecycleClick}
-                            />
-                        </div>
+                    {/* COL 2: INVENTORY - Remaining Width (55%) */}
+                    <div style={{
+                        flex: 1, // Takes remaining width (approx 55% of 55%)
+                        height: '100%',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        background: 'rgba(5, 5, 15, 0.98)',
+                        padding: '5px' // Reduced padding from 10px
+                    }}>
+                        <InventoryPanel
+                            inventory={gameState.inventory}
+                            movedItem={movedItem}
+                            onInventoryUpdate={onInventoryUpdate}
+                            onSocketUpdate={onSocketUpdate}
+                            setMovedItem={(item) => {
+                                if (gameState.pendingLegendaryHex) {
+                                    setPlacementAlert(true);
+                                    setTimeout(() => setPlacementAlert(false), 2000);
+                                    return;
+                                }
+                                setMovedItem(item);
+                            }}
+                            handleMouseEnterItem={handleMouseEnterItem}
+                            handleMouseLeaveItem={handleMouseLeaveItem}
+                            isRecycleMode={isRecycleMode}
+                            onRecycleClick={handleRecycleClick}
+                            onMassRecycle={(indices) => {
+                                if (gameState.pendingLegendaryHex) {
+                                    setPlacementAlert(true);
+                                    setTimeout(() => setPlacementAlert(false), 2000);
+                                    return;
+                                }
+                                handleMassRecycle(indices);
+                            }}
+                            onSort={handleSortByRarity}
+                        />
                     </div>
                 </div>
             </div>
+
             {/* Ghost Item Rendering */}
-            {
-                movedItem && (
-                    <div style={{
-                        position: 'absolute',
-                        top: mousePos.y,
-                        left: mousePos.x,
-                        width: '60px',
-                        height: '60px',
-                        pointerEvents: 'none',
-                        transform: 'translate(-50%, -50%)',
-                        zIndex: 9999,
-                        filter: 'drop-shadow(0 0 15px cyan)'
-                    }}>
-                        <img
-                            src={getMeteoriteImage(movedItem.item)}
-                            alt="moved"
-                            style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                        />
-                    </div>
-                )
-            }
+            {movedItem && (
+                <div style={{
+                    position: 'absolute',
+                    top: mousePos.y,
+                    left: mousePos.x,
+                    width: '60px',
+                    height: '60px',
+                    pointerEvents: 'none',
+                    transform: 'translate(-50%, -50%)',
+                    zIndex: 9999,
+                    filter: 'drop-shadow(0 0 15px cyan)'
+                }}>
+                    <img
+                        src={getMeteoriteImage(movedItem.item)}
+                        alt="moved"
+                        style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                    />
+                </div>
+            )}
 
             {/* REMOVAL CONFIRMATION MODAL */}
             {removalCandidate && (
@@ -453,19 +503,12 @@ export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClo
                     </div>
                 </div>
             )}
-            {hoveredHex && !movedItem && (
-                <HexTooltip
-                    hex={hoveredHex.hex}
+
+            {selectedClassDetail && (
+                <ChassisDetail
                     gameState={gameState}
-                    hexIdx={hoveredHex.index}
-                    x={hoveredHex.x}
-                    y={hoveredHex.y}
-                    neighbors={[
-                        moduleSockets.diamonds[hoveredHex.index],
-                        moduleSockets.diamonds[(hoveredHex.index + 5) % 6],
-                        moduleSockets.diamonds[hoveredHex.index + 6],
-                        moduleSockets.diamonds[((hoveredHex.index + 5) % 6) + 6]
-                    ]}
+                    playerClass={selectedClassDetail}
+                    onClose={() => setSelectedClassDetail(null)}
                 />
             )}
 
@@ -544,6 +587,16 @@ export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClo
                     transform-origin: center;
                     transform-box: fill-box;
                 }
+                @keyframes attentionPulse {
+                    0% { transform: scale(1); opacity: 0.1; stroke-width: 1; }
+                    50% { transform: scale(1.1); opacity: 0.6; stroke-width: 3; }
+                    100% { transform: scale(1); opacity: 0.1; stroke-width: 1; }
+                }
+                .pulse-attention {
+                    animation: attentionPulse 2s infinite ease-in-out;
+                    transform-origin: center;
+                    transform-box: fill-box;
+                }
                 @keyframes floatUpFade {
                     0% { transform: translateY(0); opacity: 1; }
                     100% { transform: translateY(-40px); opacity: 0; }
@@ -552,6 +605,6 @@ export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClo
                     animation: floatUpFade 1.5s forwards ease-out;
                 }
             `}</style>
-        </div>
+        </div >
     );
 };

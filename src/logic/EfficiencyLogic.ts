@@ -25,17 +25,7 @@ export function calculateMeteoriteEfficiency(state: GameState, meteoriteIdx: num
                 case 'matrix_same_type_rarity':
                     const currentMet = state.moduleSockets.diamonds[meteoriteIdx];
                     if (currentMet) {
-                        count = state.moduleSockets.diamonds.filter(m =>
-                            m && m.id !== currentMet.id && // Don't count self? "per each meteorite... placed in matrix" usually implies others or all? 
-                            // "per each" might mean total count including self or excluding? 
-                            // Usually "per neighbor" excludes self. "per each in matrix" implies total count.
-                            // If I have 3 same types, do I get 3x boost?
-                            // Let's assume inclusive or exclusive? 
-                            // "Efficiency per each... THAT IS PLACED". 
-                            // If I am one of them, I am placed.
-                            // Let's count *other* matching ones to avoid specific self-loop double dipping issues, or just count all-1?
-                            // Let's count ALL matching ones including self? No, that scales quadratically. 
-                            // Let's count ALL matching ones.
+                        count = neighbors.meteorites.filter(m =>
                             m.rarity === currentMet.rarity &&
                             m.discoveredIn === currentMet.discoveredIn
                         ).length;
@@ -124,8 +114,8 @@ function getMeteoriteNeighbors(state: GameState, idx: number) {
     const isInner = idx < 6;
 
     if (isInner) {
-        // Neighbors: prev inner, next inner, opposite inner, same-index edge
-        const neighborIdxs = [(idx + 5) % 6, (idx + 1) % 6, (idx + 3) % 6, idx + 6];
+        // Neighbors: prev inner, next inner, same-index edge
+        const neighborIdxs = [(idx + 5) % 6, (idx + 1) % 6, idx + 6];
         neighborIdxs.forEach(nIdx => {
             if (state.moduleSockets.diamonds[nIdx]) meteorites.push(state.moduleSockets.diamonds[nIdx]!);
         });
@@ -147,6 +137,20 @@ function getMeteoriteHexConnections(state: GameState, idx: number): LegendaryHex
     });
 
     return hexes;
+}
+
+
+export function getChassisResonance(state: GameState): number {
+    // The center slot (chassis) connects to the FIRST 6 diamonds (inner ring)
+    const connectedDiamondIdxs = [0, 1, 2, 3, 4, 5];
+    let totalBoost = 0;
+
+    for (const dIdx of connectedDiamondIdxs) {
+        if (state.moduleSockets.diamonds[dIdx]) {
+            totalBoost += calculateMeteoriteEfficiency(state, dIdx).totalBoost;
+        }
+    }
+    return totalBoost;
 }
 
 function calculatePairBonus(hexes: LegendaryHex[], perkId: string, value: number, checkLevel: boolean): number {

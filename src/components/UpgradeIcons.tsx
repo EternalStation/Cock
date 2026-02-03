@@ -73,8 +73,9 @@ export const getIcon = (type: string, color: string) => {
             );
 
         case 'reg_f': // Regen Health: Green Heart + Water Fill
+            const regenColor = '#4ade80';
             return (
-                <svg viewBox="0 0 100 100" width="100%" height="100%" style={{ filter: `drop-shadow(0 0 3px ${color})` }}>
+                <svg viewBox="0 0 100 100" width="100%" height="100%" style={{ filter: `drop-shadow(0 0 3px ${regenColor})` }}>
                     <defs>
                         <mask id="regenMask">
                             <rect x="0" y="100" width="100" height="100" fill="white">
@@ -86,27 +87,28 @@ export const getIcon = (type: string, color: string) => {
                         </clipPath>
                     </defs>
                     {/* Outline */}
-                    <path d={WIDE_HEART_PATH} fill="none" stroke={color} strokeWidth="4" />
+                    <path d={WIDE_HEART_PATH} fill="none" stroke={regenColor} strokeWidth="4" />
                     {/* Filling Effect */}
-                    <rect x="0" y="0" width="100" height="100" fill={color} opacity="0.6" clipPath="url(#regenClip)">
+                    <rect x="0" y="0" width="100" height="100" fill={regenColor} opacity="0.6" clipPath="url(#regenClip)">
                         <animate attributeName="y" values="100;0;100" dur="1.5s" repeatCount="indefinite" />
                     </rect>
                 </svg>
             );
 
         case 'reg_m': // Regen Multiplier: Heart + %
+            const regenColorM = '#4ade80';
             return (
-                <svg viewBox="0 0 100 100" width="100%" height="100%" style={{ filter: `drop-shadow(0 0 3px ${color})` }}>
+                <svg viewBox="0 0 100 100" width="100%" height="100%" style={{ filter: `drop-shadow(0 0 3px ${regenColorM})` }}>
                     <defs>
                         <clipPath id="regenClipM">
                             <path d={WIDE_HEART_PATH} />
                         </clipPath>
                     </defs>
-                    <path d={WIDE_HEART_PATH} fill="none" stroke={color} strokeWidth="4" />
-                    <rect x="0" y="0" width="100" height="100" fill={color} opacity="0.6" clipPath="url(#regenClipM)">
+                    <path d={WIDE_HEART_PATH} fill="none" stroke={regenColorM} strokeWidth="4" />
+                    <rect x="0" y="0" width="100" height="100" fill={regenColorM} opacity="0.6" clipPath="url(#regenClipM)">
                         <animate attributeName="y" values="100;0;100" dur="1.5s" repeatCount="indefinite" />
                     </rect>
-                    <text x="50" y="65" textAnchor="middle" fill="#fff" fontSize="36" fontFamily="Orbitron, sans-serif" fontWeight="900" stroke={color} strokeWidth="1">%</text>
+                    <text x="50" y="65" textAnchor="middle" fill="#fff" fontSize="36" fontFamily="Orbitron, sans-serif" fontWeight="900" stroke={regenColorM} strokeWidth="1">%</text>
                 </svg>
             );
 

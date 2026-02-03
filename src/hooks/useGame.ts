@@ -1,9 +1,11 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import gameWorkerUrl from '../logic/gameWorker?worker&url';
-import type { GameState, UpgradeChoice, LegendaryHex } from '../logic/types';
-import { createInitialGameState } from '../logic/GameState';
+import type { GameState, UpgradeChoice, LegendaryHex, PlayerClass } from '../logic/types';
+
+import { createInitialGameState, createInitialPlayer } from '../logic/GameState';
 import { updatePlayer } from '../logic/PlayerLogic';
 import { updateEnemies } from '../logic/EnemyLogic';
+import { getChassisResonance } from '../logic/EfficiencyLogic';
 import { updateProjectiles, spawnBullet } from '../logic/ProjectileLogic';
 
 import { spawnUpgrades, spawnSnitchUpgrades, applyUpgrade } from '../logic/UpgradeLogic';
@@ -13,6 +15,7 @@ import { updateParticles, spawnParticles, spawnFloatingNumber } from '../logic/P
 import { ARENA_CENTERS, ARENA_RADIUS, PORTALS, getHexWallLine } from '../logic/MapLogic';
 import { playSfx, updateBGMPhase, duckMusic, restoreMusic, pauseMusic, resumeMusic, startBossAmbience, stopBossAmbience, startPortalAmbience, stopPortalAmbience } from '../logic/AudioLogic';
 import { syncLegendaryHex, applyLegendarySelection } from '../logic/LegendaryLogic';
+import { updateDirector } from '../logic/DirectorLogic';
 
 
 // Refactored Modules
@@ -67,7 +70,7 @@ export function useGameLoop(gameStarted: boolean) {
         (meteoriteImagesRef.current as any).deathMark = dmImg;
 
         // Preload Hex Icons for UI stability
-        ['ComCrit', 'ComWave', 'DefPuddle', 'DefEpi', 'DefShield'].forEach(hex => {
+        ['ComCrit', 'ComWave', 'DefPuddle', 'DefEpi', 'DefShield', 'HiveMother'].forEach(hex => {
             const img = new Image();
             img.src = `/assets/hexes/${hex}.png`;
             (meteoriteImagesRef.current as any)[hex] = img; // Store in ref to keep alive/cached
@@ -97,6 +100,7 @@ export function useGameLoop(gameStarted: boolean) {
     const [showStats, setShowStats] = useState(false);
     const [showSettings, setShowSettings] = useState(false);
     const [showModuleMenu, setShowModuleMenu] = useState(false);
+    const [portalError, setPortalError] = useState(false);
     const [showLegendarySelection, setShowLegendarySelection] = useState(false);
 
     // Sync refs with state
@@ -105,23 +109,70 @@ export function useGameLoop(gameStarted: boolean) {
     showModuleMenuRef.current = showModuleMenu;
     upgradeChoicesRef.current = upgradeChoices;
 
+    // Critical: Sync GameState flag so input handlers know menu status immediately
+    gameState.current.showModuleMenu = showModuleMenu;
+    gameState.current.showStats = showStats;
+    gameState.current.showSettings = showSettings;
+
+    // Reset unseen notification badge when opening matrix
+    useEffect(() => {
+        if (showModuleMenu) {
+            setUiState(p => p + 1); // Ensure HUD updates
+        }
+    }, [showModuleMenu]);
+
+    const triggerPortal = useCallback(() => {
+        if (gameState.current.portalState === 'closed') {
+            if (gameState.current.player.dust >= 5) {
+                gameState.current.player.dust -= 5;
+                gameState.current.portalState = 'warn';
+                gameState.current.portalTimer = 10; // 10s warning period
+                playSfx('warning');
+                setPortalError(false);
+                setUiState(p => p + 1);
+                return true;
+            } else {
+                setPortalError(true);
+                setUiState(p => p + 1);
+                setTimeout(() => {
+                    setPortalError(false);
+                    setUiState(p => p + 1);
+                }, 1000);
+            }
+        }
+        return false;
+    }, []);
+
     // Extracted Input Logic
-    const { keys, inputVector, handleJoystickInput } = useGameInput({
+    const { keys, inputVector, mousePos, handleJoystickInput } = useGameInput({
         gameState,
         setShowSettings,
         setShowStats,
         setShowModuleMenu,
         setGameOver,
-        // showStats: removed
+        triggerPortal
     });
 
-    const restartGame = () => {
+    const restartGame = (selectedClass?: PlayerClass) => {
+        // Preserve current class if not provided
+        const classToUse = selectedClass || gameState.current.moduleSockets.center || undefined;
+
         gameState.current = createInitialGameState();
+
+        // Apply selected class to player
+        gameState.current.player = createInitialPlayer(classToUse);
+        if (classToUse) {
+            gameState.current.moduleSockets.center = classToUse;
+        }
+
         setGameOver(false);
         setUpgradeChoices(null);
         setBossWarning(null);
         setShowSettings(false);
         setShowModuleMenu(false);
+        gameState.current.showStats = false;
+        gameState.current.showSettings = false;
+        gameState.current.showModuleMenu = false;
     };
 
     const handleUpgradeSelect = (choice: UpgradeChoice) => {
@@ -190,7 +241,22 @@ export function useGameLoop(gameStarted: boolean) {
         };
 
         if (state.portalState !== 'transferring') {
-            updatePlayer(state, keys.current, eventHandler, inputVector.current);
+            const canvas = canvasRef.current;
+            if (canvas && mousePos.current) {
+                const rect = canvas.getBoundingClientRect();
+                const screenX = mousePos.current.x - rect.left;
+                const screenY = mousePos.current.y - rect.top;
+
+                // 1 world unit = (windowScaleFactor * 0.58) logical pixels
+                const logicalZoom = windowScaleFactor.current * 0.58;
+
+                const worldX = (screenX - rect.width / 2) / logicalZoom + state.camera.x;
+                const worldY = (screenY - rect.height / 2) / logicalZoom + state.camera.y;
+
+                updatePlayer(state, keys.current, eventHandler, inputVector.current, { x: worldX, y: worldY });
+            } else {
+                updatePlayer(state, keys.current, eventHandler, inputVector.current);
+            }
         }
 
         if (state.spawnTimer > 0.95 && !state.hasPlayedSpawnSound) {
@@ -202,6 +268,7 @@ export function useGameLoop(gameStarted: boolean) {
         state.camera.y = state.player.y;
 
         updateEnemies(state, eventHandler, step);
+        updateDirector(state, step);
 
         // --- ACTIVE SKILL & AREA EFFECT LOGIC (Processed BEFORE Projectiles to apply Debuffs) ---
 
@@ -334,9 +401,141 @@ export function useGameLoop(gameStarted: boolean) {
                     // 0.5s is fine for a skill sound loop.
                     playSfx('ice-loop');
                 }
+            } else if (effect.type === 'blackhole') {
+                // --- VOID SINGULARITY REWORK (Event-Horizon) ---
+                const pullRadius = 450; // Static 450px radius
+                const consumptionRadius = 40; // Static 40px core
+
+                // Scale pull strength with resonance
+                const resonance = getChassisResonance(state);
+                const pullMult = 1 + resonance;
+
+                const basePull = 40; // Initial "weak" pull (Matches 10% feel)
+                const scaledPull = basePull * (1 + resonance * 4); // Resonance greatly improves pull
+
+                state.enemies.forEach(e => {
+                    if (e.dead) return;
+                    const dist = Math.hypot(e.x - effect.x, e.y - effect.y);
+
+                    if (dist < pullRadius) {
+                        // 1. CONSUMPTION MECHANIC
+                        if (dist < consumptionRadius) {
+                            if (e.boss) {
+                                // Bosses take 15% Max HP/sec - They can't be "consumed" instantly but get crushed
+                                e.hp -= (e.maxHp * 0.15) * step;
+                            } else {
+                                // Instantly kill non-bosses (No text as requested)
+                                e.hp = 0;
+                                spawnParticles(state, e.x, e.y, '#000000', 5);
+                                return;
+                            }
+                        }
+
+                        // 2. PULL LOGIC (Inverse linear-to-center)
+                        const ang = Math.atan2(effect.y - e.y, effect.x - e.x);
+                        const forceFactor = 1 - (dist / pullRadius); // 0 at edge, 1 at center
+
+                        // Apply pull
+                        const currentPull = (basePull + (scaledPull - basePull) * forceFactor) * pullMult;
+                        const radialPull = currentPull * step;
+                        e.x += Math.cos(ang) * radialPull;
+                        e.y += Math.sin(ang) * radialPull;
+
+                        // Slight orbital swirl
+                        const tangentAng = ang + Math.PI / 2;
+                        const orbitalPull = (30 * forceFactor) * step;
+                        e.x += Math.cos(tangentAng) * orbitalPull;
+                        e.y += Math.sin(tangentAng) * orbitalPull;
+
+                        // Amplify external damage
+                        e.voidAmplified = true;
+                        e.voidAmpMult = 1.3;
+                    } else {
+                        e.voidAmplified = false;
+                        e.voidAmpMult = 1.0;
+                    }
+                });
+                // 3. Pull enemy projectiles with orbital motion
+                const bulletPull = 50;
+                const bulletOrbitalForce = 30;
+                state.enemyBullets.forEach(bullet => {
+                    const distToCenter = Math.hypot(bullet.x - effect.x, bullet.y - effect.y);
+                    if (distToCenter < pullRadius && distToCenter > 5) {
+                        const ang = Math.atan2(effect.y - bullet.y, effect.x - bullet.x);
+                        const forceMult = 1 - (distToCenter / pullRadius);
+
+                        // Radial pull
+                        const radialPull = bulletPull * (forceMult + 0.5) * step;
+                        bullet.x += Math.cos(ang) * radialPull;
+                        bullet.y += Math.sin(ang) * radialPull;
+
+                        // Tangential force
+                        const tangentAng = ang + Math.PI / 2;
+                        const orbitalPull = bulletOrbitalForce * forceMult * step;
+                        bullet.x += Math.cos(tangentAng) * orbitalPull;
+                        bullet.y += Math.sin(tangentAng) * orbitalPull;
+                    }
+                });
             }
 
             if (effect.duration <= 0) {
+                if (effect.type === 'orbital_strike') {
+                    // Trigger Orbital Strike Burst
+                    const range = effect.radius;
+                    // base damage * 4.0
+                    const pDmg = calcStat(state.player.dmg);
+                    const resonance = getChassisResonance(state);
+                    const damage = pDmg * 1.5 * (1 + resonance);
+
+                    // Visuals
+                    playSfx('laser'); // Laser sound
+                    // Shockwave removed as per user request
+                    spawnParticles(state, effect.x, effect.y, ['#bae6fd', '#38bdf8', '#0ea5e9'], 30, 3, 40, 'spark');
+
+                    // Create Crater Effect (Lasts 5 seconds)
+                    // This will handle the lingering beam fade-out AND the crater visual
+                    state.areaEffects.push({
+                        id: Date.now() + Math.random(),
+                        type: 'crater',
+                        x: effect.x,
+                        y: effect.y,
+                        radius: range,
+                        duration: 5.0, // 5 seconds lifespan
+                        creationTime: state.gameTime,
+                        level: 1
+                    });
+
+                    // Damage Logic
+                    state.enemies.forEach(e => {
+                        if (e.dead) return;
+                        const dist = Math.hypot(e.x - effect.x, e.y - effect.y);
+                        if (dist < range) {
+                            // "Ignore Enemy Shields" - Assuming this means bypassing armor or standard reductions if they existed.
+                            // For now, raw massive damage.
+                            e.hp -= damage;
+
+                            // Visual Feedback
+                            spawnFloatingNumber(state, e.x, e.y, Math.round(damage).toString(), '#38bdf8', true); // Crit color for impact
+                            spawnParticles(state, e.x, e.y, '#ef4444', 5);
+
+                            if (e.hp <= 0 && !e.dead) {
+                                // Killed by strike
+                                // Check for Death Logic (We can't import handleEnemyDeath inside this hook easily unless it's available)
+                                // HandleEnemyDeath is imported in useGame.ts! Line 6.
+                                // But updateEnemies calls it.
+                                // We can manually call it or let updateEnemies clean it up (hp <= 0).
+                                // Usually updateEnemies handles deaths.
+                                // But handleEnemyDeath adds score/xp. If I don't call it, I might miss rewards?
+                                // updateEnemies loop calls handleEnemyDeath if hp<=0. (Line 506 in ProjectileLogic, but updateEnemies handles it too?)
+                                // Let's check Logic/EnemyLogic.ts.
+                                // Actually ProjectileLogic calls handleEnemyDeath immediately on kill.
+                                // If I reduce HP here, the next updateEnemies loop will see hp<=0?
+                                // Let's check updateEnemies in EnemyLogic.
+                            }
+                        }
+                    });
+                }
+
                 if (effect.type === 'epicenter') state.player.immobilized = false;
                 state.areaEffects.splice(i, 1);
             }
@@ -347,17 +546,14 @@ export function useGameLoop(gameStarted: boolean) {
 
         // --- PORTAL LOGIC ---
         if (state.portalState !== 'transferring') {
-            if (state.portalState !== 'closed') {
+            if (state.portalState === 'warn') {
                 state.portalTimer -= step;
-            }
-            if (state.portalState === 'closed' && state.portalTimer <= 10) {
-                state.portalState = 'warn';
-                playSfx('warning');
-            } else if (state.portalState === 'warn' && state.portalTimer <= 0) {
-                state.portalState = 'open';
-                state.portalTimer = state.portalOpenDuration;
-                startPortalAmbience();
-                playSfx('spawn');
+                if (state.portalTimer <= 0) {
+                    state.portalState = 'open';
+                    state.portalTimer = state.portalOpenDuration;
+                    startPortalAmbience();
+                    playSfx('spawn');
+                }
             } else if (state.portalState === 'open') {
                 if (state.portalTimer <= 0) {
                     state.portalState = 'closed';
@@ -379,6 +575,7 @@ export function useGameLoop(gameStarted: boolean) {
                             state.portalState = 'transferring';
                             state.transferTimer = 3.0;
                             state.nextArenaId = p.to;
+                            state.portalsUsed++;
 
                             // Immediate Despawn to prevent interaction during animation
                             state.enemies = [];
@@ -417,7 +614,7 @@ export function useGameLoop(gameStarted: boolean) {
                 state.bullets = [];
                 state.drones.forEach(d => { d.x = state.player.x; d.y = state.player.y; });
                 state.portalState = 'closed';
-                state.portalTimer = 240;
+                state.portalTimer = 0;
 
                 // Switch BGM for the new arena
                 const switchArenaMusic = async (id: number) => {
@@ -460,6 +657,9 @@ export function useGameLoop(gameStarted: boolean) {
 
         updateParticles(state);
         if (state.critShake > 0) state.critShake *= 0.85;
+        if (state.timeInArena) {
+            state.timeInArena[state.currentArena] = (state.timeInArena[state.currentArena] || 0) + step;
+        }
         state.gameTime += step;
         state.frameCount++;
 
@@ -512,13 +712,16 @@ export function useGameLoop(gameStarted: boolean) {
                 return;
             }
 
-            // Pausing Logic (check refs for current values)
+            // Pausing Logic
             const isMenuOpen = showStatsRef.current || showSettingsRef.current || showModuleMenuRef.current || upgradeChoicesRef.current !== null || state.showLegendarySelection;
-            state.isPaused = isMenuOpen;
-            if (state.isPaused) {
-                // Ensure keys are cleared when pausing to prevent stuck movement
+
+            // CRITICAL: Only clear keys when TRANSITIONING to paused.
+            // This stops current movement but allows players to "buffer" their next move 
+            // by pressing keys while the menu is open or closing.
+            if (isMenuOpen && !state.isPaused) {
                 Object.keys(keys.current).forEach(k => keys.current[k] = false);
             }
+            state.isPaused = isMenuOpen;
 
             // Music volume control based on menu state
             const inStats = showStatsRef.current;
@@ -598,7 +801,7 @@ export function useGameLoop(gameStarted: boolean) {
 
             // Force Re-render for UI updates (Throttled to ~15 FPS)
             frameCountRef.current++;
-            if (frameCountRef.current % 4 === 0) {
+            if (!state.isPaused && frameCountRef.current % 4 === 0) {
                 setUiState(prev => prev + 1);
             }
 
@@ -677,10 +880,14 @@ export function useGameLoop(gameStarted: boolean) {
         toggleModuleMenu: () => {
             setShowModuleMenu(prev => {
                 const next = !prev;
+                // Sync State
+                gameState.current.showModuleMenu = next;
+
                 if (next) {
                     setShowSettings(false);
                     setShowStats(false);
-                    gameState.current.unseenMeteorites = 0;
+                    gameState.current.showSettings = false;
+                    gameState.current.showStats = false;
                 }
                 return next;
             });
@@ -711,15 +918,12 @@ export function useGameLoop(gameStarted: boolean) {
             }
             return false;
         },
-        triggerPortal: () => {
-            if (gameState.current.portalState === 'closed' && gameState.current.player.dust >= 5) {
-                gameState.current.player.dust -= 5;
-                gameState.current.portalTimer = 10; // Trigger "warn" sequence immediately
-                setUiState(p => p + 1);
-                return true;
-            }
-            return false;
-        },
-        fps
+        triggerPortal,
+        fps,
+        portalError,
+        onViewChassisDetail: () => {
+            gameState.current.chassisDetailViewed = true;
+            setUiState(p => p + 1);
+        }
     };
 }

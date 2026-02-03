@@ -5,6 +5,8 @@ export const LEGENDARY_UPGRADES: Record<string, LegendaryHex> = {
         id: 'eco_dmg',
         name: 'STORM OF STEEL',
         desc: '+1 DMG per kill',
+        description: 'System-integrated kinetic resonators that convert combat data into localized weapon enhancements.',
+        lore: 'A forgotten prototype from the Solar Wars, the Storm of Steel harvests the kinetic energy of fallen foes to calibrate your weapon arrays for higher density impacts.',
         category: 'Economic',
         type: 'EcoDMG',
         level: 1,
@@ -15,6 +17,8 @@ export const LEGENDARY_UPGRADES: Record<string, LegendaryHex> = {
         id: 'eco_xp',
         name: 'NEURAL HARVEST',
         desc: '+1 XP per kill',
+        description: 'Bio-mechanical neural links that extract high-fidelity tactical data during enemy neutralization.',
+        lore: 'The Neural Harvest protocol was designed for rapid AI training in hostile sectors, leaching every bit of processed data from destroyed units to accelerate evolution.',
         category: 'Economic',
         type: 'EcoXP',
         level: 1,
@@ -25,6 +29,8 @@ export const LEGENDARY_UPGRADES: Record<string, LegendaryHex> = {
         id: 'eco_hp',
         name: 'ESSENCE SYPHON',
         desc: '+1 Max HP per kill',
+        description: 'Nano-molecular reconstructors that repurpose organic matter from fallen targets into defensive plating.',
+        lore: 'Life in the void is scarce; the Essence Syphon ensures nothing is wasted, stitching the remains of your enemies directly into your hull to bolster your survival.',
         category: 'Economic',
         type: 'EcoHP',
         level: 1,
@@ -35,6 +41,8 @@ export const LEGENDARY_UPGRADES: Record<string, LegendaryHex> = {
         id: 'com_life',
         name: 'CRIMSON FEAST',
         desc: '+3% Lifesteal',
+        description: 'Advanced parasitic nanites that bleed energy from enemy hulls to fuel internal repair systems.',
+        lore: 'The Feast is a relentless hunger. As you strike, your nanites burrow deep, carrying back the vital energy needed to keep your systems operational even under heavy fire.',
         category: 'Combat',
         type: 'ComLife',
         level: 1,
@@ -45,6 +53,8 @@ export const LEGENDARY_UPGRADES: Record<string, LegendaryHex> = {
         id: 'com_crit',
         name: 'SHATTERED FATE',
         desc: '+15% Crit Chance',
+        description: 'Quantum-synchronized targeting sensors that identify and exploit structural weaknesses in real-time.',
+        lore: 'Fate is calculated, not random. These sensors scan for the exact micro-second of vulnerability, allowing your munitions to tear through the toughest armor like glass.',
         category: 'Combat',
         type: 'ComCrit',
         level: 1,
@@ -55,6 +65,8 @@ export const LEGENDARY_UPGRADES: Record<string, LegendaryHex> = {
         id: 'com_wave',
         name: 'TERROR PULSE',
         desc: 'Sonic Wave on every 15th shot',
+        description: 'High-frequency sonic resonators that discharge a wave of psychological interference and physical force.',
+        lore: 'The pulse doesn\'t just break hulls; it shatters morale. The oscillating waves resonate at frequencies that disrupt neural patterns, leaving enemies paralyzed with fear.',
         category: 'Combat',
         type: 'ComWave',
         level: 1,
@@ -65,6 +77,8 @@ export const LEGENDARY_UPGRADES: Record<string, LegendaryHex> = {
         id: 'def_puddle',
         name: 'TOXIC SWAMP',
         desc: 'Active: Spawn Toxic Puddle',
+        description: 'Chemical dispersal system that saturates the region with corrosive, neuro-inhibiting compounds.',
+        lore: 'The Toxic Swamp creates a localized dead-zone. Corrosive nanites melt through enemy shielding while neuro-toxins slow their movement to a crawl.',
         category: 'Defensive',
         type: 'DefPuddle',
         level: 1,
@@ -75,6 +89,8 @@ export const LEGENDARY_UPGRADES: Record<string, LegendaryHex> = {
         id: 'def_epi',
         name: 'EPICENTER',
         desc: 'Active: Channel Spikes',
+        description: 'Gravimetric stabilization unit that channels tectonic energy into localized crystalline spikes.',
+        lore: 'Become the center of gravity. As the spikes emerge, the sheer force of the energy channel locks you in place but creates a sanctuary of total destruction around you.',
         category: 'Defensive',
         type: 'DefEpi',
         level: 1,
@@ -84,7 +100,9 @@ export const LEGENDARY_UPGRADES: Record<string, LegendaryHex> = {
     CombShield: {
         id: 'comb_shield',
         name: 'AEGIS PROTOCOL',
-        desc: 'Scaling Defense per Kill',
+        desc: 'Log-Scaling Defense per Kill',
+        description: 'Adaptive plating algorithms that strengthen structural integrity logarithmically based on combat data.',
+        lore: 'The Aegis is a living shield. It learns from every hit taken and every enemy destroyed, reinforcing your chassis until it becomes an impenetrable fortress.',
         category: 'Defensive',
         type: 'CombShield',
         level: 1,
@@ -94,75 +112,75 @@ export const LEGENDARY_UPGRADES: Record<string, LegendaryHex> = {
 };
 
 export function getLegendaryPerksArray(type: string, level: number): string[] {
-    const perks: Record<string, string[]> = {
+    const perks: Record<string, string[][]> = {
         EcoDMG: [
-            "+0.2 DMG per kill",
-            "+0.2 ATS per kill",
-            "+0.2 DMG% per kill",
-            "+0.2 ATS% per kill",
-            "MAX LEVEL (Mergeable)"
+            ["+0.2 DMG per kill"],
+            ["+0.2 ATS per kill"],
+            ["+0.2 DMG% per kill"],
+            ["+0.2 ATS% per kill"],
+            ["MAX LEVEL"]
         ],
         EcoXP: [
-            "+0.2 XP per kill",
-            "+0.2% Meteor Drop per kill",
-            "+0.2% Rarity Boost per kill",
-            "+0.2 XP% per kill",
-            "MAX LEVEL (Mergeable)"
+            ["+0.2 XP per kill"],
+            ["+0.2% Meteor Drop per kill"],
+            ["+0.2% Rarity Boost per kill"],
+            ["+0.2% XP per kill"],
+            ["MAX LEVEL"]
         ],
         EcoHP: [
-            "+0.2 Max HP per kill",
-            "+0.2 HP/sec per kill",
-            "+0.2 Max HP% per kill",
-            "+0.2 HP/sec% per kill",
-            "MAX LEVEL (Mergeable)"
+            ["+0.2 Max HP per kill"],
+            ["+0.1 HP/sec per kill"],
+            ["+0.2% Max HP per kill"],
+            ["+0.2% Regen per kill"],
+            ["MAX LEVEL"]
         ],
         ComLife: [
-            "+3% Lifesteal",
-            "Overheal -> Shield (200% eff, 3s)",
-            "Attacks: Deal 2% Enemy Max HP",
-            "Necromancy: 10% Chance for Zombie",
-            "MAX LEVEL (Mergeable)"
+            ["+3% Lifesteal"],
+            ["Shift: Restore 200% Overheal", "3s Shield Duration"],
+            ["2% Enemy Max HP DMG"],
+            ["10% Zombie Spawn Chance"],
+            ["MAX LEVEL"]
         ],
         ComCrit: [
-            "+15% Crit Chance (2x DMG)",
-            "Execute: 10% Chance if HP < 50%",
-            "Death Mark: Target takes 300% DMG",
-            "Crit Upgrade: 25% Chance (3.5x DMG)",
-            "MAX LEVEL (Mergeable)"
+            ["+15% Crit Chance"],
+            ["HP < 50%: 10% Execute"],
+            ["300% Death Mark DMG"],
+            ["25% Mega-Crit Chance"],
+            ["MAX LEVEL"]
         ],
         ComWave: [
-            "Every 15 shots: Sonic Wave (75% DMG, 450 Range)",
-            "Wave adds Fear (1.5s)",
-            "Wave Upgrade: 125% DMG, 600 Range",
-            "Twin Wave (Front & Back)",
-            "MAX LEVEL (Mergeable)"
+            ["75% Wave DMG", "450 Wave Range"],
+            ["1.5s Wave Fear"],
+            ["125% Wave DMG", "600 Wave Range"],
+            ["Twin Front/Back Wave"],
+            ["MAX LEVEL"]
         ],
         DefPuddle: [
-            "Active (25s CD): 500px Puddle, Slow 20%, Dmg Taken +20%",
-            "Acid: Enemies take 5% Max HP/sec inside",
-            "Synthesis: +25% Max HP & Regen while standing in puddle",
-            "Expansion: 600px Radius, Slow 30%, Dmg Taken +30%",
-            "MAX LEVEL (Mergeable)"
+            ["20% Slow", "20% Dmg Taken"],
+            ["5% Max HP/sec Acid DMG"],
+            ["+25% Stand-in Max HP", "+25% Stand-in Regen"],
+            ["30% Slow", "30% Dmg Taken"],
+            ["MAX LEVEL"]
         ],
         DefEpi: [
-            "Active (30s CD): Channel Spikes (70% Slow, 25% Dmg/0.5s)",
-            "Fortress: -50% Dmg Taken channeling",
-            "Stasis: Invulnerable Shield for first 3s",
-            "Cataclysm: 80% Slow, 35% Dmg/0.5s",
-            "MAX LEVEL (Mergeable)"
+            ["70% Spike Slow", "25% Spike Dmg/0.5s"],
+            ["-50% Channeling Dmg Taken"],
+            ["3s Invulnerable Start"],
+            ["80% Spike Slow", "35% Spike Dmg/0.5s"],
+            ["MAX LEVEL"]
         ],
         CombShield: [
-            "+1 Armor per kill",
-            "+1% Collision Dmg Red. per kill",
-            "+1% Projectile Dmg Red. per kill",
-            "+1% Armor Multiplier per kill",
-            "MAX LEVEL (Mergeable)"
+            ["+1 Armor per kill"],
+            ["Log-scaling Collision Resist"],
+            ["Log-scaling Projectile Resist"],
+            ["+1% Armor Multiplier per kill"],
+            ["MAX LEVEL"]
         ]
     };
     const list = perks[type];
     if (!list) return [];
 
-    return list.slice(0, level);
+    return list.slice(0, level).flat();
 }
 
 export function getLegendaryPerkDesc(type: string, level: number): string {
@@ -329,11 +347,17 @@ export function calculateLegendaryBonus(state: GameState, statKey: string): numb
             if (statKey === 'reg_pct_per_kill' && hex.level >= 4) total += getKillsSinceLevel(4) * 0.2 * multiplier;
         }
 
-        // CombShield Logic
+        // CombShield Logic (Logarithmic scaling for reductions)
         if (hex.type === 'CombShield') {
             if (statKey === 'arm_per_kill' && hex.level >= 1) total += getKillsSinceLevel(1) * 1 * multiplier;
-            if (statKey === 'col_red_per_kill' && hex.level >= 2) total += getKillsSinceLevel(2) * 0.01 * multiplier;
-            if (statKey === 'proj_red_per_kill' && hex.level >= 3) total += getKillsSinceLevel(3) * 0.01 * multiplier;
+            if (statKey === 'col_red_per_kill' && hex.level >= 2) {
+                const stacks = getKillsSinceLevel(2) * multiplier;
+                total += 80 * (stacks / (stacks + 350));
+            }
+            if (statKey === 'proj_red_per_kill' && hex.level >= 3) {
+                const stacks = getKillsSinceLevel(3) * multiplier;
+                total += 80 * (stacks / (stacks + 350));
+            }
             if (statKey === 'arm_pct_per_kill' && hex.level >= 4) total += getKillsSinceLevel(4) * 0.01 * multiplier;
         }
 

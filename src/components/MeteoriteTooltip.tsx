@@ -234,11 +234,17 @@ export const MeteoriteTooltip: React.FC<MeteoriteTooltipProps> = ({
                     };
 
                     const getPerkName = (id: string) => {
-                        if (id === 'neighbor_any_all') return 'UNIVERSAL SYNERGY';
-                        if (id.includes('eco')) return 'ECONOMIC RESONANCE';
-                        if (id.includes('com')) return 'COMBAT AMPLIFIER';
-                        if (id.includes('def')) return 'DEFENCE MATRIX';
-                        if (id.includes('pair')) return 'HARMONIC PAIRING';
+                        if (id === 'base_efficiency') return 'METEORITIC PARTICLE';
+                        if (id === 'neighbor_any_all') return 'PROXIMITY RELAY';
+                        if (id.startsWith('neighbor_any_')) return 'SECTOR AMPLIFIER';
+                        if (id.startsWith('neighbor_new_') || id.startsWith('neighbor_dam_') || id.startsWith('neighbor_bro_')) return 'CONDITION LINK';
+                        if (id === 'neighbor_leg_any') return 'LEGENDARY LIAISON';
+                        if (id.startsWith('neighbor_leg_')) return 'ALPHA CONTROLLER';
+                        if (id.startsWith('pair_')) {
+                            if (id.endsWith('_lvl')) return 'HARMONY PAIR';
+                            return 'SYNERGY PAIR';
+                        }
+                        if (id === 'matrix_same_type_rarity') return 'SINGULARITY CORE';
                         return 'METEORIC PROTOCOL';
                     };
 

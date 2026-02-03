@@ -73,19 +73,19 @@ import { SECTOR_NAMES } from './MapLogic';
 // [MinTime, MaxTime, [Lvl1, Lvl2, ..., Lvl9]]
 // Time in Minutes
 const DROP_TABLE: { min: number, max: number, weights: number[] }[] = [
-    { min: 0, max: 5, weights: [1.6, 1.0, 0.4, 0, 0, 0, 0, 0, 0] },
-    { min: 5, max: 10, weights: [1.3, 0.9, 0.5, 0.2, 0, 0, 0, 0, 0] },
-    { min: 10, max: 15, weights: [1.0, 0.8, 0.6, 0.3, 0.1, 0, 0, 0, 0] },
-    { min: 15, max: 20, weights: [0.7, 0.7, 0.6, 0.4, 0.2, 0.1, 0, 0, 0] },
-    { min: 20, max: 25, weights: [0.4, 0.6, 0.6, 0.5, 0.3, 0.1, 0.1, 0, 0] },
-    { min: 25, max: 30, weights: [0, 0.5, 0.6, 0.6, 0.4, 0.2, 0.15, 0.05, 0] },
-    { min: 30, max: 35, weights: [0, 0, 0.5, 0.6, 0.5, 0.3, 0.25, 0.15, 0.1] },
-    { min: 35, max: 40, weights: [0, 0, 0, 0.5, 0.5, 0.4, 0.35, 0.25, 0.15] },
-    { min: 40, max: 45, weights: [0, 0, 0, 0, 0.5, 0.45, 0.45, 0.45, 0.35] },
-    { min: 45, max: 50, weights: [0, 0, 0, 0, 0.4, 0.45, 0.5, 0.45, 0.3] },
-    { min: 50, max: 55, weights: [0, 0, 0, 0, 0, 0.4, 0.5, 0.55, 0.55] },
-    { min: 55, max: 60, weights: [0, 0, 0, 0, 0, 0.3, 0.45, 0.55, 0.5] },
-    { min: 60, max: 9999, weights: [0, 0, 0, 0, 0, 0, 0.4, 0.6, 0.5] }
+    { min: 0, max: 5, weights: [1.33, 0.83, 0.33, 0, 0, 0, 0, 0, 0] },
+    { min: 5, max: 10, weights: [1.08, 0.74, 0.41, 0.17, 0, 0, 0, 0, 0] },
+    { min: 10, max: 15, weights: [0.82, 0.66, 0.49, 0.25, 0.08, 0, 0, 0, 0] },
+    { min: 15, max: 20, weights: [0.57, 0.57, 0.49, 0.33, 0.16, 0.08, 0, 0, 0] },
+    { min: 20, max: 25, weights: [0.32, 0.48, 0.48, 0.40, 0.24, 0.09, 0.09, 0, 0] },
+    { min: 25, max: 30, weights: [0, 0.40, 0.48, 0.48, 0.32, 0.16, 0.12, 0.04, 0] },
+    { min: 30, max: 35, weights: [0, 0, 0.40, 0.47, 0.40, 0.24, 0.20, 0.12, 0.08] },
+    { min: 35, max: 40, weights: [0, 0, 0, 0.38, 0.38, 0.31, 0.27, 0.19, 0.12] },
+    { min: 40, max: 45, weights: [0, 0, 0, 0, 0.39, 0.35, 0.35, 0.35, 0.27] },
+    { min: 45, max: 50, weights: [0, 0, 0, 0, 0.30, 0.34, 0.38, 0.34, 0.23] },
+    { min: 50, max: 55, weights: [0, 0, 0, 0, 0, 0.30, 0.37, 0.41, 0.41] },
+    { min: 55, max: 60, weights: [0, 0, 0, 0, 0, 0.22, 0.32, 0.40, 0.36] },
+    { min: 60, max: 9999, weights: [0, 0, 0, 0, 0, 0, 0.27, 0.40, 0.33] }
 ];
 
 const RARITY_LIST: MeteoriteRarity[] = ['scrap', 'anomalous', 'quantum', 'astral', 'radiant', 'void', 'eternal', 'divine', 'singularity'];
@@ -183,6 +183,7 @@ export function createMeteorite(state: GameState, rarity: MeteoriteRarity, x: nu
         magnetized: false,
         discoveredIn: SECTOR_NAMES[state.currentArena] || "UNKNOWN SECTOR",
         perks,
+        spawnedAt: state.gameTime,
         stats
     };
 }
@@ -214,6 +215,12 @@ export function updateLoot(state: GameState) {
 
     for (let i = meteorites.length - 1; i >= 0; i--) {
         const item = meteorites[i];
+
+        // 2-Minute Despawn Timer
+        if (state.gameTime - item.spawnedAt > 120) {
+            meteorites.splice(i, 1);
+            continue;
+        }
 
         // Friction / Deceleration for initial bounce
         item.x += item.vx;
@@ -250,7 +257,7 @@ export function updateLoot(state: GameState) {
                     // Add to inventory
                     item.isNew = true;
                     inventory[emptySlotIndex] = item;
-                    state.unseenMeteorites = (state.unseenMeteorites || 0) + 1;
+                    state.meteoritesPickedUp++;
                     playSfx('shoot'); // Pickup sound
                     meteorites.splice(i, 1);
                 }

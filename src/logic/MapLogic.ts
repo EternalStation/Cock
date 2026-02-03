@@ -41,16 +41,16 @@ export interface PortalDef {
 
 export const PORTALS: PortalDef[] = [
     // From Economic (0)
-    { from: 0, to: 1, wall: 5, color: '#FF3333' }, // To Combat (Red) - Top Left Wall (between vertex 5 and 0)
-    { from: 0, to: 2, wall: 0, color: '#3388FF' }, // To Defence (Blue) - Right Wall (between vertex 0 and 1)
+    { from: 0, to: 1, wall: 5, color: '#FF3333' }, // To Combat (Red)
+    { from: 0, to: 2, wall: 0, color: '#3388FF' }, // To Defence (Blue)
 
     // From Combat (1) - To Economic
-    { from: 1, to: 0, wall: 2, color: '#33FF33' }, // Bottom Right Wall (between vertex 2 and 3)
-    { from: 1, to: 2, wall: 1, color: '#3388FF' }, // To Defence - Top Right Wall (between vertex 1 and 2)
+    { from: 1, to: 0, wall: 2, color: '#FFD700' }, // To Economic (Yellow)
+    { from: 1, to: 2, wall: 1, color: '#3388FF' }, // To Defence (Blue)
 
     // From Defence (2) - To Economic
-    { from: 2, to: 0, wall: 3, color: '#33FF33' }, // Top Right Wall (between vertex 3 and 4)
-    { from: 2, to: 1, wall: 4, color: '#FF3333' }, // To Combat - Bottom Left Wall (between vertex 4 and 5)
+    { from: 2, to: 0, wall: 3, color: '#FFD700' }, // To Economic (Yellow)
+    { from: 2, to: 1, wall: 4, color: '#FF3333' }, // To Combat (Red)
 ];
 
 // Helper to get Wall Line Segment (Visual Match)
@@ -123,48 +123,55 @@ export function isInMap(x: number, y: number): boolean {
  * For any point in the map, find the nearest hex edge.
  */
 export function getHexDistToWall(x: number, y: number): { dist: number; normal: { x: number; y: number } } {
-    let minDist = Infinity;
+    let bestMinDist = -Infinity;
     let bestNormal = { x: 0, y: 0 };
+
+    const r = ARENA_RADIUS;
+    const H = r * SQRT3 / 2;
 
     ARENA_CENTERS.forEach(c => {
         const dx = x - c.x;
         const dy = y - c.y;
 
-        // Plane equations for flat-topped hex:
-        // 1. px = r (right)
-        // 2. px = -r (left)
-        // 3. x*sqrt3 + y = r*sqrt3 
-        // 4. x*sqrt3 - y = r*sqrt3
-        // 5. -x*sqrt3 + y = r*sqrt3
-        // 6. -x*sqrt3 - y = r*sqrt3
+        // Plane equations for flat-topped hex (horizontal top/bottom):
+        // 1. py = H (top)
+        // 2. py = -H (bottom)
+        // 3. x*sqrt3 + y = r*sqrt3 (top-right)
+        // 4. x*sqrt3 - y = r*sqrt3 (bottom-right)
+        // 5. -x*sqrt3 + y = r*sqrt3 (top-left)
+        // 6. -x*sqrt3 - y = r*sqrt3 (bottom-left)
 
-        // Inward Normals:
         const normals = [
-            { x: -1, y: 0 }, { x: 1, y: 0 },
-            { x: -SQRT3 / 2, y: -0.5 }, { x: -SQRT3 / 2, y: 0.5 },
-            { x: SQRT3 / 2, y: -0.5 }, { x: SQRT3 / 2, y: 0.5 }
+            { x: 0, y: -1 }, { x: 0, y: 1 }, // Top, Bottom
+            { x: -SQRT3 / 2, y: -0.5 }, { x: -SQRT3 / 2, y: 0.5 }, // TR, BR
+            { x: SQRT3 / 2, y: -0.5 }, { x: SQRT3 / 2, y: 0.5 }   // TL, BL
         ];
 
-        const r = ARENA_RADIUS;
-
-        // Distances to the 6 lines
         const dists = [
-            r - dx, r + dx, // Vertical flat sides
+            H - dy, H + dy, // Top, Bottom
             (r * SQRT3 - (dx * SQRT3 + dy)) / 2,
             (r * SQRT3 - (dx * SQRT3 - dy)) / 2,
             (r * SQRT3 - (-dx * SQRT3 + dy)) / 2,
             (r * SQRT3 - (-dx * SQRT3 - dy)) / 2
         ];
 
+        let hexMinDist = Infinity;
+        let hexNormal = { x: 0, y: 0 };
+
         dists.forEach((d, i) => {
-            if (d < minDist) {
-                minDist = d;
-                bestNormal = normals[i];
+            if (d < hexMinDist) {
+                hexMinDist = d;
+                hexNormal = normals[i];
             }
         });
+
+        if (hexMinDist > bestMinDist) {
+            bestMinDist = hexMinDist;
+            bestNormal = hexNormal;
+        }
     });
 
-    return { dist: minDist, normal: bestNormal };
+    return { dist: bestMinDist, normal: bestNormal };
 }
 
 // Get the index of the arena closest to the point (or containing it)

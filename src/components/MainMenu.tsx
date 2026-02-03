@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { startMenuMusic } from '../logic/AudioLogic';
 
+import { SettingsMenu } from './SettingsMenu';
+
 interface MainMenuProps {
     onStart: () => void;
 }
@@ -8,31 +10,46 @@ interface MainMenuProps {
 export const MainMenu: React.FC<MainMenuProps> = ({ onStart }) => {
     const [fading, setFading] = useState(false);
     const [showBlueprint, setShowBlueprint] = useState(false);
+    const [showSettings, setShowSettings] = useState(false);
+    const [mouse, setMouse] = useState({ x: 0, y: 0 });
 
     // Start Menu Music on mount
     useEffect(() => {
         startMenuMusic();
     }, []);
 
-    // Handle ESC key to close blueprint
+    // Handle ESC key to close modals
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
-            if ((e.key === 'Escape' || e.code.toLowerCase() === 'escape') && showBlueprint) {
-                setShowBlueprint(false);
+            if (e.key === 'Escape') {
+                if (showBlueprint) setShowBlueprint(false);
+                if (showSettings) setShowSettings(false);
             }
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [showBlueprint]);
+    }, [showBlueprint, showSettings]);
+
+    // Mouse movement for parallax
+    useEffect(() => {
+        const handleMouseMove = (e: MouseEvent) => {
+            setMouse({
+                x: (e.clientX / window.innerWidth) - 0.5,
+                y: (e.clientY / window.innerHeight) - 0.5
+            });
+        };
+        window.addEventListener('mousemove', handleMouseMove);
+        return () => window.removeEventListener('mousemove', handleMouseMove);
+    }, []);
 
     const handleStart = () => {
         setFading(true);
         setTimeout(() => {
             onStart();
-        }, 1000); // 1s fade out
+        }, 1000);
     };
 
-    // Dark Ominous Hexagon Theme (Clean & Fearful)
+    // --- ENHANCED CANVAS BACKGROUND ---
     useEffect(() => {
         const canvas = document.getElementById('menu-particles') as HTMLCanvasElement;
         if (!canvas) return;
@@ -48,82 +65,130 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onStart }) => {
         };
         window.addEventListener('resize', handleResize);
 
-        class DarkHex {
-            x: number;
-            y: number;
-            size: number;
-            speedX: number;
-            speedY: number;
-            opacity: number;
-            growing: boolean;
-
+        class Star {
+            x: number; y: number; size: number; opacity: number; pulse: number;
             constructor() {
                 this.x = Math.random() * w;
                 this.y = Math.random() * h;
-                this.size = Math.random() * 40 + 10; // Medium sizes
-                this.speedX = (Math.random() - 0.5) * 0.2; // Very slow, ominous drifting
-                this.speedY = (Math.random() - 0.5) * 0.2;
-                this.opacity = Math.random() * 0.1 + 0.02; // Very faint
-                this.growing = Math.random() > 0.5;
+                this.size = Math.random() * 1.5;
+                this.opacity = Math.random();
+                this.pulse = Math.random() * 0.02;
             }
-
             update() {
-                this.x += this.speedX;
-                this.y += this.speedY;
-
-                // Subtle pulsing
-                if (this.growing) {
-                    this.opacity += 0.0005;
-                    if (this.opacity > 0.15) this.growing = false;
-                } else {
-                    this.opacity -= 0.0005;
-                    if (this.opacity < 0.02) this.growing = true;
-                }
-
-                // Wrap smoothly
-                if (this.x > w + 50) this.x = -50;
-                if (this.x < -50) this.x = w + 50;
-                if (this.y > h + 50) this.y = -50;
-                if (this.y < -50) this.y = h + 50;
+                this.opacity += this.pulse;
+                if (this.opacity > 1 || this.opacity < 0.2) this.pulse *= -1;
             }
-
-            draw(context: CanvasRenderingContext2D) {
-                context.beginPath();
-                for (let i = 0; i < 6; i++) {
-                    const angle = 2 * Math.PI / 6 * i;
-                    context.lineTo(this.x + this.size * Math.cos(angle), this.y + this.size * Math.sin(angle));
-                }
-                context.closePath();
-                context.fillStyle = `rgba(100, 116, 139, ${this.opacity})`; // Dark Slate/Grey
-                context.fill();
-                context.strokeStyle = `rgba(255, 255, 255, ${this.opacity * 0.5})`; // Faint faint outline
-                context.lineWidth = 1;
-                context.stroke();
+            draw() {
+                if (!ctx) return;
+                ctx.fillStyle = `rgba(255, 255, 255, ${this.opacity})`;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
             }
         }
 
-        const hexes: DarkHex[] = [];
-        // Reduced count for cleaner look
-        for (let i = 0; i < 25; i++) {
-            hexes.push(new DarkHex());
+        class Meteor {
+            x!: number; y!: number; length!: number; speed!: number; opacity!: number; active: boolean;
+            constructor() {
+                this.reset();
+                this.active = Math.random() > 0.98; // Rare start
+            }
+            reset() {
+                this.x = Math.random() * w;
+                this.y = Math.random() * h * 0.5;
+                this.length = Math.random() * 80 + 20;
+                this.speed = Math.random() * 15 + 10;
+                this.opacity = 0;
+                this.active = false;
+            }
+            update() {
+                if (!this.active) {
+                    if (Math.random() > 0.999) this.active = true;
+                    return;
+                }
+                this.x += this.speed;
+                this.y += this.speed * 0.5;
+                this.opacity += 0.05;
+                if (this.x > w || this.y > h) this.reset();
+            }
+            draw() {
+                if (!this.active || !ctx) return;
+                const grad = ctx.createLinearGradient(this.x, this.y, this.x - this.length, this.y - this.length * 0.5);
+                grad.addColorStop(0, `rgba(34, 211, 238, ${Math.min(1, this.opacity)})`);
+                grad.addColorStop(1, 'rgba(34, 211, 238, 0)');
+                ctx.strokeStyle = grad;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(this.x, this.y);
+                ctx.lineTo(this.x - this.length, this.y - this.length * 0.5);
+                ctx.stroke();
+            }
+        }
+
+        class Hex {
+            x: number; y: number; baseSize: number; size: number; opacity: number; targetOpacity: number;
+            constructor(x: number, y: number, size: number) {
+                this.x = x;
+                this.y = y;
+                this.baseSize = size;
+                this.size = size;
+                this.opacity = 0;
+                this.targetOpacity = 0.05 + Math.random() * 0.05;
+            }
+            update(mx: number, my: number) {
+                const dx = mx - this.x;
+                const dy = my - this.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                const maxDist = 300;
+
+                if (dist < maxDist) {
+                    const factor = 1 - dist / maxDist;
+                    this.size = this.baseSize + factor * 5;
+                    this.opacity = this.targetOpacity + factor * 0.2;
+                } else {
+                    this.size += (this.baseSize - this.size) * 0.1;
+                    this.opacity += (this.targetOpacity - this.opacity) * 0.1;
+                }
+            }
+            draw() {
+                if (!ctx) return;
+                ctx.beginPath();
+                for (let i = 0; i < 6; i++) {
+                    const angle = (Math.PI / 3) * i;
+                    ctx.lineTo(this.x + this.size * Math.cos(angle), this.y + this.size * Math.sin(angle));
+                }
+                ctx.closePath();
+                ctx.strokeStyle = `rgba(34, 211, 238, ${this.opacity})`;
+                ctx.lineWidth = 1;
+                ctx.stroke();
+            }
+        }
+
+        const stars = Array.from({ length: 150 }, () => new Star());
+        const meteors = Array.from({ length: 3 }, () => new Meteor());
+        const hexes: Hex[] = [];
+        const hexSize = 40;
+        const hexW = hexSize * Math.sqrt(3);
+        const hexH = hexSize * 1.5;
+
+        for (let y = 0; y < h + hexH; y += hexH) {
+            for (let x = 0; x < w + hexW; x += hexW) {
+                const xOffset = (Math.floor(y / hexH) % 2) * (hexW / 2);
+                hexes.push(new Hex(x + xOffset, y, hexSize - 2));
+            }
         }
 
         let animId: number;
         const loop = () => {
-            // Strict clear for clean look
-            ctx.clearRect(0, 0, w, h);
-
-            // Background Gradient (Vignette)
-            const grad = ctx.createRadialGradient(w / 2, h / 2, h / 3, w / 2, h / 2, h);
-            grad.addColorStop(0, '#0f172a'); // Slate 900
-            grad.addColorStop(1, '#020617'); // Slate 950 (Almost black)
-            ctx.fillStyle = grad;
+            ctx.fillStyle = '#020617';
             ctx.fillRect(0, 0, w, h);
 
-            hexes.forEach(hex => {
-                hex.update();
-                hex.draw(ctx);
-            });
+            stars.forEach(s => { s.update(); s.draw(); });
+            meteors.forEach(m => { m.update(); m.draw(); });
+
+            const mx = (mouse.x + 0.5) * w;
+            const my = (mouse.y + 0.5) * h;
+            hexes.forEach(hex => { hex.update(mx, my); hex.draw(); });
 
             animId = requestAnimationFrame(loop);
         };
@@ -133,89 +198,54 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onStart }) => {
             cancelAnimationFrame(animId);
             window.removeEventListener('resize', handleResize);
         };
-    }, []);
+    }, [mouse]);
 
     return (
         <div className="main-menu" style={{ transition: 'opacity 1s', opacity: fading ? 0 : 1 }}>
             <canvas id="menu-particles" style={{ position: 'absolute', top: 0, left: 0 }} />
 
-            <div className="menu-container">
+            {/* Post-Processing Overlays */}
+            <div className="menu-vignette" />
+            <div className="menu-scanlines" />
+            <div className="menu-scanline-beam" />
+
+            <div className="menu-container" style={{
+                transform: `translate(${mouse.x * -20}px, ${mouse.y * -20}px)`,
+                transition: 'transform 0.1s ease-out'
+            }}>
                 <div className="menu-title">NEON SURVIVOR</div>
 
-                <button className="btn-start" onClick={handleStart}>START</button>
-                <button className="btn-logic" onClick={() => setShowBlueprint(true)}>GAME LOGIC</button>
-
-                {showBlueprint && (
-                    <div className="blueprint-modal" onClick={() => setShowBlueprint(false)}>
-                        <div className="blueprint-container" onClick={(e) => e.stopPropagation()}>
-                            <div className="blueprint-header">
-                                <div className="blueprint-title">NEON SURVIVOR - BLUEPRINT & LOGIC</div>
-                                <button className="btn-close-blueprint" onClick={() => setShowBlueprint(false)} autoFocus>CLOSE [ESC]</button>
-                            </div>
-                            <iframe
-                                src="/blueprint.html"
-                                className="blueprint-iframe"
-                                title="Game Blueprint"
-                            />
-                        </div>
-                    </div>
-                )}
-
-                <div className="controls-hint-container">
-                    {/* WASD / ARROWS - Movement & Scroll */}
-                    <div className="control-group">
-                        <div className="keys-visual" style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
-                            <div className="key-group">
-                                <div className="key-row">
-                                    <div className="key-box">W</div>
-                                </div>
-                                <div className="key-row">
-                                    <div className="key-box">A</div>
-                                    <div className="key-box">S</div>
-                                    <div className="key-box">D</div>
-                                </div>
-                            </div>
-                            <span style={{ color: '#1e293b', fontWeight: 900 }}>/</span>
-                            <div className="key-group">
-                                <div className="key-row">
-                                    <div className="key-box">↑</div>
-                                </div>
-                                <div className="key-row">
-                                    <div className="key-box">←</div>
-                                    <div className="key-box">↓</div>
-                                    <div className="key-box">→</div>
-                                </div>
-                            </div>
-                        </div>
-                        <span className="control-label">MOVE / SCROLL</span>
-                    </div>
-
-                    {/* SPACE - Select */}
-                    <div className="control-group">
-                        <div className="keys-visual">
-                            <div className="key-box space-key" style={{ width: 120 }}>SPACE</div>
-                        </div>
-                        <span className="control-label">SELECT UPGRADE</span>
-                    </div>
-
-                    {/* C - Data */}
-                    <div className="control-group">
-                        <div className="keys-visual">
-                            <div className="key-box">C</div>
-                        </div>
-                        <span className="control-label">DATA</span>
-                    </div>
-
-
-                    {/* X - Matrix */}
-                    <div className="control-group">
-                        <div className="keys-visual">
-                            <div className="key-box">X</div>
-                        </div>
-                        <span className="control-label">MATRIX</span>
-                    </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: '100%', alignItems: 'center', pointerEvents: 'auto' }}>
+                    <button className="btn-start" onClick={handleStart}>
+                        <span>ENTER VOID</span>
+                    </button>
+                    <button className="btn-logic" onClick={() => setShowSettings(true)}>
+                        SETTINGS
+                    </button>
+                    <button className="btn-logic" onClick={() => setShowBlueprint(true)}>
+                        DATABASE
+                    </button>
                 </div>
             </div>
+
+            {/* Sub-panels */}
+            {showSettings && (
+                <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 5000 }}>
+                    <SettingsMenu onClose={() => setShowSettings(false)} mode="menu" />
+                </div>
+            )}
+
+            {showBlueprint && (
+                <div className="blueprint-modal" onClick={() => setShowBlueprint(false)}>
+                    <div className="blueprint-container" onClick={(e) => e.stopPropagation()}>
+                        <div className="blueprint-header">
+                            <div className="blueprint-title">NEON SURVIVOR - ARCHIVE</div>
+                            <button className="btn-close-blueprint" onClick={() => setShowBlueprint(false)}>CLOSE [ESC]</button>
+                        </div>
+                        <iframe src="/blueprint.html" className="blueprint-iframe" title="Game Archive" />
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

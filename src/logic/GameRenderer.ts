@@ -84,10 +84,14 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, mete
 
         // 8. Entities (Enemies, Drones)
         renderDrones(ctx, state);
+
+        // 8.5. Void particles (behind enemies for layering)
+        renderParticles(ctx, state, 'void');
+
         renderEnemies(ctx, state, meteoriteImages);
 
-        // 9. Particles & Floating Numbers
-        renderParticles(ctx, state);
+        // 9. Particles & Floating Numbers (in front of enemies)
+        renderParticles(ctx, state, 'non-void');
         renderFloatingNumbers(ctx, state);
 
         ctx.restore(); // Restores zoom/camera for screen-space/ui elements

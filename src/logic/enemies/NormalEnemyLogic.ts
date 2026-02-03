@@ -167,32 +167,11 @@ export function updateNormalPentagon(e: Enemy, state: GameState, dist: number, d
 
             if (Date.now() > dTimer) {
                 // PHASE 3: KABOOM
+                // No AoE damage as per request - just suicide and particles
                 e.dead = true;
                 e.hp = 0;
                 spawnParticles(state, e.x, e.y, '#EF4444', 30);
                 playSfx('rare-kill');
-
-                // Explosion Damage (150px Radius, 50% Max HP)
-                const damage = e.maxHp * 0.5;
-
-                // 1. Damage Player
-                const distP = Math.hypot(state.player.x - e.x, state.player.y - e.y);
-                if (distP < 150) {
-                    state.player.curHp -= damage;
-                    if (state.player.curHp <= 0) state.gameOver = true;
-                }
-
-                // 2. Damage Enemies
-                state.enemies.forEach(other => {
-                    if (other !== e && !other.dead) {
-                        const distE = Math.hypot(other.x - e.x, other.y - e.y);
-                        if (distE < 150) {
-                            other.hp -= damage;
-                            spawnParticles(state, other.x, other.y, '#EF4444', 5);
-                            if (other.hp <= 0) other.dead = true;
-                        }
-                    }
-                });
             }
         }
     } else {

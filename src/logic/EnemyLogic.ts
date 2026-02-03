@@ -1,8 +1,9 @@
 import type { GameState, Enemy } from './types';
 import { isInMap, ARENA_CENTERS } from './MapLogic';
 import { playSfx } from './AudioLogic';
-import { spawnParticles } from './ParticleLogic';
+import { spawnParticles, spawnFloatingNumber } from './ParticleLogic';
 import { handleEnemyDeath } from './DeathLogic';
+import { getPlayerThemeColor } from './helpers';
 
 // Modular Enemy Logic
 import { updateNormalCircle, updateNormalTriangle, updateNormalSquare, updateNormalDiamond, updateNormalPentagon, updateUniquePentagon } from './enemies/NormalEnemyLogic';
@@ -65,6 +66,22 @@ export function updateEnemies(state: GameState, onEvent?: (event: string, data?:
     enemies.forEach(e => {
         if (e.dead) return;
 
+        // Sync visual progression to current game time
+        const params = getProgressionParams(gameTime);
+        e.fluxState = params.fluxState;
+        if (!e.isNeutral && !e.isRare) {
+            e.eraPalette = params.eraPalette.colors;
+        }
+
+        // Particle Leakage (Starts at 30m, increases at 60m)
+        const minutes = gameTime / 60;
+        if (minutes > 30 && !e.isNeutral) {
+            const chance = minutes > 60 ? 10 : 30; // Every 10 or 30 frames
+            if (state.frameCount % chance === 0) {
+                spawnParticles(state, e.x, e.y, e.eraPalette?.[0] || e.palette[0], 1, 15, 0, 'void');
+            }
+        }
+
         // --- ZOMBIE LOGIC ---
         if (e.isZombie) {
             updateZombie(e, state, step, onEvent);
@@ -78,6 +95,29 @@ export function updateEnemies(state: GameState, onEvent?: (event: string, data?:
 
         // Reset Frame-based Multipliers
         e.takenDamageMultiplier = 1.0;
+
+        // --- CLASS MODIFIER: Hive-Mother Nanite DOT ---
+        if (e.infectedUntil && state.gameTime * 1000 < e.infectedUntil) {
+            const dotFreq = 15; // Every 15 frames (4 times a second)
+            if (state.frameCount % dotFreq === 0) {
+                const dmgPerTick = e.infectionDmg || 0;
+                if (dmgPerTick > 0) {
+                    // Accumulate damage to handle sub-integer values correctly
+                    e.infectionAccumulator = (e.infectionAccumulator || 0) + dmgPerTick;
+
+                    if (e.infectionAccumulator >= 1) {
+                        const actualDmg = Math.floor(e.infectionAccumulator);
+                        e.hp -= actualDmg;
+                        player.damageDealt += actualDmg;
+                        e.infectionAccumulator -= actualDmg;
+
+                        const themeColor = getPlayerThemeColor(state);
+                        spawnFloatingNumber(state, e.x, e.y, actualDmg.toString(), themeColor, false);
+                        spawnParticles(state, e.x, e.y, themeColor, 2);
+                    }
+                }
+            }
+        }
 
         // Wall collision - instant death if out of bounds
         if (!isInMap(e.x, e.y)) {

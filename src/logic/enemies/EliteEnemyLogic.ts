@@ -207,7 +207,7 @@ export function updateEliteDiamond(e: Enemy, state: GameState, player: any, dist
     return { vx, vy };
 }
 
-export function updateElitePentagon(e: Enemy, state: GameState, dist: number, dx: number, dy: number, currentSpd: number, pushX: number, pushY: number, onEvent?: (event: string, data?: any) => void) {
+export function updateElitePentagon(e: Enemy, state: GameState, dist: number, dx: number, dy: number, currentSpd: number, pushX: number, pushY: number, _onEvent?: (event: string, data?: any) => void) {
     // Movement handled by Normal/Shared logic (caller should handle calling Normal Pentagon Update if this returns null or if it's integrated)
     // Actually, Elite Pentagon logic IS the same as Normal but with Elite Spawning parameters.
     // The spawning is the ONLY difference in logic besides stats (which are handled in spawnEnemy).
@@ -295,36 +295,11 @@ export function updateElitePentagon(e: Enemy, state: GameState, dist: number, dx
             e.palette = blink ? ['#EF4444', '#B91C1C', '#991B1B'] : ['#FFFFFF', '#F0F0F0', '#E2E8F0'];
 
             if (Date.now() > dTimer) {
-                // PHASE 3: KABOOM
+                // No AoE damage as per request - just suicide and particles
                 e.dead = true;
                 e.hp = 0;
                 spawnParticles(state, e.x, e.y, '#EF4444', 30);
                 playSfx('rare-kill');
-
-                // Explosion Damage (150px Radius, 50% Max HP)
-                const damage = e.maxHp * 0.5;
-
-                // 1. Damage Player
-                const distP = Math.hypot(state.player.x - e.x, state.player.y - e.y);
-                if (distP < 150) {
-                    state.player.curHp -= damage;
-                    if (state.player.curHp <= 0 && !state.gameOver) {
-                        state.gameOver = true;
-                        if (onEvent) onEvent('game_over');
-                    }
-                }
-
-                // 2. Damage Enemies
-                state.enemies.forEach(other => {
-                    if (other !== e && !other.dead) {
-                        const distE = Math.hypot(other.x - e.x, other.y - e.y);
-                        if (distE < 150) {
-                            other.hp -= damage;
-                            spawnParticles(state, other.x, other.y, '#EF4444', 5);
-                            if (other.hp <= 0) other.dead = true;
-                        }
-                    }
-                });
             }
         }
     } else {

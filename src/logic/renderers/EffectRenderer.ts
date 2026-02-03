@@ -92,6 +92,180 @@ export function renderAreaEffects(ctx: CanvasRenderingContext2D, state: GameStat
                 ctx.restore();
             }
             ctx.restore();
+        } else if (effect.type === 'blackhole') {
+            // --- VOID SINGULARITY VISUAL (Core + Reverted Organic Outline) ---
+            const pullRadius = 450;
+            const coreRadius = 40;
+            if (isNaN(effect.x) || isNaN(effect.y)) return;
+
+            ctx.save();
+            ctx.translate(effect.x, effect.y);
+            const t = state.gameTime;
+
+            // 1. ORGANIC ACCRETION DISK (Reverted to previous style)
+            const rotation = (t * 3) % (Math.PI * 2);
+            for (let layer = 0; layer < 6; layer++) {
+                // Layer radius scales from core to pull edge
+                const layerRadius = coreRadius + (pullRadius - coreRadius) * (0.2 + layer * 0.15);
+                if (layerRadius > pullRadius) continue;
+
+                const numSegments = 60;
+                ctx.beginPath();
+                for (let i = 0; i <= numSegments; i++) {
+                    const angle = (i / numSegments) * Math.PI * 2 + rotation + (layer * 0.3);
+                    const distortionAngle = angle + Math.sin(angle * 3 + t * 5) * 0.3;
+                    const x = Math.cos(distortionAngle) * layerRadius;
+                    const y = Math.sin(distortionAngle) * layerRadius * 0.6;
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                }
+
+                const opacity = (0.35 - layer * 0.05) * (0.7 + Math.sin(t * 4 + layer) * 0.3);
+                ctx.strokeStyle = `rgba(126, 34, 206, ${Math.max(0, opacity)})`;
+                ctx.lineWidth = 3 - layer * 0.4;
+                ctx.shadowColor = '#7e22ce';
+                ctx.shadowBlur = 12 - layer * 1.5;
+                ctx.stroke();
+            }
+
+            // 2. GRAVITATIONAL LENSING (Keep the clear sharp rim)
+            ctx.beginPath();
+            ctx.arc(0, 0, coreRadius + 4, 0, Math.PI * 2);
+            ctx.strokeStyle = '#f8fafc'; // Sharp white rim
+            ctx.lineWidth = 2;
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = '#38bdf8';
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+
+            // 3. THE SINGULARITY (Keep the pitch black core)
+            ctx.beginPath();
+            ctx.arc(0, 0, coreRadius, 0, Math.PI * 2);
+            ctx.fillStyle = '#000000';
+            ctx.fill();
+
+            ctx.restore();
+        } else if (effect.type === 'orbital_strike') {
+            // TARGETING VISUAL (0.3s delay)
+            // Just a contracting ring or target reticle
+            const timeLeft = effect.duration; // 0.3 down to 0
+            const progress = 1 - (timeLeft / 0.3); // 0 to 1
+            const baseR = effect.radius || 150;
+
+            ctx.save();
+            ctx.translate(effect.x, effect.y);
+
+            // Rotating outer ring
+            ctx.rotate(state.gameTime * 2);
+            ctx.beginPath();
+            ctx.arc(0, 0, baseR * (1 - progress * 0.5), 0, Math.PI * 2); // Contracts from 100% to 50%
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = `rgba(56, 189, 248, ${0.5 + progress * 0.5})`; // Fade in alpha
+            ctx.setLineDash([10, 10]);
+            ctx.stroke();
+
+            // Inner solid ring
+            ctx.beginPath();
+            ctx.arc(0, 0, baseR * 0.2, 0, Math.PI * 2);
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = '#38bdf8';
+            ctx.setLineDash([]);
+            ctx.stroke();
+
+            ctx.restore();
+
+        } else if (effect.type === 'crater') {
+            // CRATER + BEAM (Lasts 5s)
+
+            const lifeTime = state.gameTime - effect.creationTime; // Time since creation
+            const duration = effect.duration; // 5.0
+            const radius = effect.radius || 150;
+            const remaining = duration - lifeTime;
+            const alpha = Math.max(0, remaining > 1.0 ? 1.0 : remaining); // Fade out last 1 sec
+
+            ctx.save();
+            ctx.translate(effect.x, effect.y);
+
+            // 1. CRATER (Scorched SCARS only - No Circle)
+            // Draw crossed lines / cracks in the middle
+            ctx.strokeStyle = `rgba(50, 60, 80, ${0.8 * alpha})`; // Dark scorch color
+            ctx.lineWidth = 3;
+
+            // Random crossed lines near center
+            const seed = effect.id; // Consistent random seed
+            const count = 4;
+            for (let i = 0; i < count; i++) {
+                ctx.beginPath();
+                // Use deterministic pseudorandom offset based on ID
+                const angle = (i * (Math.PI / count)) + (seed % 100) * 0.01;
+                const len = radius * 0.4;
+
+                // Draw line through center
+                ctx.moveTo(Math.cos(angle) * -len, Math.sin(angle) * -len * 0.6);
+                ctx.lineTo(Math.cos(angle) * len, Math.sin(angle) * len * 0.6);
+                ctx.stroke();
+            }
+
+            // Add some smaller random cracks
+            ctx.lineWidth = 1.5;
+            for (let i = 0; i < 5; i++) {
+                const angle = (i * 2.5) + (seed % 50) * 0.1;
+                const dist = radius * 0.2;
+                const crackLen = radius * 0.3;
+
+                const startX = Math.cos(angle) * dist;
+                const startY = Math.sin(angle) * dist * 0.6;
+
+                ctx.beginPath();
+                ctx.moveTo(startX, startY);
+                ctx.lineTo(startX + Math.cos(angle + 0.5) * crackLen, startY + Math.sin(angle + 0.5) * crackLen * 0.6);
+                ctx.stroke();
+            }
+
+            // 2. BEAM (High Opacity Center -> Fade corners)
+            // Only visible for first 0.6s
+            const beamDuration = 0.6;
+            if (lifeTime < beamDuration) {
+                const beamAlpha = 1 - (lifeTime / beamDuration);
+
+                // Beams are tall. Draw huge rectangle going up.
+                // We are translated to (x,y).
+                // Draw Upwards (-y).
+                const beamHeight = 2000;
+                const beamWidth = radius * 1.5; // Slightly wider than crater for impact feel
+
+                // Gradient: Horizontal (across beam width) - High Center Opacity
+                const beamGrad = ctx.createLinearGradient(-beamWidth / 2, 0, beamWidth / 2, 0);
+                beamGrad.addColorStop(0, `rgba(56, 189, 248, 0)`); // Corner
+                beamGrad.addColorStop(0.2, `rgba(186, 230, 253, ${0.5 * beamAlpha})`); // Transition
+                beamGrad.addColorStop(0.5, `rgba(255, 255, 255, ${1.0 * beamAlpha})`); // Center (High Opacity)
+                beamGrad.addColorStop(0.8, `rgba(186, 230, 253, ${0.5 * beamAlpha})`); // Transition
+                beamGrad.addColorStop(1, `rgba(56, 189, 248, 0)`); // Corner
+
+                ctx.fillStyle = beamGrad;
+                ctx.fillRect(-beamWidth / 2, -beamHeight, beamWidth, beamHeight);
+
+                // Add vertical "energy" lines opacity
+                ctx.globalCompositeOperation = 'lighter';
+                ctx.strokeStyle = `rgba(255, 255, 255, ${0.8 * beamAlpha})`;
+                ctx.lineWidth = 6; // Thicker core
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.lineTo(0, -beamHeight);
+                ctx.stroke();
+
+                // Add side streaks
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = `rgba(56, 189, 248, ${0.4 * beamAlpha})`;
+                ctx.beginPath();
+                ctx.moveTo(-radius * 0.5, 0); ctx.lineTo(-radius * 0.5, -beamHeight);
+                ctx.moveTo(radius * 0.5, 0); ctx.lineTo(radius * 0.5, -beamHeight);
+                ctx.stroke();
+
+                ctx.globalCompositeOperation = 'source-over';
+            }
+
+            ctx.restore();
         }
     });
 }
@@ -118,13 +292,29 @@ export function renderEpicenterShield(ctx: CanvasRenderingContext2D, state: Game
     }
 }
 
-export function renderParticles(ctx: CanvasRenderingContext2D, state: GameState) {
+export function renderParticles(ctx: CanvasRenderingContext2D, state: GameState, filter?: 'void' | 'non-void') {
     state.particles.forEach(p => {
+        // Apply filter if specified
+        if (filter === 'void' && p.type !== 'void') return;
+        if (filter === 'non-void' && p.type === 'void') return;
+
         ctx.fillStyle = p.color;
         ctx.globalAlpha = p.life < 0.2 ? p.life * 5 : 1;
         if (p.type === 'shard') {
             ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(state.gameTime * 5 + (p.x * 0.1));
             ctx.beginPath(); ctx.moveTo(p.size * 2, 0); ctx.lineTo(-p.size, p.size); ctx.lineTo(-p.size, -p.size); ctx.closePath(); ctx.fill();
+            ctx.restore();
+        } else if (p.type === 'void') {
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+            // Black hole core
+            ctx.fillStyle = '#000000';
+            ctx.fill();
+            // Glow border
+            ctx.strokeStyle = p.color;
+            ctx.lineWidth = 2;
+            ctx.stroke();
             ctx.restore();
         } else if (p.type === 'shockwave') {
             ctx.save(); ctx.strokeStyle = p.color || '#FFFFFF'; ctx.lineWidth = 3; ctx.shadowColor = p.color || '#FFFFFF'; ctx.shadowBlur = 5;

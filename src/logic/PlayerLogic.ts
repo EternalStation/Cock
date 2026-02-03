@@ -9,7 +9,8 @@ import { handleEnemyDeath } from './DeathLogic';
 import { spawnFloatingNumber } from './ParticleLogic';
 
 
-export function updatePlayer(state: GameState, keys: Record<string, boolean>, onEvent?: (type: string, data?: any) => void, inputVector?: { x: number, y: number }) {
+
+export function updatePlayer(state: GameState, keys: Record<string, boolean>, onEvent?: (type: string, data?: any) => void, inputVector?: { x: number, y: number }, worldMousePos?: { x: number, y: number }) {
     const { player } = state;
 
     // Track player position history for laser prediction (last 60 frames = ~1 second at 60fps)
@@ -126,14 +127,20 @@ export function updatePlayer(state: GameState, keys: Record<string, boolean>, on
 
             player.knockback.x = Math.cos(reflectDir) * GAME_CONFIG.PLAYER.WALL_BOUNCE_SPEED;
             player.knockback.y = Math.sin(reflectDir) * GAME_CONFIG.PLAYER.WALL_BOUNCE_SPEED;
+            player.wallsHit++;
 
             const maxHp = calcStat(player.hp);
             const rawWallDmg = maxHp * GAME_CONFIG.PLAYER.WALL_DAMAGE_PERCENT;
             const armor = calcStat(player.arm);
             // Wall damage reduction (Using the proper reduction formula)
             // Formula in MathUtils: 0.95 * (armor / (armor + 5263))
-            const armRed = 1 - (0.95 * (armor / (armor + GAME_CONFIG.PLAYER.ARMOR_CONSTANT)));
-            const wallDmg = rawWallDmg * armRed;
+            const armRedMult = 1 - (0.95 * (armor / (armor + GAME_CONFIG.PLAYER.ARMOR_CONSTANT)));
+            let wallDmgAfterArmor = rawWallDmg * armRedMult;
+
+            player.damageBlockedByArmor += (rawWallDmg - wallDmgAfterArmor);
+            player.damageBlocked += (rawWallDmg - wallDmgAfterArmor);
+
+            let wallDmg = wallDmgAfterArmor;
 
             // Check Shield Chunks
             let absorbed = 0;
@@ -153,15 +160,19 @@ export function updatePlayer(state: GameState, keys: Record<string, boolean>, on
                 player.shieldChunks = player.shieldChunks.filter(c => c.amount > 0);
             }
 
-            const finalWallDmg = wallDmg - absorbed;
+            let finalWallDmg = wallDmg - absorbed;
+
+            // --- CLASS CAPABILITIES (Legacy removed) ---
+
             if (wallDmg > 0) {
                 if (finalWallDmg > 0) {
                     player.curHp -= finalWallDmg;
                     player.damageTaken += finalWallDmg;
                 }
                 spawnFloatingNumber(state, player.x, player.y, Math.round(wallDmg).toString(), '#ef4444', false);
+
+                // --- CLASS CAPABILITIES (Legacy removed) ---
             }
-            playSfx('wall-shock');
 
             if (onEvent) onEvent('player_hit', { dmg: wallDmg });
 
@@ -218,25 +229,46 @@ export function updatePlayer(state: GameState, keys: Record<string, boolean>, on
         regenAmount *= 1.25; // +25% Regen in Puddle (Lvl 3)
     }
 
+    // Overclocker System Surge Buff decaying is handled in useGame loop usually, 
+    // but we check for it in stat calcs if we modify them there.
+    // Actually we'll modify PlayerLogic to apply surge bonuses here.
+    if (player.buffs?.systemSurge && Date.now() < player.buffs.systemSurge.end) {
+        const surge = player.buffs.systemSurge;
+        player.atk.hexMult = (player.atk.hexMult || 0) + surge.atk;
+        // Speed is multiplied directly in some places, but we can't easily mult it here without compounding.
+        // We'll handle speed by adding to a temporary mult if we had one.
+        // For now let's just use the current logic.
+    }
+
     player.curHp = Math.min(maxHp, player.curHp + regenAmount);
 
-    // Auto-Aim Logic (skip barrels - they're neutral)
-    let nearest: Enemy | null = null;
-    let minDist = 800;
-    state.enemies.forEach((e: Enemy) => {
-        if (e.dead || e.isNeutral || e.isZombie) return; // Skip dead, neutral, and zombies
-        const d = Math.hypot(e.x - player.x, e.y - player.y);
-        if (d < minDist) {
-            minDist = d;
-            nearest = e;
-        }
-    });
-
-    if (nearest !== null) {
-        const actualNearest: Enemy = nearest;
-        player.targetAngle = Math.atan2(actualNearest.y - player.y, actualNearest.x - player.x);
+    // Aiming Logic
+    if (player.playerClass === 'malware' && worldMousePos) {
+        // --- CLASS MODIFIER: Malware-Prime Mouse Aim ---
+        player.targetAngle = Math.atan2(worldMousePos.y - player.y, worldMousePos.x - player.x);
+        player.targetX = worldMousePos.x;
+        player.targetY = worldMousePos.y;
     } else {
-        player.targetAngle = player.lastAngle;
+        // Auto-Aim Logic (skip barrels - they're neutral)
+        let nearest: Enemy | null = null;
+        let minDist = 800;
+        state.enemies.forEach((e: Enemy) => {
+            if (e.dead || e.isNeutral || e.isZombie) return; // Skip dead, neutral, and zombies
+            const d = Math.hypot(e.x - player.x, e.y - player.y);
+            if (d < minDist) {
+                minDist = d;
+                nearest = e;
+            }
+        });
+
+        if (nearest !== null) {
+            const actualNearest: Enemy = nearest;
+            player.targetAngle = Math.atan2(actualNearest.y - player.y, actualNearest.x - player.x);
+            player.targetX = actualNearest.x;
+            player.targetY = actualNearest.y;
+        } else {
+            player.targetAngle = player.lastAngle;
+        }
     }
 
     // --- ENEMY CONTACT DAMAGE & COLLISION ---
@@ -277,10 +309,20 @@ export function updatePlayer(state: GameState, keys: Record<string, boolean>, on
             const colRedMult = 1 - (colRed / 100);
 
             // Apply Armor Reduction then % Perk Reduction
-            let reducedDmg = rawDmg * armRedMult * colRedMult;
+            const dmgAfterArmor = rawDmg * armRedMult;
+            const blockedByArmor = rawDmg - dmgAfterArmor;
+
+            let reducedDmg = dmgAfterArmor * colRedMult;
+            const blockedByCol = dmgAfterArmor - reducedDmg;
+
+            player.damageBlockedByArmor += blockedByArmor;
+            player.damageBlockedByCollisionReduc += blockedByCol;
+            player.damageBlocked += (blockedByArmor + blockedByCol);
 
             // EPICENTER SHIELD: Invulnerability (Lvl 3)
             if (player.buffs?.epicenterShield && player.buffs.epicenterShield > 0) {
+                player.damageBlocked += reducedDmg;
+                player.damageBlockedByCollisionReduc += reducedDmg;
                 reducedDmg = 0;
             }
 
@@ -305,12 +347,17 @@ export function updatePlayer(state: GameState, keys: Record<string, boolean>, on
                     player.shieldChunks = player.shieldChunks.filter(c => c.amount > 0);
                 }
                 const actualDmg = finalDmg - absorbed;
+
+                // --- CLASS CAPABILITIES (Legacy removed) ---
+
                 if (finalDmg > 0) {
                     if (actualDmg > 0) {
                         player.curHp -= actualDmg;
                         player.damageTaken += actualDmg;
                     }
                     spawnFloatingNumber(state, player.x, player.y, Math.round(finalDmg).toString(), '#ef4444', false);
+
+                    // --- CLASS CAPABILITIES (Legacy removed) ---
                 }
             }
 

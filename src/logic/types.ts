@@ -8,7 +8,7 @@ export interface Particle {
     life: number;
     color: string;
     size: number;
-    type?: 'shard' | 'spark' | 'shockwave' | 'bubble' | 'vapor';
+    type?: 'shard' | 'spark' | 'shockwave' | 'bubble' | 'vapor' | 'void';
     alpha?: number;
     decay?: number;
 }
@@ -51,7 +51,7 @@ export interface ActiveSkill {
 
 export interface AreaEffect {
     id: number;
-    type: 'puddle' | 'epicenter';
+    type: 'puddle' | 'epicenter' | 'blackhole' | 'orbital_strike' | 'crater';
     x: number;
     y: number;
     radius: number;
@@ -79,6 +79,10 @@ export interface Player {
     damageDealt: number;
     damageTaken: number;
     damageBlocked: number;
+    damageBlockedByArmor: number;
+    damageBlockedByCollisionReduc: number;
+    damageBlockedByProjectileReduc: number;
+    wallsHit: number;
     upgradesCollected: import('./types').UpgradeChoice[]; // Full objects for stat tracking
     reg: PlayerStats;
     arm: PlayerStats;
@@ -91,6 +95,8 @@ export interface Player {
     droneCount: number;
     lastAngle: number;
     targetAngle: number;
+    targetX?: number;
+    targetY?: number;
     faceAngle: number;
     knockback: Vector;
     stunnedUntil?: number; // Timestamp when stun ends
@@ -107,7 +113,45 @@ export interface Player {
     buffs?: {
         puddleRegen?: boolean; // Lvl 3 puddle buff
         epicenterShield?: number; // Lvl 3 epicenter shield
+        systemSurge?: { end: number, atk: number, spd: number }; // General surge buff for Storm-Strike or others
     };
+    playerClass?: import('./classes').PlayerClassId;
+    classShotCount?: number; // For Storm-Strike Hyper-Pulse
+    lastCosmicStrikeTime?: number; // For Cosmic Beam class tracking
+    blackholeCooldown?: number; // Timestamp when next blackhole can be created (Event Horizon)
+}
+
+export interface ClassMetric {
+    label: string;
+    value: number;
+    unit: string;
+    description: string;
+    isPercentage: boolean;
+}
+
+export interface PlayerClass {
+    id: import('./classes').PlayerClassId;
+    name: string;
+    title: string;
+    lore: string;
+    description: string;
+    characteristics: string[];
+    capabilityName: string;
+    capabilityDesc: string;
+    capabilityMetrics: ClassMetric[];
+    stats: {
+        hpMult?: number;
+        regFlat?: number;
+        dmgMult?: number;
+        atkMult?: number;
+        spdMult?: number;
+        xpMult?: number;
+        regMult?: number;
+        armMult?: number;
+    };
+    icon: string;
+    iconUrl?: string;
+    themeColor?: string;
 }
 
 export interface Bullet {
@@ -125,6 +169,16 @@ export interface Bullet {
     size: number;
     isCrit?: boolean;
     critMult?: number;
+    // New Class Modifiers
+    bounceCount?: number;
+    isHyperPulse?: boolean;
+    vortexState?: 'orbiting' | 'expanding';
+    orbitAngle?: number;
+    orbitDist?: number;
+    spawnTime?: number;
+    // Nanite Swarm
+    isNanite?: boolean;
+    naniteTargetId?: number;
 }
 
 export type ShapeType = 'circle' | 'triangle' | 'square' | 'diamond' | 'pentagon' | 'minion' | 'snitch';
@@ -165,6 +219,8 @@ export interface Enemy {
     shape: ShapeType;
     shellStage: number; // 0, 1, 2 (Core, Inner, Outer)
     palette: string[]; // [Core, Inner, Outer]
+    fluxState: number; // 0: Containment, 1: Active, 2: Overload
+    eraPalette: string[]; // Base era colors [Bright, Med, Dark]
     pulsePhase: number; // 0-1 for breathing animation
     rotationPhase: number; // For slow rotation
 
@@ -205,6 +261,10 @@ export interface Enemy {
     parentId?: number; // For decoys to know their master
     teleported?: boolean; // Flag for Phase 2 entry
     longTrail?: { x: number; y: number }[]; // Long paint trail
+
+    // Event Horizon Blackhole Effects
+    voidAmplified?: boolean; // Is enemy in blackhole vortex?
+    voidAmpMult?: number; // Damage amplification multiplier
     untargetable?: boolean; // If true, player bullets won't home in on it
     phase3AudioTriggered?: boolean; // Flag for Phase 3 Audio Trigger
     spawnedAt?: number; // GameTime when spawned
@@ -290,6 +350,10 @@ export interface Enemy {
     critGlitchUntil?: number;
     slowFactor?: number; // 0-1 (e.g. 0.3 = 30% slow)
     takenDamageMultiplier?: number; // e.g. 1.2 = +20% dmg taken
+    // Hive-Mother Infection
+    infectedUntil?: number;
+    infectionDmg?: number;
+    infectionAccumulator?: number;
 }
 
 export interface Upgrade {
@@ -319,6 +383,8 @@ export interface LegendaryHex {
     killsAtAcquisition: number;
     killsAtLevel?: Record<number, number>; // Track killCount when each level was unlocked
     customIcon?: string;
+    description?: string;
+    lore?: string;
     perks?: string[];
 }
 
@@ -335,6 +401,32 @@ export interface Rarity {
     mult: number;
 }
 
+export type GameEventType =
+    | 'red_moon'
+    | 'solar_emp'
+    | 'legionnaire_sweep'
+    | 'necrotic_surge'
+    | 'huddle'
+    | 'gravity_singularity'
+    | 'pincer_maneuver'
+    | 'fog_of_war'
+    | 'meteor_shower'
+    | 'mirror_match'
+    | 'thief_rush'
+    | 'bullet_hell'
+    | 'titans_shadow'
+    | 'nano_infection'
+    | 'clockwork_arena';
+
+export interface GameEvent {
+    type: GameEventType;
+    startTime: number;
+    duration: number; // in seconds
+    endTime: number;
+    data?: any; // Event specific storage (e.g. original values to restore)
+    pendingZombieSpawns?: Array<{ x: number; y: number; shape: ShapeType; spd: number; maxHp: number; size: number; spawnAt: number }>;
+}
+
 export interface GameState {
     player: Player;
     enemies: Enemy[];
@@ -348,6 +440,10 @@ export interface GameState {
     killCount: number; // Dedicated kill counter
     bossKills: number; // Track boss kills separately
     gameTime: number;
+    meteoritesPickedUp: number;
+    portalsUsed: number;
+    snitchCaught: number;
+    timeInArena: Record<number, number>; // ArenaId -> Seconds
     frameCount: number; // For throttling particle effects
     isPaused: boolean;
     gameOver: boolean;
@@ -364,6 +460,8 @@ export interface GameState {
     smokeBlindTime?: number; // Timestamp for full-screen white fog effect
     spatialGrid: import('./SpatialGrid').SpatialGrid;
     areaEffects: AreaEffect[];
+    activeEvent: GameEvent | null;
+    nextEventCheckTime: number;
 
     // Portal / Multiverse Props
     currentArena: number; // ID of the arena the player is currently in
@@ -380,6 +478,8 @@ export interface GameState {
 
     // Module Menu System
     showModuleMenu: boolean;
+    showStats: boolean; // Synced from React State
+    showSettings: boolean; // Synced from React State
     showLegendarySelection: boolean;
     legendaryOptions: LegendaryHex[] | null;
     pendingLegendaryHex: LegendaryHex | null; // Hex waiting to be placed
@@ -389,7 +489,9 @@ export interface GameState {
     moduleSockets: {
         hexagons: (LegendaryHex | null)[];   // 6 outer sockets
         diamonds: (Meteorite | null)[];       // 6 inner sockets
+        center: PlayerClass | null; // Center slot for class
     };
+    chassisDetailViewed: boolean;
 }
 
 export type MeteoriteRarity = 'scrap' | 'anomalous' | 'quantum' | 'astral' | 'radiant' | 'void' | 'eternal' | 'divine' | 'singularity';
@@ -415,6 +517,7 @@ export interface Meteorite {
     isNew?: boolean; // track if player has seen this meteorite
     discoveredIn: string; // The arena where it was found
     perks: MeteoritePerk[];
+    spawnedAt: number; // Timestamp for despawn logic
     stats: {
         coreSurge?: number;
         neighbor?: number;

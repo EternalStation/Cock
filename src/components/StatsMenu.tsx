@@ -5,6 +5,7 @@ import type { GameState, PlayerStats } from '../logic/types';
 import { calcStat } from '../logic/MathUtils';
 import { calculateLegendaryBonus } from '../logic/LegendaryLogic';
 import { getArenaIndex } from '../logic/MapLogic';
+import { GAME_CONFIG } from '../logic/GameConfig';
 
 
 interface StatsMenuProps {
@@ -319,7 +320,7 @@ export const StatsMenu: React.FC<StatsMenuProps> = ({ gameState }) => {
                                             stat={player.arm}
                                             legendaryBonusFlat={calculateLegendaryBonus(gameState, 'arm_per_kill')}
                                             legendaryBonusPct={calculateLegendaryBonus(gameState, 'arm_pct_per_kill')}
-                                            extraInfo={`(${(0.95 * (calcStat(player.arm) / (calcStat(player.arm) + 5263)) * 100).toFixed(1)}%)`}
+                                            extraInfo={`(${(0.95 * (calcStat(player.arm) / (calcStat(player.arm) + GAME_CONFIG.PLAYER.ARMOR_CONSTANT)) * 100).toFixed(1)}%)`}
                                         />
                                         {(() => {
                                             const colRed = calculateLegendaryBonus(gameState, 'col_red_per_kill');

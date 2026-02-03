@@ -8,11 +8,11 @@ export interface Particle {
     life: number;
     color: string;
     size: number;
-    type?: 'shard' | 'spark' | 'bubble' | 'vapor';
+    type?: 'shard' | 'spark' | 'bubble' | 'vapor' | 'void' | 'shockwave';
     alpha?: number; // For fading effects
 }
 
-export function spawnParticles(state: GameState, x: number, y: number, color: string | string[], count: number = 8, sizeOverride?: number, lifeOverride?: number, type: 'shard' | 'spark' | 'bubble' | 'vapor' = 'spark') {
+export function spawnParticles(state: GameState, x: number, y: number, color: string | string[], count: number = 8, sizeOverride?: number, lifeOverride?: number, type: 'shard' | 'spark' | 'bubble' | 'vapor' | 'void' | 'shockwave' = 'spark') {
     if (!state.particles) state.particles = [];
 
     // Performance: Cap total particles to 300 active
@@ -34,9 +34,9 @@ export function spawnParticles(state: GameState, x: number, y: number, color: st
         if (type === 'bubble') {
             pV.vx = (Math.random() - 0.5) * 0.5;
             pV.vy = -Math.random() * 0.5 - 0.2; // Rise
-        } else if (type === 'vapor') {
-            pV.vx = (Math.random() - 0.5) * 0.3;
-            pV.vy = -Math.random() * 0.3 - 0.1; // Gentle rise
+        } else if (type === 'void') {
+            pV.vx *= 0.1;
+            pV.vy *= 0.1;
         }
 
         state.particles.push({
@@ -64,6 +64,10 @@ export function updateParticles(state: GameState) {
             p.vy -= 0.01; // Acceleration up
             p.vx += (Math.random() - 0.5) * 0.05; // Jitter
             p.alpha = p.life / 50; // Fade out
+        } else if (p.type === 'void') {
+            p.vx *= 0.9;
+            p.vy *= 0.9;
+            p.size *= 0.95; // Shrink
         } else {
             p.vx *= 0.95;
             p.vy *= 0.95;

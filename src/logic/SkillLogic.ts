@@ -1,6 +1,5 @@
 import type { GameState } from './types';
 import { getHexLevel } from './LegendaryLogic';
-// import { playSfx } from './SfxLogic';
 
 export function castSkill(state: GameState, skillIndex: number) {
     // 0-indexed skill slot

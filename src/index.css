@@ -1,11 +1,11 @@
 :root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-family: 'Inter', 'Orbitron', system-ui, sans-serif;
   line-height: 1.5;
   font-weight: 400;
-
-  color-scheme: light dark;
+  color-scheme: dark;
   color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
+  background-color: #020617;
+  /* Solid deep base */
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -23,12 +23,32 @@ a:hover {
   color: #535bf2;
 }
 
-body {
+html,
+body,
+#root {
   margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  background-color: #020617;
+  overflow-x: hidden;
+}
+
+body {
   display: flex;
   place-items: center;
+  justify-content: center;
   min-width: 320px;
-  min-height: 100vh;
+  cursor: crosshair;
+  /* Tactical neon feel */
+}
+
+/* Custom Tactical Cursor Replacement (Optional/Generic) */
+body,
+button,
+[role="button"],
+.clickable {
+  cursor: url("data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8Y2lyY2xlIGN4PSIxMiIgY3k9IjEyIiByPSIzIiBzdHJva2U9IiNmZjAwZmYiIHN0cm9rZS13aWR0aD0iMSIgbm9uZS8+CiAgPHBhdGggZD0iTTEyIDJWMjRNMiAxMkgyNCIgc3Ryb2tlPSIjZmYwMGZmIiBzdHJva2Utd2lkdGg9IjEiLz4KPC9zdmc+"), crosshair;
 }
 
 h1 {
@@ -352,6 +372,19 @@ button:focus-visible {
   box-shadow: 0 0 10px #FF0000;
   animation: orbit 3s linear infinite;
   pointer-events: none;
+}
+
+.chassis-detail-modal {
+  width: 1200px;
+  /* Even wider as requested */
+  max-width: 95vw;
+  height: 550px;
+  /* Slighter shorter height */
+  max-height: 80vh;
+  background: #020617;
+  border: 2px solid var(--accent-color);
+  box-shadow: 0 0 50px rgba(0, 0, 0, 0.8), 0 0 20px var(--accent-color);
+  border-radius: 12px;
 }
 
 /* Singularity Event Horizon */

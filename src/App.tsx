@@ -6,10 +6,13 @@ import { SettingsMenu } from './components/SettingsMenu';
 import { MainMenu } from './components/MainMenu';
 import { DeathScreen } from './components/DeathScreen';
 import { MobileControls } from './components/MobileControls';
+import { AudioWidget } from './components/AudioWidget';
 
 
 import { ModuleMenu } from './components/ModuleMenu';
 import { LegendarySelectionMenu } from './components/LegendarySelectionMenu';
+import { ClassSelection } from './components/ClassSelection';
+import { type PlayerClass } from './logic/types';
 
 import { useGameLoop } from './hooks/useGame';
 import { useWindowScale } from './hooks/useWindowScale';
@@ -18,6 +21,7 @@ import './styles/menu_additions.css';
 
 function App() {
   const [gameStarted, setGameStarted] = useState(false);
+  const [selectingClass, setSelectingClass] = useState(false);
   const hook = useGameLoop(gameStarted);
   const appRef = useRef<HTMLDivElement>(null);
 
@@ -25,34 +29,35 @@ function App() {
 
   // Auto-focus logic
   useEffect(() => {
-    if (gameStarted && !hook.showStats && !hook.showSettings && !hook.showModuleMenu) {
+    if (gameStarted && !hook.showStats && !hook.showSettings && !hook.showModuleMenu && !selectingClass) {
       appRef.current?.focus();
     }
-  }, [gameStarted, hook.showStats, hook.showSettings, hook.showModuleMenu]);
+  }, [gameStarted, hook.showStats, hook.showSettings, hook.showModuleMenu, selectingClass]);
 
   // Reset logic when quitting to main menu
   const handleQuit = () => {
     hook.setShowSettings(false);
     setGameStarted(false);
+    setSelectingClass(false);
     // Optional: reset game state logic if needed, but restartGame handles most
     hook.restartGame();
   };
 
   const handleStart = () => {
-    // startBGM(); // User requested silence/no firing sounds on load for now, or maybe only menu music stops?
-    // Actually user complaint was "firing sounds on start". That suggests game loop running before ready.
-    // But we already fixed game loop. 
-    // Wait, the user said "Remove firing sounds on load".
-    // I will comment out startBGM to be safe if they mean music, or just ensure logic is right.
-    // But actually, 'startBGM' plays the game music. The user specifically mentioned "firing sounds".
-    // I already fixed the game loop running in background.
-    // The user's request "Audio: Remove firing sounds on load" likely refers to the previous bug I fixed.
-    // However, I will ensure startBGM is called ONLY when game fully starts.
+    setSelectingClass(true);
+  };
+
+  const handleClassSelect = (selectedClass: PlayerClass) => {
     startBGM();
+    setSelectingClass(false);
     setGameStarted(true);
-    // Ensure inputs are cleared or delay input processing slightly?
-    // The previous fix 'useGameLoop(gameStarted)' should prevent firing.
-    hook.restartGame();
+    hook.restartGame(selectedClass);
+  };
+
+  const handleRestart = () => {
+    hook.restartGame(); // Reset internal game state and setGameOver(false)
+    setGameStarted(false);
+    setSelectingClass(true);
   };
 
   return (
@@ -63,7 +68,8 @@ function App() {
       onClick={(e) => e.currentTarget.focus()}
     >
 
-      {!gameStarted && <MainMenu onStart={handleStart} />}
+      {!gameStarted && !selectingClass && <MainMenu onStart={handleStart} />}
+      {selectingClass && <ClassSelection onSelect={handleClassSelect} />}
 
       {gameStarted && (
         <>
@@ -90,10 +96,11 @@ function App() {
                   upgradeChoices={hook.upgradeChoices}
                   onUpgradeSelect={hook.handleUpgradeSelect}
                   gameOver={hook.gameOver}
-                  onRestart={hook.restartGame}
+                  onRestart={handleRestart}
                   bossWarning={hook.bossWarning}
                   fps={hook.fps}
                   onInventoryToggle={hook.toggleModuleMenu}
+                  portalError={hook.portalError}
                 />
 
                 {isMobile && !hook.gameOver && (
@@ -106,7 +113,15 @@ function App() {
             {hook.showStats && <div style={{ width: '100%', height: '100%', pointerEvents: 'auto' }}><StatsMenu gameState={hook.gameState} /></div>}
 
             {/* Settings Menu */}
-            {hook.showSettings && <div style={{ width: '100%', height: '100%', pointerEvents: 'auto' }}><SettingsMenu onClose={() => hook.setShowSettings(false)} onRestart={hook.restartGame} onQuit={handleQuit} /></div>}
+            {hook.showSettings && (
+              <>
+                <div style={{ width: '100%', height: '100%', pointerEvents: 'auto' }}>
+                  <SettingsMenu onClose={() => hook.setShowSettings(false)} onRestart={handleRestart} onQuit={handleQuit} />
+                </div>
+                {/* Audio Widget - Floating top-right */}
+                <AudioWidget />
+              </>
+            )}
 
             {/* Module Menu */}
             <div style={{ pointerEvents: hook.showModuleMenu ? 'auto' : 'none' }}>
@@ -118,7 +133,7 @@ function App() {
                 onInventoryUpdate={hook.updateInventorySlot}
                 onRecycle={hook.recycleMeteorite}
                 spendDust={hook.spendDust}
-                triggerPortal={hook.triggerPortal}
+                onViewChassisDetail={hook.onViewChassisDetail}
               />
             </div>
 
@@ -143,7 +158,7 @@ function App() {
                     level: hook.gameState.player.level,
                   }}
                   gameState={hook.gameState}
-                  onRestart={hook.restartGame}
+                  onRestart={handleRestart}
                   onQuit={handleQuit}
                 />
               </div>
