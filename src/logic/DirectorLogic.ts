@@ -8,17 +8,31 @@ const MIN_TIME_FOR_EVENTS = 60; // Start events after 1 minute
 export function updateDirector(state: GameState, step: number) {
     if (state.gameOver || state.isPaused) return;
 
-    // 1. Check for new events
+    // 1. Check for new random events (Excluding scheduled ones)
     if (state.gameTime >= state.nextEventCheckTime && !state.activeEvent) {
         if (Math.random() < EVENT_CHANCE && state.gameTime > MIN_TIME_FOR_EVENTS) {
-            const pool: GameEventType[] = ['red_moon', 'necrotic_surge', 'solar_emp']; // Starting with 3
+            const pool: GameEventType[] = ['red_moon', 'necrotic_surge', 'solar_emp']; // Removed legion_formation from random pool
             const type = pool[Math.floor(Math.random() * pool.length)];
             startEvent(state, type);
         }
         state.nextEventCheckTime = state.gameTime + CHECK_INTERVAL;
     }
 
-    // 2. Update existing event
+    // 2. Scheduled Legion Formation (Min 10-12:59, 20-22:59, 30-32:59)
+    const currentMin = Math.floor(state.gameTime / 60);
+    const windowId = Math.floor(currentMin / 10);
+    const inLegionWindow = currentMin >= 10 && (currentMin % 10) < 3;
+
+    if (inLegionWindow && !state.activeEvent && state.lastLegionWindow !== windowId) {
+        // Random chance to start during the 3-minute window (approx 1 in 180 seconds)
+        // Check every frame (60 fps), so 1 / (180 * 60)
+        if (Math.random() < 1 / (180 * 60)) {
+            startEvent(state, 'legion_formation');
+            state.lastLegionWindow = windowId;
+        }
+    }
+
+    // 3. Update existing event
     if (state.activeEvent) {
         updateActiveEvent(state, step);
     }
@@ -27,8 +41,8 @@ export function updateDirector(state: GameState, step: number) {
 function startEvent(state: GameState, type: GameEventType) {
     let duration = 60; // Default 1 minute
 
-    // Necrotic Surge is shorter
-    if (type === 'necrotic_surge') {
+    // Necrotic Surge and Legion Formation are shorter
+    if (type === 'necrotic_surge' || type === 'legion_formation') {
         duration = 30; // 30 seconds
     }
 
@@ -52,6 +66,9 @@ function startEvent(state: GameState, type: GameEventType) {
             break;
         case 'solar_emp':
             playSfx('warning');
+            break;
+        case 'legion_formation':
+            playSfx('warning'); // Maybe a horn?
             break;
     }
 
@@ -83,22 +100,24 @@ function updateActiveEvent(state: GameState, _step: number) {
                 lastAttack: 0,
                 dead: false,
                 shellStage: 0,
-                palette: ['#57534e', '#44403c', '#292524'], // Dark stone/dirty brown
-                eraPalette: ['#57534e', '#44403c', '#292524'],
+                palette: ['#0f172a', '#4f46e5', '#818cf8'], // Void Indigo
+                eraPalette: ['#0f172a', '#4f46e5', '#818cf8'],
                 fluxState: 0,
                 pulsePhase: 0,
                 rotationPhase: 0,
                 knockback: { x: 0, y: 0 },
-                isRare: false,
                 isElite: false,
                 xpRewardMult: 0.5, // 50% XP
-                spawnedAt: state.gameTime
+                spawnedAt: state.gameTime,
+                frozen: 1.0, // Digging for 1 second
+                summonState: 1, // Trigger digging animation in renderer
+                isNecroticZombie: true // Prevent palette overrides
             };
             state.enemies.push(eventZombie);
 
-            // Visual feedback
+            // Visual feedback - Void particles
             import('./ParticleLogic').then(({ spawnParticles }) => {
-                spawnParticles(state, zombieData.x, zombieData.y, '#57534e', 10);
+                spawnParticles(state, zombieData.x, zombieData.y, '#818cf8', 20);
             });
             import('./AudioLogic').then(({ playSfx }) => {
                 playSfx('zombie-rise');

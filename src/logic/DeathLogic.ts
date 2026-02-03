@@ -126,7 +126,7 @@ export function handleEnemyDeath(state: GameState, e: Enemy, onEvent?: (event: s
     if (shouldSpawnZombie) {
         const isEventZombie = state.activeEvent?.type === 'necrotic_surge';
         const riseDelay = isEventZombie ? 3000 : 2000; // 3s for event, 2s for normal
-        const speedBoost = isEventZombie ? 1.25 : 1.0; // 25% speed boost for event zombies
+        const speedBoost = isEventZombie ? 1.1 : 1.0; // 10% speed boost for event zombies
 
         if (isEventZombie) {
             // SCHEDULE HOSTILE EVENT ZOMBIE (Necrotic Surge)

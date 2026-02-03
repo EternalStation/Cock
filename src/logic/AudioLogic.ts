@@ -67,8 +67,7 @@ export function resumeMusic() {
     }
 }
 
-export async function startBGM(arenaId: number = 0) {
-    if (isBgmPlaying) return;
+export async function startBGM(arenaId: number | string = 0) {
     if (audioCtx.state === 'suspended') {
         await audioCtx.resume().catch(() => { });
     }
@@ -83,15 +82,16 @@ export async function startBGM(arenaId: number = 0) {
     await loadSfxAssets();
 }
 
-const BGM_TRACKS: Record<number, string> = {
+const BGM_TRACKS: Record<number | string, string> = {
+    'menu': '/Background.mp3',
     0: '/audio/EconomicArenaBackground.mp3',
     1: '/audio/CombatArenaBackground.mp3',
     2: '/audio/DefensiveArenaBackgound.mp3'
 };
 
-let currentTrackId: number | null = null;
+let currentTrackId: number | string | null = null;
 
-export async function switchBGM(arenaId: number) {
+export async function switchBGM(arenaId: number | string) {
     if (currentTrackId === arenaId && bgmSource) return;
 
     if (bgmSource) {
@@ -295,4 +295,6 @@ export function stopAllLoops() {
 export { playShootDing, playUpgradeSfx, playSfx } from './SfxLogic';
 export type { SfxType } from './SfxLogic';
 
-export const startMenuMusic = startBGM;
+export function startMenuMusic() {
+    startBGM('menu');
+}

@@ -421,23 +421,49 @@ export function updateProjectiles(state: GameState, onEvent?: (event: string, da
                     // Nanites apply infection without impact damage
                     damageAmount = 0;
                     const gameMs = state.gameTime * 1000;
+                    const wasInfected = e.infectedUntil && e.infectedUntil > gameMs;
                     e.infectedUntil = Math.max(e.infectedUntil || 0, gameMs + 5000);
                     // Inherit per-tick damage directly from nanite projectile (no recursion)
                     e.infectionDmg = Math.max(e.infectionDmg || 0, b.dmg);
 
-                    // Visuals
-                    const themeColor = getPlayerThemeColor(state);
-                    spawnParticles(state, e.x, e.y, themeColor, 5);
+                    // Visuals - only on initial infection, not refresh
+                    if (!wasInfected) {
+                        const themeColor = getPlayerThemeColor(state);
+                        spawnParticles(state, e.x, e.y, themeColor, 5);
+                    }
+                }
+
+                // --- LEGION SHIELD LOGIC ---
+                if (e.legionId) {
+                    const lead = state.legionLeads?.[e.legionId];
+                    if (lead && (lead.legionShield || 0) > 0) {
+                        const shieldDmg = Math.min(damageAmount, lead.legionShield || 0);
+                        lead.legionShield = (lead.legionShield || 0) - shieldDmg;
+                        damageAmount -= shieldDmg;
+
+                        // Visual feedback for shield hit
+                        spawnParticles(state, e.x, e.y, '#60a5fa', 5); // Blue spark for shield
+                        spawnFloatingNumber(state, e.x, e.y, Math.round(shieldDmg).toString(), '#60a5fa', false);
+
+                        if (damageAmount <= 0) {
+                            // Bullet absorbed by shield
+                            b.hits.add(e.id);
+                            if (!b.isHyperPulse) b.pierce--;
+                            // Skip regular damage but stay in loop for bullet removal check
+                        }
+                    }
                 }
 
                 // 1. Apply Damage
-                e.hp -= damageAmount;
-                player.damageDealt += damageAmount;
-                b.hits.add(e.id);
+                if (damageAmount > 0) {
+                    e.hp -= damageAmount;
+                    player.damageDealt += damageAmount;
+                    b.hits.add(e.id);
 
-                // Hyper-Pulse infinite pierce
-                if (!b.isHyperPulse) {
-                    b.pierce--;
+                    // Hyper-Pulse infinite pierce
+                    if (!b.isHyperPulse) {
+                        b.pierce--;
+                    }
                 }
 
                 // --- CLASS MODIFIER: Event-Horizon Gravimetric Pull ---
@@ -476,13 +502,16 @@ export function updateProjectiles(state: GameState, onEvent?: (event: string, da
 
                     e.infectedUntil = Math.max(e.infectedUntil || 0, gameMs + 5000); // 5 seconds
                     const basePower = calcStat(player.dmg);
-                    e.infectionDmg = basePower * (swarmDmgPerSecPct / 100) / 4; // 5%/sec * resonance, split into 4 ticks
+                    e.infectionDmg = basePower * (swarmDmgPerSecPct / 100); // 5%/sec * resonance, 1 tick per second
                 }
 
                 // Determine if crit for visual
                 const isCritVisible = !!b.isCrit || (critLevel >= 3 && damageAmount > b.dmg * 2);
                 const themeColor = getPlayerThemeColor(state);
-                spawnFloatingNumber(state, e.x, e.y, Math.round(damageAmount).toString(), isCritVisible ? '#ef4444' : themeColor, isCritVisible);
+                // Only show damage number if damage was actually dealt
+                if (damageAmount > 0) {
+                    spawnFloatingNumber(state, e.x, e.y, Math.round(damageAmount).toString(), isCritVisible ? '#ef4444' : themeColor, isCritVisible);
+                }
 
                 // --- ComCrit Lvl 3: Apply Death Mark ---
                 // "Death marks enemy you hit every 10second"

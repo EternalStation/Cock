@@ -10,7 +10,10 @@ export function scanForMerges(state: GameState) {
         if (e.mergeCooldown && state.gameTime < e.mergeCooldown) continue;
         const neighbors = spatialGrid.query(e.x, e.y, 100);
         const candidates = neighbors.filter(n =>
-            n.shape === e.shape && !n.dead && !n.boss && !n.isElite && !n.isRare && !n.mergeState && !n.isNeutral &&
+            n.shape === e.shape &&
+            !!n.isNecroticZombie === !!e.isNecroticZombie && // Match necrotic status
+            !!n.isZombie === !!e.isZombie &&               // Match friendly zombie status
+            !n.dead && !n.boss && !n.isElite && !n.isRare && !n.mergeState && !n.isNeutral &&
             n.shape !== 'minion' && (!n.mergeCooldown || state.gameTime >= n.mergeCooldown)
         );
         const threshold = e.shape === 'pentagon' ? GAME_CONFIG.ENEMY.MERGE_THRESHOLD_PENTAGON : GAME_CONFIG.ENEMY.MERGE_THRESHOLD_DEFAULT;
@@ -50,7 +53,10 @@ export function manageMerges(state: GameState) {
             if (firstAlive) {
                 const nearby = state.spatialGrid.query(firstAlive.x, firstAlive.y, 100);
                 const recruits = nearby.filter(n =>
-                    n.shape === firstAlive.shape && !n.dead && !n.boss && !n.isElite && !n.isRare && !n.mergeState
+                    n.shape === firstAlive.shape &&
+                    !!n.isNecroticZombie === !!firstAlive.isNecroticZombie &&
+                    !!n.isZombie === !!firstAlive.isZombie &&
+                    !n.dead && !n.boss && !n.isElite && !n.isRare && !n.mergeState
                 ).slice(0, threshold - aliveEnemies.length);
                 recruits.forEach((r) => {
                     r.mergeState = 'warming_up';
@@ -82,6 +88,16 @@ export function manageMerges(state: GameState) {
             const xpMult = host.shape === 'pentagon' ? GAME_CONFIG.ENEMY.MERGE_XP_MULT_PENTAGON : GAME_CONFIG.ENEMY.MERGE_XP_MULT_DEFAULT;
             host.hp *= mult; host.maxHp *= mult; host.hp = host.maxHp;
             host.xpRewardMult = xpMult;
+
+            // Retain identity status if merging zombies
+            if (host.isNecroticZombie) {
+                host.palette = ['#0f172a', '#4f46e5', '#818cf8']; // Void Indigo
+                host.eraPalette = ['#0f172a', '#4f46e5', '#818cf8'];
+            } else if (host.isZombie) {
+                host.palette = ['#4ade80', '#22c55e', '#166534']; // Friendly Undead Green
+                host.eraPalette = ['#4ade80', '#22c55e', '#166534'];
+            }
+
             aliveEnemies.forEach(e => {
                 if (e !== host) { e.dead = true; e.hp = 0; }
             });

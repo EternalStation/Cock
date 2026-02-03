@@ -161,9 +161,7 @@ export function updateNormalPentagon(e: Enemy, state: GameState, dist: number, d
                 playSfx('warning');
             }
 
-            // Blink Red/White
-            const blink = Math.floor(Date.now() / 200) % 2 === 0;
-            e.palette = blink ? ['#EF4444', '#B91C1C', '#991B1B'] : ['#FFFFFF', '#F0F0F0', '#E2E8F0'];
+
 
             if (Date.now() > dTimer) {
                 // PHASE 3: KABOOM
@@ -184,9 +182,7 @@ export function updateNormalPentagon(e: Enemy, state: GameState, dist: number, d
 
         // Guardian Mode: Player close + Has Minions -> Turn RED and Trigger Minions
         if (distToPlayer <= 550 && hasMinions) {
-            // Red Warning Color - Angry Pulsing "Beehive"
-            const pulse = Math.floor(Date.now() / 100) % 2 === 0;
-            e.palette = pulse ? ['#EF4444', '#B91C1C', '#991B1B'] : ['#B91C1C', '#991B1B', '#7F1D1D'];
+
 
             // Shake Effect (Vibration)
             vx += (Math.random() - 0.5) * 4;
@@ -195,12 +191,7 @@ export function updateNormalPentagon(e: Enemy, state: GameState, dist: number, d
             // Normal State / Charging State Handling
 
             if (e.summonState === 1) {
-                // CHARGING (3 Seconds) - Blink Green
-                if (Math.floor(Date.now() / 200) % 2 === 0) {
-                    e.palette = ['#4ade80', '#22c55e', '#166534']; // Green
-                } else {
-                    e.palette = ['#FFFFFF', '#F0F0F0', '#E2E8F0']; // White Flash
-                }
+
 
                 if (Date.now() > (e.timer || 0)) {
                     // FINISH CHARGING -> SPAWN
@@ -209,12 +200,11 @@ export function updateNormalPentagon(e: Enemy, state: GameState, dist: number, d
                     e.lastAttack = Date.now();
                     e.summonState = 0;
                     if (e.originalPalette) e.palette = e.originalPalette;
-                    else e.palette = ['#a855f7', '#9333ea', '#7e22ce'];
                 }
 
             } else {
                 // IDLE STATE
-                if (e.originalPalette) e.palette = e.originalPalette;
+
 
                 // Check Spawn Timer (Limit to 9 Minions)
                 const spawnInterval = 15000;

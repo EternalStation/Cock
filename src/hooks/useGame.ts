@@ -13,7 +13,7 @@ import { calcStat } from '../logic/MathUtils';
 import { updateLoot } from '../logic/LootLogic';
 import { updateParticles, spawnParticles, spawnFloatingNumber } from '../logic/ParticleLogic'; // Added spawnParticles import
 import { ARENA_CENTERS, ARENA_RADIUS, PORTALS, getHexWallLine } from '../logic/MapLogic';
-import { playSfx, updateBGMPhase, duckMusic, restoreMusic, pauseMusic, resumeMusic, startBossAmbience, stopBossAmbience, startPortalAmbience, stopPortalAmbience } from '../logic/AudioLogic';
+import { playSfx, updateBGMPhase, duckMusic, restoreMusic, pauseMusic, resumeMusic, startBossAmbience, stopBossAmbience, startPortalAmbience, stopPortalAmbience, switchBGM } from '../logic/AudioLogic';
 import { syncLegendaryHex, applyLegendarySelection } from '../logic/LegendaryLogic';
 import { updateDirector } from '../logic/DirectorLogic';
 
@@ -70,9 +70,12 @@ export function useGameLoop(gameStarted: boolean) {
         (meteoriteImagesRef.current as any).deathMark = dmImg;
 
         // Preload Hex Icons for UI stability
-        ['ComCrit', 'ComWave', 'DefPuddle', 'DefEpi', 'DefShield', 'HiveMother'].forEach(hex => {
+        ['ComCrit', 'ComWave', 'DefPuddle', 'DefEpi', 'DefShield', 'HiveMother', 'MalwarePrime', 'EventHorizon', 'CosmicBeam', 'AigisVortex', 'EcoDMG', 'EcoXP', 'EcoHP', 'ComLife'].forEach(hex => {
             const img = new Image();
-            img.src = `/assets/hexes/${hex}.png`;
+            // Handle both .png and .PNG if needed, but classes.ts uses specific ones.
+            // For simplicity in preloading, we'll try to match what's in classes.ts
+            const ext = (hex === 'AigisVortex') ? 'PNG' : 'png';
+            img.src = `/assets/hexes/${hex}.${ext}`;
             (meteoriteImagesRef.current as any)[hex] = img; // Store in ref to keep alive/cached
         });
 
@@ -239,6 +242,7 @@ export function useGameLoop(gameStarted: boolean) {
 
             }
         };
+        state.legionLeads = state.legionLeads || {};
 
         if (state.portalState !== 'transferring') {
             const canvas = canvasRef.current;
@@ -339,8 +343,24 @@ export function useGameLoop(gameStarted: boolean) {
                         // Lvl 2: DoT 5% Max HP / sec
                         if (effect.level >= 2) {
                             const dotDmg = (e.maxHp * 0.05) * step;
-                            e.hp -= dotDmg;
-                            if (e.hp <= 0) e.hp = 0; // Death handled in updateEnemies
+
+                            // --- LEGION SHIELD BLOCK ---
+                            let appliedDmg = dotDmg;
+                            if (e.legionId) {
+                                const lead = state.legionLeads?.[e.legionId];
+                                if (lead && (lead.legionShield || 0) > 0) {
+                                    const shieldHit = Math.min(appliedDmg, lead.legionShield || 0);
+                                    lead.legionShield = (lead.legionShield || 0) - shieldHit;
+                                    appliedDmg -= shieldHit;
+                                    // Visual feedback
+                                    if (Math.random() < 0.1) spawnParticles(state, e.x, e.y, '#60a5fa', 1);
+                                }
+                            }
+
+                            if (appliedDmg > 0) {
+                                e.hp -= appliedDmg;
+                                if (e.hp <= 0) e.hp = 0; // Death handled in updateEnemies
+                            }
 
                             // OPTIMIZATION: Only show DoT numbers approx every 0.5s to avoid clutter
                             // Use e.id + gameTime to stagger numbers
@@ -379,7 +399,22 @@ export function useGameLoop(gameStarted: boolean) {
                         if (e.dead) return;
                         const dist = Math.hypot(e.x - effect.x, e.y - effect.y);
                         if (dist < range) {
-                            e.hp -= dmg;
+                            let appliedDmg = dmg;
+
+                            // --- LEGION SHIELD BLOCK ---
+                            if (e.legionId) {
+                                const lead = state.legionLeads?.[e.legionId];
+                                if (lead && (lead.legionShield || 0) > 0) {
+                                    const shieldHit = Math.min(appliedDmg, lead.legionShield || 0);
+                                    lead.legionShield = (lead.legionShield || 0) - shieldHit;
+                                    appliedDmg -= shieldHit;
+                                    spawnParticles(state, e.x, e.y, '#60a5fa', 2);
+                                }
+                            }
+
+                            if (appliedDmg > 0) {
+                                e.hp -= appliedDmg;
+                            }
 
                             // Visual Feedback (50% chance to reduce lag, but good feedback)
                             if (Math.random() < 0.5) {
@@ -422,9 +457,31 @@ export function useGameLoop(gameStarted: boolean) {
                         if (dist < consumptionRadius) {
                             if (e.boss) {
                                 // Bosses take 15% Max HP/sec - They can't be "consumed" instantly but get crushed
-                                e.hp -= (e.maxHp * 0.15) * step;
+                                let appliedDmg = (e.maxHp * 0.15) * step;
+
+                                // --- LEGION SHIELD BLOCK ---
+                                if (e.legionId) {
+                                    const lead = state.legionLeads?.[e.legionId];
+                                    if (lead && (lead.legionShield || 0) > 0) {
+                                        const shieldHit = Math.min(appliedDmg, lead.legionShield || 0);
+                                        lead.legionShield = (lead.legionShield || 0) - shieldHit;
+                                        appliedDmg -= shieldHit;
+                                    }
+                                }
+
+                                if (appliedDmg > 0) e.hp -= appliedDmg;
                             } else {
-                                // Instantly kill non-bosses (No text as requested)
+                                // Instantly kill non-bosses (UNLESS they have legion shield)
+                                if (e.legionId) {
+                                    const lead = state.legionLeads?.[e.legionId];
+                                    if (lead && (lead.legionShield || 0) > 0) {
+                                        // Crush the shield instead of the enemy
+                                        const shieldCrush = 100 * step; // Drain shield fast in black hole
+                                        lead.legionShield = Math.max(0, (lead.legionShield || 0) - shieldCrush);
+                                        return;
+                                    }
+                                }
+
                                 e.hp = 0;
                                 spawnParticles(state, e.x, e.y, '#000000', 5);
                                 return;
@@ -510,9 +567,22 @@ export function useGameLoop(gameStarted: boolean) {
                         if (e.dead) return;
                         const dist = Math.hypot(e.x - effect.x, e.y - effect.y);
                         if (dist < range) {
-                            // "Ignore Enemy Shields" - Assuming this means bypassing armor or standard reductions if they existed.
-                            // For now, raw massive damage.
-                            e.hp -= damage;
+                            let appliedDmg = damage;
+
+                            // --- LEGION SHIELD BLOCK ---
+                            if (e.legionId) {
+                                const lead = state.legionLeads?.[e.legionId];
+                                if (lead && (lead.legionShield || 0) > 0) {
+                                    const shieldHit = Math.min(appliedDmg, lead.legionShield || 0);
+                                    lead.legionShield = (lead.legionShield || 0) - shieldHit;
+                                    appliedDmg -= shieldHit;
+                                    spawnParticles(state, e.x, e.y, '#60a5fa', 10);
+                                }
+                            }
+
+                            if (appliedDmg > 0) {
+                                e.hp -= appliedDmg;
+                            }
 
                             // Visual Feedback
                             spawnFloatingNumber(state, e.x, e.y, Math.round(damage).toString(), '#38bdf8', true); // Crit color for impact
@@ -617,11 +687,7 @@ export function useGameLoop(gameStarted: boolean) {
                 state.portalTimer = 0;
 
                 // Switch BGM for the new arena
-                const switchArenaMusic = async (id: number) => {
-                    const { switchBGM } = await import('../logic/AudioLogic');
-                    switchBGM(id);
-                };
-                switchArenaMusic(newArena);
+                switchBGM(newArena);
 
                 playSfx('spawn');
             }

@@ -79,7 +79,7 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, mete
         renderProjectiles(ctx, state);
 
         // 7. Player
-        renderPlayer(ctx, state);
+        renderPlayer(ctx, state, meteoriteImages);
         renderEpicenterShield(ctx, state);
 
         // 8. Entities (Enemies, Drones)

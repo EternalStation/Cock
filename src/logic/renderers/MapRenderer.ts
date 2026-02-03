@@ -112,16 +112,9 @@ export function renderArenaVignette(ctx: CanvasRenderingContext2D) {
     // Single pass "Glow" using a wider stroke with low opacity is usually enough and fastest
     // Using 2 layers for better quality
 
-    // Layer 1: Wide, very faint
-    ctx.lineWidth = 160;
-    ctx.strokeStyle = 'rgba(2, 6, 23, 0.4)';
-    ctx.beginPath();
-    ARENA_CENTERS.forEach(c => buildHexPath(ctx, c, ARENA_RADIUS));
-    ctx.stroke();
-
-    // Layer 2: Narrower, denser (closer to wall)
-    ctx.lineWidth = 80;
-    ctx.strokeStyle = 'rgba(2, 6, 23, 0.5)';
+    // Single pass "Glow"
+    ctx.lineWidth = 120;
+    ctx.strokeStyle = 'rgba(2, 6, 23, 0.6)';
     ctx.beginPath();
     ARENA_CENTERS.forEach(c => buildHexPath(ctx, c, ARENA_RADIUS));
     ctx.stroke();

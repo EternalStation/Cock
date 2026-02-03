@@ -42,39 +42,23 @@ export const HUD: React.FC<HUDProps> = ({ gameState, upgradeChoices, onUpgradeSe
 
     return (
         <>
-            {/* Event Screen Effects */}
-            {activeEvent?.type === 'red_moon' && (
-                <div style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    width: '100%',
-                    height: '100%',
-                    background: 'radial-gradient(circle at center, rgba(127, 29, 29, 0.35) 0%, rgba(185, 28, 28, 0.15) 100%)',
-                    pointerEvents: 'none',
-                    zIndex: 5,
-                    animation: 'redPulse 2s ease-in-out infinite'
-                }} />
-            )}
-            {activeEvent?.type === 'necrotic_surge' && (
-                <div style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    width: '100%',
-                    height: '100%',
-                    background: 'radial-gradient(circle at center, rgba(87, 83, 78, 0.25) 0%, rgba(120, 113, 108, 0.15) 50%, rgba(127, 29, 29, 0.2) 100%)',
-                    pointerEvents: 'none',
-                    zIndex: 5,
-                    animation: 'glitchEffect 0.3s ease-in-out infinite'
-                }} />
-            )}
-
-            {/* Event Indicator */}
+            {/* Event Screen Effects: Scary Dark Red Vignette */}
             {activeEvent && (
                 <div style={{
                     position: 'absolute',
-                    top: '15%',
+                    top: 0, left: 0, width: '100%', height: '100%',
+                    background: 'radial-gradient(circle at center, transparent 20%, rgba(0, 0, 0, 0.4) 60%, rgba(127, 29, 29, 0.5) 90%, rgba(0, 0, 0, 1) 100%)',
+                    pointerEvents: 'none',
+                    zIndex: 5,
+                    animation: activeEvent.type === 'red_moon' ? 'redPulse 2s ease-in-out infinite' : 'glitchEffect 0.2s ease-in-out infinite'
+                }} />
+            )}
+
+            {/* Event Indicator (Title & Timer) */}
+            {activeEvent && (
+                <div style={{
+                    position: 'absolute',
+                    top: '7%',
                     left: '50%',
                     transform: 'translateX(-50%)',
                     textAlign: 'center',
@@ -82,27 +66,25 @@ export const HUD: React.FC<HUDProps> = ({ gameState, upgradeChoices, onUpgradeSe
                     zIndex: 200
                 }}>
                     <div style={{
-                        fontSize: 32,
+                        fontSize: 34,
                         fontWeight: 'bold',
-                        color: activeEvent.type === 'red_moon' ? '#ef4444' : '#a8a29e',
-                        textShadow: activeEvent.type === 'red_moon'
-                            ? '0 0 25px rgba(239, 68, 68, 0.9), 0 0 50px rgba(185, 28, 28, 0.5)'
-                            : '0 0 15px rgba(0, 0, 0, 0.9), 0 0 30px rgba(87, 83, 78, 0.6)',
-                        letterSpacing: 3,
-                        marginBottom: 10,
+                        color: '#ef4444',
+                        textShadow: '0 0 25px rgba(239, 68, 68, 0.9), 0 0 50px rgba(185, 28, 28, 0.5)',
+                        letterSpacing: 4,
+                        marginBottom: 4,
                         animation: activeEvent.type === 'necrotic_surge' ? 'glitchText 0.5s ease-in-out infinite' : 'none'
                     }}>
                         {activeEvent.type === 'red_moon' && 'BLOOD MOON'}
                         {activeEvent.type === 'necrotic_surge' && 'NECROTIC SURGE'}
+                        {activeEvent.type === 'legion_formation' && 'LEGION FORMATION'}
                     </div>
                     <div style={{
-                        fontSize: 20,
-                        color: '#ffffff',
-                        textShadow: '0 0 12px rgba(0, 0, 0, 0.95)',
+                        fontSize: 18,
+                        color: 'rgba(255, 255, 255, 0.7)',
                         fontWeight: 700,
                         letterSpacing: 1
                     }}>
-                        SURVIVE: {timeRemaining}s
+                        {timeRemaining}s
                     </div>
                 </div>
             )}

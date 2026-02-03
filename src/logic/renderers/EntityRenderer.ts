@@ -1,7 +1,7 @@
 import { PLAYER_CLASSES } from '../classes';
-import type { GameState } from '../types';
+import type { GameState, Enemy } from '../types';
 
-export function renderPlayer(ctx: CanvasRenderingContext2D, state: GameState) {
+export function renderPlayer(ctx: CanvasRenderingContext2D, state: GameState, meteoriteImages: Record<string, HTMLImageElement>) {
     const { player } = state;
     ctx.save();
     ctx.translate(player.x, player.y);
@@ -12,7 +12,7 @@ export function renderPlayer(ctx: CanvasRenderingContext2D, state: GameState) {
     const drawHexagon = (x: number, y: number, r: number) => {
         ctx.beginPath();
         for (let i = 0; i < 6; i++) {
-            const angle = (Math.PI / 3) * i;
+            const angle = (Math.PI / 3) * i - Math.PI / 2; // Pointy-top to match UI
             const px = x + r * Math.cos(angle);
             const py = y + r * Math.sin(angle);
             if (i === 0) ctx.moveTo(px, py);
@@ -45,6 +45,26 @@ export function renderPlayer(ctx: CanvasRenderingContext2D, state: GameState) {
             ctx.save();
             ctx.scale(scale, scale);
             drawHexagon(0, 0, cellSize);
+
+            // Draw Class Icon in center during spawn
+            const pClass = PLAYER_CLASSES.find(c => c.id === player.playerClass);
+            if (pClass) {
+                let imgKey = '';
+                if (pClass.id === 'malware') imgKey = 'MalwarePrime';
+                else if (pClass.id === 'eventhorizon') imgKey = 'EventHorizon';
+                else if (pClass.id === 'stormstrike') imgKey = 'CosmicBeam';
+                else if (pClass.id === 'aigis') imgKey = 'AigisVortex';
+                else if (pClass.id === 'hivemother') imgKey = 'HiveMother';
+
+                const img = meteoriteImages[imgKey];
+                if (img && img.complete) {
+                    const iconSize = cellSize * 1.8; // Increased from 1.4 to 1.8
+                    ctx.save();
+                    ctx.globalAlpha = 0.8 * Math.min(1, ease * 2);
+                    ctx.drawImage(img, -iconSize / 2, -iconSize / 2, iconSize, iconSize);
+                    ctx.restore();
+                }
+            }
             ctx.restore();
         }
 
@@ -53,22 +73,78 @@ export function renderPlayer(ctx: CanvasRenderingContext2D, state: GameState) {
         const currentDist = startDist - (startDist - finalDist) * ease;
 
         ctx.globalAlpha = Math.min(1, ease * 2);
+        const hexSockets = state.moduleSockets.hexagons;
         for (let i = 0; i < 6; i++) {
-            const angle = (Math.PI / 3) * i + Math.PI / 6;
+            const angle = (Math.PI / 3) * i; // Match UI placement (0, 60, 120...)
             const cx = currentDist * Math.cos(angle);
             const cy = currentDist * Math.sin(angle);
             drawHexagon(cx, cy, cellSize);
+
+            // Draw Legendary Icon in spawn
+            const hex = hexSockets[i];
+            if (hex) {
+                const iconName = hex.customIcon?.split('/').pop()?.split('.')[0];
+                if (iconName) {
+                    const img = meteoriteImages[iconName];
+                    if (img && img.complete) {
+                        const iconSize = cellSize * 1.9;
+                        ctx.save();
+                        ctx.globalAlpha = 0.7 * Math.min(1, ease * 2);
+                        ctx.drawImage(img, cx - iconSize / 2, cy - iconSize / 2, iconSize, iconSize);
+                        ctx.restore();
+                    }
+                }
+            }
         }
         ctx.globalAlpha = 1;
     } else {
         ctx.shadowBlur = 0;
         drawHexagon(0, 0, cellSize);
+
+        // Draw Class Icon in center
+        const pClass = PLAYER_CLASSES.find(c => c.id === player.playerClass);
+        if (pClass) {
+            let imgKey = '';
+            if (pClass.id === 'malware') imgKey = 'MalwarePrime';
+            else if (pClass.id === 'eventhorizon') imgKey = 'EventHorizon';
+            else if (pClass.id === 'stormstrike') imgKey = 'CosmicBeam';
+            else if (pClass.id === 'aigis') imgKey = 'AigisVortex';
+            else if (pClass.id === 'hivemother') imgKey = 'HiveMother';
+
+            const img = meteoriteImages[imgKey];
+            if (img && img.complete) {
+                const iconSize = cellSize * 1.8; // Increased from 1.4 to 1.8
+                ctx.save();
+                ctx.globalAlpha = 0.8;
+                ctx.drawImage(img, -iconSize / 2, -iconSize / 2, iconSize, iconSize);
+                ctx.restore();
+            }
+        }
+
         const cellDistance = cellSize * Math.sqrt(3);
+        const hexSockets = state.moduleSockets.hexagons;
         for (let i = 0; i < 6; i++) {
-            const angle = (Math.PI / 3) * i + Math.PI / 6;
+            const angle = (Math.PI / 3) * i; // Match UI placement (0, 60, 120...)
             const cx = cellDistance * Math.cos(angle);
             const cy = cellDistance * Math.sin(angle);
             drawHexagon(cx, cy, cellSize);
+
+            // Draw Legendary Icon if socketed
+            const hex = hexSockets[i];
+            if (hex) {
+                // Extract filename from customIcon URL: e.g. "/assets/hexes/EcoDMG.png" -> "EcoDMG"
+                const iconName = hex.customIcon?.split('/').pop()?.split('.')[0];
+                if (iconName) {
+                    const img = meteoriteImages[iconName];
+                    if (img && img.complete) {
+                        const iconSize = cellSize * 1.9;
+                        ctx.save();
+                        ctx.globalAlpha = 0.7;
+                        ctx.drawImage(img, cx - iconSize / 2, cy - iconSize / 2, iconSize, iconSize);
+                        ctx.restore();
+                    }
+                }
+            }
         }
     }
 
@@ -105,10 +181,15 @@ export function renderPlayer(ctx: CanvasRenderingContext2D, state: GameState) {
 export function renderEnemies(ctx: CanvasRenderingContext2D, state: GameState, meteoriteImages: Record<string, HTMLImageElement>) {
     const { enemies } = state;
 
-    // 1. Draw Merging Lines
+    // 1. Draw Merging Lines (Optimized)
+    const mergeHosts = new Map<string, Enemy>();
     enemies.forEach(e => {
-        if (e.mergeState === 'warming_up' && e.mergeTimer && !e.mergeHost) {
-            const host = enemies.find(h => h.mergeId === e.mergeId && h.mergeHost);
+        if (e.mergeHost && e.mergeId && !e.dead) mergeHosts.set(e.mergeId, e);
+    });
+
+    enemies.forEach(e => {
+        if (e.mergeState === 'warming_up' && e.mergeTimer && !e.mergeHost && e.mergeId) {
+            const host = mergeHosts.get(e.mergeId);
             if (host) {
                 ctx.save();
                 ctx.strokeStyle = '#FFFFFF';
@@ -279,8 +360,23 @@ export function renderEnemies(ctx: CanvasRenderingContext2D, state: GameState, m
             }
         }
 
-        const drawShape = (size: number, isWarpedLimit: boolean = false) => {
+        const drawShape = (size: number, isWarpedLimit: boolean = false, isCore: boolean = false) => {
             ctx.beginPath();
+
+            // CORE DISTORTION: Internal digital fragment
+            if (isCore) {
+                const sides = 3 + (Math.floor((e.id || 0) * 10) % 3); // 3-5 sides
+                const rot = state.gameTime * 4 * ((e.id || 0) > 0.5 ? 1 : -1);
+                for (let i = 0; i < sides; i++) {
+                    const ang = (i * 2 * Math.PI / sides) + rot;
+                    const r = size * (0.8 + Math.sin(state.gameTime * 12 + i) * 0.3);
+                    if (i === 0) ctx.moveTo(Math.cos(ang) * r, Math.sin(ang) * r);
+                    else ctx.lineTo(Math.cos(ang) * r, Math.sin(ang) * r);
+                }
+                ctx.closePath();
+                return;
+            }
+
             const warpAmp = isWarpedLimit && e.boss ? (0.1 + chaosLevel * 0.2) * size : 0;
             const wp = (px: number, py: number) => {
                 if (warpAmp === 0) return { x: px, y: py };
@@ -348,21 +444,33 @@ export function renderEnemies(ctx: CanvasRenderingContext2D, state: GameState, m
             }
         };
 
-        if (e.shape === 'pentagon') {
-            const motherAge = state.gameTime - (e.spawnedAt || 0);
-            const isAngry = (e.angryUntil && Date.now() < e.angryUntil);
-            if (e.suicideTimer !== undefined) {
-                const suicideProgress = (state.gameTime - e.suicideTimer!) / 5.0;
-                const pVal = (Math.sin(e.pulsePhase || 0) + 1) / 2;
-                outerColor = pVal > 0.3 ? '#FF0000' : '#880000';
-                innerColor = pVal > 0.5 ? '#FF5555' : '#440000';
-                ctx.scale(1.0 + (pVal * 0.2 * suicideProgress), 1.0 + (pVal * 0.2 * suicideProgress));
-            } else if (!isAngry && motherAge < 60) {
-                const pVal = (Math.sin(e.pulsePhase || 0) + 1) / 2;
-                if (pVal > 0.6) { outerColor = '#4ade80'; innerColor = '#22c55e'; }
+        // --- DIGGING / SUMMONING ANIMATION ---
+        if (e.summonState === 1 && e.frozen && e.frozen > 0) {
+            const progress = 1 - Math.max(0, e.frozen / 1.0); // 1.0s duration
+            const shake = (1 - progress) * 8;
+            ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
+
+            // Draw Dirt particles (Matching friendly zombie style)
+            ctx.fillStyle = '#451a03';
+            const particleCount = progress < 0.5 ? 12 : 6;
+            for (let i = 0; i < particleCount; i++) {
+                const dr = Math.sin(i * 123 + state.gameTime * 25) * e.size * (1 + progress);
+                const da = i * (Math.PI * 2 / particleCount);
+                ctx.fillRect(Math.cos(da) * dr, Math.sin(da) * dr, 3, 3);
             }
-            coreColor = '#FFFFFF';
+
+            // Clip & Rise
+            ctx.beginPath();
+            ctx.rect(-e.size * 2, -e.size * 2, e.size * 4, e.size * 2 + 10);
+            ctx.clip();
+
+            const riseOffset = (1 - progress) * e.size * 1.5;
+            ctx.translate(0, riseOffset);
+            ctx.scale(progress, progress);
+            ctx.globalAlpha = Math.min(1, progress * 1.5);
         }
+
+
 
         if (e.critGlitchUntil && Date.now() < e.critGlitchUntil) {
             ctx.save();
@@ -433,7 +541,15 @@ export function renderEnemies(ctx: CanvasRenderingContext2D, state: GameState, m
             ctx.restore();
         }
 
-        ctx.fillStyle = coreColor; ctx.globalAlpha = 1.0; drawShape(e.size * 0.5, true); ctx.fill();
+        ctx.fillStyle = coreColor; ctx.globalAlpha = 1.0;
+        if (e.isNecroticZombie) {
+            // Only zombies get the unique shapeshifting core
+            drawShape(e.size * 0.5, true, true);
+        } else {
+            // Normal enemies have a core that matches their shape
+            drawShape(e.size * 0.5, true, false);
+        }
+        ctx.fill();
 
         if (e.deathMarkExpiry && e.deathMarkExpiry > state.gameTime) {
             const dmImg = (meteoriteImages as any).deathMark;
@@ -466,6 +582,69 @@ export function renderEnemies(ctx: CanvasRenderingContext2D, state: GameState, m
             ctx.strokeRect(-barWidth / 2, yOffset, barWidth, barHeight);
 
             ctx.restore();
+        }
+
+        // --- LEGION VISUALS (Aura & Shield Bar) ---
+        if (e.legionId && e.maxLegionShield && e.legionShield) {
+            const isLead = e.id === e.legionLeadId;
+            if (isLead) {
+                ctx.save();
+                ctx.rotate(-(e.rotationPhase || 0)); // Un-rotate for bar/aura logic if needed or keep it dynamic
+
+                const spacing = e.size * 2.5;
+                const gridWidth = 6 * spacing;
+                const gridHeight = 5 * spacing;
+                const centerX = (gridWidth - spacing) / 2;
+                const centerY = (gridHeight - spacing) / 2;
+
+                // 1. Legion AURA
+                ctx.save();
+                ctx.translate(centerX, centerY);
+                const auraPulse = 0.5 + Math.sin(state.gameTime * 3) * 0.2;
+                const auraGradient = ctx.createRadialGradient(0, 0, gridWidth * 0.2, 0, 0, gridWidth * 0.8);
+                auraGradient.addColorStop(0, 'rgba(56, 189, 248, 0)');
+                auraGradient.addColorStop(0.5, `rgba(56, 189, 248, ${0.1 * auraPulse})`);
+                auraGradient.addColorStop(1, 'rgba(56, 189, 248, 0)');
+
+                ctx.fillStyle = auraGradient;
+                ctx.beginPath();
+                ctx.arc(0, 0, gridWidth * 0.8, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Shield Border Glow
+                ctx.strokeStyle = '#38bdf8';
+                ctx.lineWidth = 3;
+                ctx.globalAlpha = 0.3 * auraPulse;
+                ctx.setLineDash([15, 15]);
+                ctx.strokeRect(-gridWidth / 2 - 10, -gridHeight / 2 - 10, gridWidth + 20, gridHeight + 20);
+                ctx.restore();
+
+                // 2. Legion SHIELD BAR
+                const barWidth = gridWidth;
+                const barHeight = 6;
+                const barX = -spacing / 2;
+                const barY = -spacing - 30;
+
+                // BG
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                ctx.fillRect(barX, barY, barWidth, barHeight);
+
+                // Shield Fill
+                const shieldPct = Math.max(0, e.legionShield / e.maxLegionShield);
+                ctx.fillStyle = '#38bdf8';
+                ctx.shadowColor = '#38bdf8';
+                ctx.shadowBlur = 10;
+                ctx.fillRect(barX, barY, barWidth * shieldPct, barHeight);
+
+                // Text
+                ctx.fillStyle = '#FFFFFF';
+                ctx.font = 'bold 12px Rajdhani, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.shadowBlur = 0;
+                ctx.fillText(`LEGION SHIELD: ${Math.round(e.legionShield)}`, barX + barWidth / 2, barY - 8);
+
+                ctx.restore();
+            }
         }
 
         ctx.restore();

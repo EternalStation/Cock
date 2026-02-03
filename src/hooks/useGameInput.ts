@@ -215,6 +215,19 @@ export function useGameInput({ gameState, setShowSettings, setShowStats, setShow
                 cheatBuffer = '';
             }
 
+            // Z2 - Trigger Legion Formation Event
+            if (cheatBuffer.endsWith('z2')) {
+                gameState.current.activeEvent = {
+                    type: 'legion_formation',
+                    startTime: gameState.current.gameTime,
+                    duration: 30, // Form legions for 30s
+                    endTime: gameState.current.gameTime + 30,
+                    data: { legions: [] }
+                };
+                console.log('Cheat: Legion Formation activated for 30 seconds');
+                cheatBuffer = '';
+            }
+
             // T5, T10, T15... Time Jump
             const timeIntervals = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60];
             timeIntervals.forEach(min => {

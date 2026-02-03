@@ -42,23 +42,32 @@ export const DeathScreen: React.FC<DeathScreenProps> = ({ stats, gameState, onRe
     useEffect(() => {
         const duration = 1200;
         const startTime = Date.now();
+
+        // Capture initial values to avoid glitches if props change during animation
+        const initialKills = stats.kills;
+        const initialLevel = stats.level;
+        const initialBosses = stats.bosses;
+        const initialDust = gameState.player.dust;
+        const initialSnitch = gameState.snitchCaught || 0;
+        const initialPortals = gameState.portalsUsed || 0;
+
         const animate = () => {
             const now = Date.now();
             const progress = Math.min(1, (now - startTime) / duration);
             const ease = 1 - Math.pow(1 - progress, 5);
 
             setDisplayStats({
-                kills: Math.floor(stats.kills * ease),
-                level: Math.floor(stats.level * ease),
-                bosses: Math.floor(stats.bosses * ease),
-                dust: Math.floor(gameState.player.dust * ease),
-                snitch: Math.floor((gameState.snitchCaught || 0) * ease),
-                portals: Math.floor((gameState.portalsUsed || 0) * ease),
+                kills: Math.floor(initialKills * ease),
+                level: Math.floor(initialLevel * ease),
+                bosses: Math.floor(initialBosses * ease),
+                dust: Math.floor(initialDust * ease),
+                snitch: Math.floor(initialSnitch * ease),
+                portals: Math.floor(initialPortals * ease),
             });
             if (progress < 1) requestAnimationFrame(animate);
         };
         animate();
-    }, [stats, gameState]);
+    }, []); // Only run once on mount to prevent "glitching" if parents re-render/pass new object refs
 
     const formatTime = (sec: number) => {
         const m = Math.floor(sec / 60);
@@ -173,7 +182,7 @@ export const DeathScreen: React.FC<DeathScreenProps> = ({ stats, gameState, onRe
                                 <div style={{ width: 4, height: 16, background: '#22d3ee' }} /> MISSION LOG
                             </div>
                             <StatItem label="Time Active" value={formatTime(stats.time)} color="#fff" />
-                            <StatItem label="Exp Level" value={displayStats.level} color="#22d3ee" />
+                            <StatItem label="LEVEL" value={displayStats.level} color="#22d3ee" />
                             <StatItem label="Kill Count" value={displayStats.kills} color="#ef4444" subValue={`${displayStats.bosses} Bosses`} />
                             <StatItem label="Snitches" value={displayStats.snitch} color="#f59e0b" />
                             <StatItem label="Portals" value={displayStats.portals} color="#a855f7" />
@@ -223,9 +232,8 @@ export const DeathScreen: React.FC<DeathScreenProps> = ({ stats, gameState, onRe
                                     </div>
                                 </div>
 
-                                <div style={{ marginLeft: 40, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                <div style={{ marginLeft: 40, marginTop: 15, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                                     <RadarChart player={gameState.player} size={110} />
-                                    <div style={{ fontSize: 9, color: '#64748b', marginTop: 5, letterSpacing: 2 }}>CORE SYNC</div>
                                 </div>
                             </div>
                         </div>

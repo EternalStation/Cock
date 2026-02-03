@@ -12,7 +12,7 @@ export function updateEliteCircle(e: Enemy, state: GameState, player: any, dist:
     if (e.eliteState === 0) {
         if (dist < 600 && (!e.timer || Date.now() > e.timer)) {
             e.eliteState = 1; e.timer = Date.now() + 500;
-            e.originalPalette = e.palette; e.palette = ['#EF4444', '#B91C1C', '#991B1B'];
+
         }
         const a = Math.atan2(dy, dx);
         vx = Math.cos(a) * currentSpd + pushX; vy = Math.sin(a) * currentSpd + pushY;
@@ -30,7 +30,7 @@ export function updateEliteCircle(e: Enemy, state: GameState, player: any, dist:
                 const a = Math.atan2(rDy, rDx); vx = Math.cos(a) * 10; vy = Math.sin(a) * 10;
                 spawnParticles(state, e.x, e.y, '#EF4444', 1);
             } else {
-                e.eliteState = 0; e.timer = Date.now() + 5000; e.palette = e.originalPalette || e.palette;
+                e.eliteState = 0; e.timer = Date.now() + 5000;
                 e.lockedTargetX = undefined; e.lockedTargetY = undefined;
             }
         }
@@ -44,7 +44,7 @@ export function updateEliteTriangle(e: Enemy, state: GameState, dist: number, dx
     if (e.eliteState === 0) {
         if ((!e.timer || Date.now() > e.timer) && dist < 600) {
             e.eliteState = 1; e.timer = Date.now() + 3500;
-            e.originalPalette = e.palette; e.palette = ['#FCD34D', '#FBBF24', '#F59E0B'];
+
         }
         const a = Math.atan2(dy, dx);
         vx = Math.cos(a) * e.spd + pushX; vy = Math.sin(a) * e.spd + pushY;
@@ -55,7 +55,7 @@ export function updateEliteTriangle(e: Enemy, state: GameState, dist: number, dx
         vx = Math.cos(a) * fast + pushX; vy = Math.sin(a) * fast + pushY;
         spawnParticles(state, e.x, e.y, '#FCD34D', 1);
         if (Date.now() > (e.timer || 0)) {
-            e.eliteState = 0; e.timer = Date.now() + 5000; e.palette = e.originalPalette || e.palette;
+            e.eliteState = 0; e.timer = Date.now() + 5000;
         }
     }
     return { vx, vy };
@@ -290,9 +290,7 @@ export function updateElitePentagon(e: Enemy, state: GameState, dist: number, dx
                 playSfx('warning');
             }
 
-            // Blink Red/White
-            const blink = Math.floor(Date.now() / 200) % 2 === 0;
-            e.palette = blink ? ['#EF4444', '#B91C1C', '#991B1B'] : ['#FFFFFF', '#F0F0F0', '#E2E8F0'];
+
 
             if (Date.now() > dTimer) {
                 // No AoE damage as per request - just suicide and particles
@@ -312,9 +310,7 @@ export function updateElitePentagon(e: Enemy, state: GameState, dist: number, dx
 
         // Guardian Mode: Player close + Has Minions -> Turn RED and Trigger Minions
         if (distToPlayer <= 550 && hasMinions) {
-            // Red Warning Color - Angry Pulsing "Beehive"
-            const pulse = Math.floor(Date.now() / 100) % 2 === 0;
-            e.palette = pulse ? ['#EF4444', '#B91C1C', '#991B1B'] : ['#B91C1C', '#991B1B', '#7F1D1D'];
+
 
             // Shake Effect (Vibration)
             vx += (Math.random() - 0.5) * 4;
@@ -322,12 +318,7 @@ export function updateElitePentagon(e: Enemy, state: GameState, dist: number, dx
         } else {
             // Normal State / Charging State Handling
             if (e.summonState === 1) {
-                // CHARGING (3 Seconds) - Blink Green
-                if (Math.floor(Date.now() / 200) % 2 === 0) {
-                    e.palette = ['#4ade80', '#22c55e', '#166534']; // Green
-                } else {
-                    e.palette = ['#FFFFFF', '#F0F0F0', '#E2E8F0']; // White Flash
-                }
+
 
                 if (Date.now() > (e.timer || 0)) {
                     // FINISH CHARGING -> SPAWN (Now matching normal: 3 minions)
@@ -336,7 +327,6 @@ export function updateElitePentagon(e: Enemy, state: GameState, dist: number, dx
                     e.lastAttack = Date.now();
                     e.summonState = 0;
                     if (e.originalPalette) e.palette = e.originalPalette;
-                    else e.palette = ['#a855f7', '#9333ea', '#7e22ce'];
                 }
             } else {
                 // IDLE STATE

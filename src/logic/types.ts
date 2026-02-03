@@ -354,6 +354,13 @@ export interface Enemy {
     infectedUntil?: number;
     infectionDmg?: number;
     infectionAccumulator?: number;
+    isNecroticZombie?: boolean;
+    legionId?: string;
+    legionLeadId?: number;
+    legionSlot?: { x: number; y: number }; // Index in the grid (e.g. 0-4, 0-3 for 20 enemies)
+    legionShield?: number; // Shared shield value (stored on each member for simplicity or just on lead)
+    maxLegionShield?: number; // Max shield for the bar indicator
+    wasInLegion?: boolean; // Prevent re-joining or merging after being in a legion
 }
 
 export interface Upgrade {
@@ -406,7 +413,7 @@ export type GameEventType =
     | 'solar_emp'
     | 'legionnaire_sweep'
     | 'necrotic_surge'
-    | 'huddle'
+    | 'legion_formation'
     | 'gravity_singularity'
     | 'pincer_maneuver'
     | 'fog_of_war'
@@ -462,6 +469,8 @@ export interface GameState {
     areaEffects: AreaEffect[];
     activeEvent: GameEvent | null;
     nextEventCheckTime: number;
+    lastLegionWindow?: number; // Track which 10m window last had a legion event
+
 
     // Portal / Multiverse Props
     currentArena: number; // ID of the arena the player is currently in
@@ -492,6 +501,8 @@ export interface GameState {
         center: PlayerClass | null; // Center slot for class
     };
     chassisDetailViewed: boolean;
+    // Frame-based caches (Not persistent)
+    legionLeads?: Record<string, Enemy>;
 }
 
 export type MeteoriteRarity = 'scrap' | 'anomalous' | 'quantum' | 'astral' | 'radiant' | 'void' | 'eternal' | 'divine' | 'singularity';

@@ -376,7 +376,20 @@ export function updatePlayer(state: GameState, keys: Record<string, boolean>, on
 
 
             // Contact Death for ALL Enemies (only if not on cooldown)
-            if (!e.lastCollisionDamage || now - e.lastCollisionDamage <= 10) {
+            // USER: Legion enemies are invincible until shield is destroyed
+            let canDie = true;
+            if (e.legionId) {
+                const lead = state.legionLeads?.[e.legionId];
+                if (lead && (lead.legionShield || 0) > 0) {
+                    canDie = false;
+                    // Apply contact damage to shield instead
+                    const contactShieldDmg = 20; // Fixed small chunk for touching
+                    lead.legionShield = Math.max(0, (lead.legionShield || 0) - contactShieldDmg);
+                    spawnFloatingNumber(state, e.x, e.y, Math.round(contactShieldDmg).toString(), '#60a5fa', false);
+                }
+            }
+
+            if (canDie && (!e.lastCollisionDamage || now - e.lastCollisionDamage <= 10)) {
                 handleEnemyDeath(state, e, onEvent);
             }
 
