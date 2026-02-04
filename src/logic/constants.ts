@@ -48,7 +48,7 @@ export const BASE_UPGRADE_VALUES: Record<string, number> = {
 export const SHAPE_CYCLE_ORDER = ['circle', 'triangle', 'square', 'diamond', 'pentagon'];
 
 export const SHAPE_DEFS: Record<string, { type: string; hpMult: number; speedMult: number; sizeMult: number; spawnWeight: number }> = {
-    circle: { type: 'circle', hpMult: 0.9, speedMult: 1.3, sizeMult: 1.0, spawnWeight: 1.1 },
+    circle: { type: 'circle', hpMult: 0.9, speedMult: 1.2, sizeMult: 1.0, spawnWeight: 1.1 },
     triangle: { type: 'triangle', hpMult: 1.0, speedMult: 1.2, sizeMult: 1.0, spawnWeight: 1.2 },
     square: { type: 'square', hpMult: 2.0, speedMult: 0.7, sizeMult: 1.2, spawnWeight: 0.8 },
     diamond: { type: 'diamond', hpMult: 0.6, speedMult: 1.5, sizeMult: 1.0, spawnWeight: 1.0 },

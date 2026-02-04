@@ -78,7 +78,7 @@ export function spawnEnemy(state: GameState, x?: number, y?: number, shape?: Sha
     const cycleCount = Math.floor(minutes / 5);
     const difficultyMult = 1 + (minutes * Math.log2(2 + minutes) / 30);
     const hpMult = Math.pow(1.2, cycleCount) * SHAPE_DEFS[chosenShape].hpMult;
-    const baseHp = 70 * Math.pow(1.186, minutes) * difficultyMult; // Tuned for 20k HP @ 20min, 250M HP @ 60min
+    const baseHp = 60 * Math.pow(1.186, minutes) * difficultyMult; // Tuned for 20k HP @ 20min, 250M HP @ 60min
 
     const isLvl2 = isBoss && (bossTier === 2 || (minutes >= 10 && bossTier !== 1));
     const size = isBoss ? (isLvl2 ? 60 : 50) : (20 * SHAPE_DEFS[chosenShape].sizeMult);

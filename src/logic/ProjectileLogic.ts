@@ -134,6 +134,7 @@ export function spawnBullet(state: GameState, x: number, y: number, angle: numbe
     let pClass = PLAYER_CLASSES.find(c => c.id === state.player.playerClass);
     let bulletColor: string | undefined = pClass?.themeColor;
     let bulletPierce = pierce;
+    if (state.player.playerClass === 'malware') bulletPierce += 1;
 
     // --- CLASS MODIFIERS: Cosmic Beam (formerly Storm-Strike) ---
     if (state.player.playerClass === 'stormstrike') {
@@ -227,7 +228,7 @@ export function spawnBullet(state: GameState, x: number, y: number, angle: numbe
         b.vortexState = 'orbiting';
         b.orbitAngle = angle + offsetAngle;
         b.orbitDist = 125;
-        b.life = 600; // Longer life for orbiting
+        b.life = 999999; // Orbit indefinitely until hit
 
         state.bullets.push(b);
 
@@ -356,22 +357,12 @@ export function updateProjectiles(state: GameState, onEvent?: (event: string, da
 
         // --- CLASS MODIFIER: Aigis-Vortex Orbtial Movement ---
         if (b.vortexState === 'orbiting') {
-            const timeAlive = now - (b.spawnTime || now);
-            if (timeAlive > 4000) {
-                b.vortexState = 'expanding';
-                const ang = b.orbitAngle || 0;
-                const spd = GAME_CONFIG.PROJECTILE.PLAYER_BULLET_SPEED;
-                // Fly radially outward (away from player)
-                b.vx = Math.cos(ang) * spd;
-                b.vy = Math.sin(ang) * spd;
-            } else {
-                b.orbitAngle = (b.orbitAngle || 0) + 0.05;
-                const dist = b.orbitDist || 125;
-                b.x = player.x + Math.cos(b.orbitAngle) * dist;
-                b.y = player.y + Math.sin(b.orbitAngle) * dist;
-                // Update velocity so it "looks" like it's moving for hit detection (approx)
-                b.vx = 0; b.vy = 0;
-            }
+            b.orbitAngle = (b.orbitAngle || 0) + 0.05;
+            const dist = b.orbitDist || 125;
+            b.x = player.x + Math.cos(b.orbitAngle) * dist;
+            b.y = player.y + Math.sin(b.orbitAngle) * dist;
+            // Update velocity so it "looks" like it's moving for hit detection (approx)
+            b.vx = 0; b.vy = 0;
         }
 
         let bulletRemoved = false;

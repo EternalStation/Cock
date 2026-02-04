@@ -12,11 +12,12 @@ export const PLAYER_CLASSES: PlayerClass[] = [
             'Quantum Ricochet Rounds'
         ],
         capabilityName: 'QUANTUM FRAGMENTATION',
-        capabilityDesc: 'Manual Targeting. Projectiles have 300% of default range and ricochet off all up to 5 times. Each bounce gains 20% Damage and projectile speed.',
+        capabilityDesc: 'Manual Targeting. Projectiles have 300% of default range, +1 Piercing, and ricochet off all up to 5 times. Each bounce gains 20% Damage and projectile speed.',
         capabilityMetrics: [
             { label: 'RANGE', value: 300, unit: '%', isPercentage: true, description: 'Base projectile range multiplier' },
             { label: 'DMG/WALL', value: 20, unit: '%', isPercentage: true, description: 'Damage gain per bounce' },
             { label: 'SPEED/WALL', value: 20, unit: '%', isPercentage: true, description: 'Speed gain per bounce' },
+            { label: 'PIERCE', value: 1, unit: '', isPercentage: false, isStatic: true, description: 'Base piercing' },
             { label: 'RICOCHET', value: 5, unit: '', isPercentage: false, description: 'Maximum bounces (static)' }
         ],
         stats: {
@@ -92,11 +93,11 @@ export const PLAYER_CLASSES: PlayerClass[] = [
             'Enhanced vitality systems'
         ],
         capabilityName: 'Magnetic Vortex',
-        capabilityDesc: 'Projectiles orbit the player in a tight ring for 4 seconds before expanding outwards. Chance to spawn additional layers.',
+        capabilityDesc: 'Projectiles orbit the player in a tight ring indefinitely until they hit an enemy. Chance to spawn additional layers.',
         capabilityMetrics: [
             { label: 'Ring II', value: 10, unit: '%', isPercentage: true, description: 'Chance for 2nd Layer' },
             { label: 'Ring III', value: 5, unit: '%', isPercentage: true, description: 'Chance for 3rd Layer' },
-            { label: 'Orbit Duration', value: 4, unit: 's', isPercentage: false, description: 'Static duration' }
+            { label: 'Targeting', value: 0, unit: '', isPercentage: false, isStatic: true, description: 'Indefinite Orbit' }
         ],
         stats: {
             hpMult: 0.20,

@@ -13,7 +13,7 @@ export const ARCHETYPES: Record<EnemyArchetype, ArchetypeConfig> = {
     circle: {
         shape: 'circle',
         name: 'Chaser',
-        speedMult: 1.3,
+        speedMult: 1.2,
         hpMult: 1.0,
         spawnRateMult: 1.5,
     },

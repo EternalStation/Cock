@@ -27,8 +27,8 @@ export function updateNormalTriangle(e: Enemy, dx: number, dy: number, pushX: nu
     // Dashing State
     if (e.dashState === 1) {
         if (Date.now() < e.timer) {
-            // Dash Speed: Cover ~250px in 0.2s (approx 12 frames) -> ~21 px/frame
-            const dashSpeed = 22;
+            // Dash Speed: Cover ~150px in 0.2s (approx 12 frames) -> ~12.5 px/frame
+            const dashSpeed = 12.5;
             const angle = e.dashAngle || Math.atan2(dy, dx);
             const vx = Math.cos(angle) * dashSpeed + pushX;
             const vy = Math.sin(angle) * dashSpeed + pushY;
