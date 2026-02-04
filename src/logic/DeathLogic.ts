@@ -1,18 +1,31 @@
 import type { GameState, Enemy, ShapeType } from './types';
 import { playSfx } from './AudioLogic';
-import { getLegendaryOptions, getHexLevel, calculateLegendaryBonus } from './LegendaryLogic';
+import { getLegendaryOptions, getHexLevel, calculateLegendaryBonus, getHexMultiplier } from './LegendaryLogic';
 import { trySpawnMeteorite } from './LootLogic';
 import { getChassisResonance } from './EfficiencyLogic';
+import { spawnFloatingNumber } from './ParticleLogic';
 
 export function handleEnemyDeath(state: GameState, e: Enemy, onEvent?: (event: string, data?: any) => void) {
     if (e.dead) return;
     e.dead = true; e.hp = 0;
     state.killCount++; state.score++;
-    // --- CLASS CAPABILITY: REAPER (SOUL SIPHON) ---
-    // (Deprecated/Removed as per user request for new classes)
+
+    // --- EcoXP Lvl 2: Dust Extraction ---
+    const ecoXp = state.moduleSockets.hexagons.find(h => h?.type === 'EcoXP');
+    if (ecoXp && ecoXp.level >= 2) {
+        const kl = ecoXp.killsAtLevel?.[2] ?? ecoXp.killsAtAcquisition;
+        const killsSinceLvl2 = state.killCount - kl;
+        if (killsSinceLvl2 > 0 && killsSinceLvl2 % 50 === 0) {
+            const multiplier = getHexMultiplier(state, 'EcoXP'); // getHexMultiplier returns 1 + boost
+            const dustAmount = 1 * multiplier;
+            state.player.dust += dustAmount;
+            playSfx('socket-place'); // Subtle sound for direct extraction
+            spawnFloatingNumber(state, e.x, e.y, `+${dustAmount.toFixed(1)} DUST`, '#a855f7', false);
+        }
+    }
 
     // --- CLASS MODIFIER: Hive-Mother Nanite Spread ---
-    if (e.infectedUntil && state.gameTime * 1000 < e.infectedUntil) {
+    if (e.isInfected) {
         const resonance = getChassisResonance(state);
         const multiplier = 1 + resonance;
         const totalInfectionRate = 30 * multiplier;
@@ -61,6 +74,16 @@ export function handleEnemyDeath(state: GameState, e: Enemy, onEvent?: (event: s
     trySpawnMeteorite(state, e.x, e.y);
 
     if (e.boss) {
+        // Boss gives normal XP
+        const xpBase = state.player.xp_per_kill.base;
+        const hexFlat = calculateLegendaryBonus(state, 'xp_per_kill');
+        const hexPct = calculateLegendaryBonus(state, 'xp_pct_per_kill');
+        const totalFlat = xpBase + state.player.xp_per_kill.flat + hexFlat;
+        const normalMult = 1 + (state.player.xp_per_kill.mult / 100);
+        const hexMult = 1 + (hexPct / 100);
+        const finalXp = totalFlat * normalMult * hexMult;
+        state.player.xp.current += finalXp;
+
         state.legendaryOptions = getLegendaryOptions(state);
         state.showLegendarySelection = true;
         state.isPaused = true;
@@ -84,7 +107,6 @@ export function handleEnemyDeath(state: GameState, e: Enemy, onEvent?: (event: s
         }
 
         if (state.currentArena === 0) xpBase *= 1.15; // +15% XP in Economic Hex
-        if (state.activeEvent?.type === 'red_moon') xpBase *= 3.0; // 3x XP during Red Moon
 
         // Legendary XP Bonuses
         const hexFlat = calculateLegendaryBonus(state, 'xp_per_kill');

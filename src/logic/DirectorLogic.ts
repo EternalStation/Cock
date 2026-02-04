@@ -1,34 +1,61 @@
 import type { GameState, GameEventType, GameEvent } from './types';
 import { playSfx } from './AudioLogic';
 
-const EVENT_CHANCE = 0.4; // 40% chance every check
 const CHECK_INTERVAL = 120; // Check every 2 minutes (120s)
 const MIN_TIME_FOR_EVENTS = 60; // Start events after 1 minute
 
 export function updateDirector(state: GameState, step: number) {
     if (state.gameOver || state.isPaused) return;
 
-    // 1. Check for new random events (Excluding scheduled ones)
+    // Ensure state tracking exists
+    if (!state.directorState) state.directorState = { necroticCycle: -1, legionCycle: -1 };
+
+    const minutes = state.gameTime / 60;
+    const current5MinCycle = Math.floor(minutes / 5);
+
+
+    // 1. Check for RANDOM events (Solar EMP) - Exclude scheduled ones
+    // Check every 2 minutes for general random events logic if not active
     if (state.gameTime >= state.nextEventCheckTime && !state.activeEvent) {
-        if (Math.random() < EVENT_CHANCE && state.gameTime > MIN_TIME_FOR_EVENTS) {
-            const pool: GameEventType[] = ['red_moon', 'necrotic_surge', 'solar_emp']; // Removed legion_formation from random pool
-            const type = pool[Math.floor(Math.random() * pool.length)];
-            startEvent(state, type);
+        if (state.gameTime > MIN_TIME_FOR_EVENTS) {
+            // General pool (Only solar_emp now, since others are scheduled)
+            const pool: GameEventType[] = ['solar_emp'];
+
+            // 30% chance every 2 mins
+            if (Math.random() < 0.3) {
+                const type = pool[Math.floor(Math.random() * pool.length)];
+                startEvent(state, type);
+            }
         }
         state.nextEventCheckTime = state.gameTime + CHECK_INTERVAL;
     }
 
-    // 2. Scheduled Legion Formation (Min 10-12:59, 20-22:59, 30-32:59)
-    const currentMin = Math.floor(state.gameTime / 60);
-    const windowId = Math.floor(currentMin / 10);
-    const inLegionWindow = currentMin >= 10 && (currentMin % 10) < 3;
+    // 2. SCHEDULED EVENTS (Necrotic Surge & Legion Formation)
+    // Only start attempting after 10 minutes (Cycle 2+)
+    if (minutes >= 10 && !state.activeEvent) {
 
-    if (inLegionWindow && !state.activeEvent && state.lastLegionWindow !== windowId) {
-        // Random chance to start during the 3-minute window (approx 1 in 180 seconds)
-        // Check every frame (60 fps), so 1 / (180 * 60)
-        if (Math.random() < 1 / (180 * 60)) {
-            startEvent(state, 'legion_formation');
-            state.lastLegionWindow = windowId;
+        // --- Necrotic Surge Logic ---
+        // Once per 5-min cycle
+        if (current5MinCycle > state.directorState.necroticCycle) {
+            // Chance to spawn: We want it to happen EVENTUALLY in this 5 minute window.
+            // Window is 300 seconds. 60 FPS. 18000 frames.
+            // 1/9000 chance gives approx 2 events per window on avg? No, we cap it at 1.
+            // Let's use 1/3600 (once per minute prob) to ensure it happens early-ish but random.
+            if (Math.random() < 0.0003) {
+                startEvent(state, 'necrotic_surge');
+                state.directorState.necroticCycle = current5MinCycle;
+            }
+        }
+
+        // --- Legion Formation Logic ---
+        // Same rules: Once per 5-min cycle, after 10 mins.
+        // We check if we are NOT currently running an event (already checked above)
+        // Note: If Necrotic Surge starts, this won't run until it ends. That's fine.
+        if (!state.activeEvent && current5MinCycle > state.directorState.legionCycle) {
+            if (Math.random() < 0.0003) {
+                startEvent(state, 'legion_formation');
+                state.directorState.legionCycle = current5MinCycle;
+            }
         }
     }
 
@@ -58,9 +85,6 @@ function startEvent(state: GameState, type: GameEventType) {
 
     // Event Specific Initialization
     switch (type) {
-        case 'red_moon':
-            playSfx('warning'); // Sound cue
-            break;
         case 'necrotic_surge':
             playSfx('rare-spawn');
             break;
@@ -119,9 +143,6 @@ function updateActiveEvent(state: GameState, _step: number) {
             import('./ParticleLogic').then(({ spawnParticles }) => {
                 spawnParticles(state, zombieData.x, zombieData.y, '#818cf8', 20);
             });
-            import('./AudioLogic').then(({ playSfx }) => {
-                playSfx('zombie-rise');
-            });
         });
 
         // Remove processed spawns
@@ -135,16 +156,6 @@ function updateActiveEvent(state: GameState, _step: number) {
         console.log(`Director: Event ${state.activeEvent.type} ended`);
         state.activeEvent = null;
         return;
-    }
-
-    // Per-frame event logic (if needed)
-    switch (state.activeEvent.type) {
-        case 'red_moon':
-            // Visual pulse or particles?
-            if (state.frameCount % 60 === 0) {
-                // spawn red particles randomly?
-            }
-            break;
     }
 }
 

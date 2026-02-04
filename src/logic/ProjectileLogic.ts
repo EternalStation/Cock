@@ -5,11 +5,12 @@ import { PALETTES } from './constants';
 import { getChassisResonance } from './EfficiencyLogic';
 import { playSfx } from './AudioLogic';
 import { calcStat } from './MathUtils';
-import type { GameState } from './types';
+import type { GameState, Enemy } from './types';
 import { spawnParticles, spawnFloatingNumber } from './ParticleLogic';
 import { getHexMultiplier, getHexLevel, calculateLegendaryBonus } from './LegendaryLogic';
 import { handleEnemyDeath } from './DeathLogic';
 import { getPlayerThemeColor } from './helpers';
+import { getDefenseReduction } from './MathUtils';
 
 
 
@@ -324,7 +325,7 @@ export function updateProjectiles(state: GameState, onEvent?: (event: string, da
                 continue;
             }
 
-            spawnParticles(state, b.x, b.y, b.color || '#22d3ee', 10);
+            spawnParticles(state, b.x, b.y, b.color || '#22d3ee', 4);
             bullets.splice(i, 1);
             continue;
         }
@@ -343,8 +344,10 @@ export function updateProjectiles(state: GameState, onEvent?: (event: string, da
                 const tx = Math.cos(angleToTarget) * speed;
                 const ty = Math.sin(angleToTarget) * speed;
 
-                b.vx += (tx - b.vx) * 0.1;
-                b.vy += (ty - b.vy) * 0.1;
+                // Add 'Jaggy' Jitter for swarm aesthetic
+                const jitter = 4.0;
+                b.vx += (tx - b.vx) * 0.15 + (Math.random() - 0.5) * jitter;
+                b.vy += (ty - b.vy) * 0.15 + (Math.random() - 0.5) * jitter;
             } else {
                 // Target died? Find new one? Or just drift
                 b.life = 0; // Fizzle out
@@ -420,9 +423,9 @@ export function updateProjectiles(state: GameState, onEvent?: (event: string, da
                 if (b.isNanite) {
                     // Nanites apply infection without impact damage
                     damageAmount = 0;
-                    const gameMs = state.gameTime * 1000;
-                    const wasInfected = e.infectedUntil && e.infectedUntil > gameMs;
-                    e.infectedUntil = Math.max(e.infectedUntil || 0, gameMs + 5000);
+                    const wasInfected = e.isInfected;
+                    e.isInfected = true;
+                    e.infectedUntil = 999999999; // Keep as fallback/legacy check
                     // Inherit per-tick damage directly from nanite projectile (no recursion)
                     e.infectionDmg = Math.max(e.infectionDmg || 0, b.dmg);
 
@@ -454,11 +457,72 @@ export function updateProjectiles(state: GameState, onEvent?: (event: string, da
                     }
                 }
 
-                // 1. Apply Damage
+                // 0.5 Thorns Logic (Reflect Damage)
+                if (e.thorns && e.thorns > 0 && damageAmount > 0) {
+                    const reflected = damageAmount * e.thorns;
+                    state.player.curHp -= reflected;
+                    spawnFloatingNumber(state, state.player.x, state.player.y, `-${Math.round(reflected)}`, '#FF0000', true);
+                    spawnParticles(state, state.player.x, state.player.y, '#FF0000', 3);
+                    // Play 'hurt' sound?
+                }
+
+                // 1. Apply Damage (with Soul Link Logic)
                 if (damageAmount > 0) {
-                    e.hp -= damageAmount;
-                    player.damageDealt += damageAmount;
-                    b.hits.add(e.id);
+
+                    // SOUL LINK LOGIC (Pentagon Boss)
+                    let linkedTargets: Enemy[] = [];
+                    if (e.soulLinkHostId) {
+                        const host = state.enemies.find(h => h.id === e.soulLinkHostId && !h.dead);
+                        if (host) {
+                            linkedTargets.push(host);
+                            // Find other minions linked to this host? 
+                            // Optimized: The Host has `soulLinkTargets`.
+                            if (host.soulLinkTargets) {
+                                const peers = state.enemies.filter(p => host.soulLinkTargets!.includes(p.id) && !p.dead);
+                                linkedTargets.push(...peers);
+                            }
+                        }
+                    } else if (e.soulLinkTargets && e.soulLinkTargets.length > 0) {
+                        // Takes hit as host
+                        linkedTargets.push(e);
+                        const minions = state.enemies.filter(m => e.soulLinkTargets!.includes(m.id) && !m.dead);
+                        linkedTargets.push(...minions);
+                    }
+
+                    if (linkedTargets.length > 1) {
+                        // Remove duplicates (Host is in targets, etc)
+                        linkedTargets = Array.from(new Set(linkedTargets));
+
+                        // Determine Link Color (Using Host Time)
+                        const host = linkedTargets.find(t => t.id === e.soulLinkHostId);
+                        let linkSourceTime = host?.spawnedAt || state.gameTime;
+
+                        const minutes = linkSourceTime / 60;
+                        const eraIndex = Math.floor(minutes / 15) % 5;
+                        const ERA_COLORS = ['#00FF00', '#00FFFF', '#BF00FF', '#FF9900', '#FF0000'];
+                        const linkColor = ERA_COLORS[eraIndex] || ERA_COLORS[0];
+
+                        const splitDmg = damageAmount / linkedTargets.length;
+
+                        linkedTargets.forEach(target => {
+                            target.hp -= splitDmg;
+                            player.damageDealt += splitDmg; // Total damage dealt remains same, just split
+                            spawnFloatingNumber(state, target.x, target.y, Math.round(splitDmg).toString(), linkColor, false);
+                            spawnParticles(state, target.x, target.y, linkColor, 2);
+
+                            // Handle Death for linked targets
+                            if (target.hp <= 0 && !target.dead) {
+                                handleEnemyDeath(state, target, onEvent);
+                            }
+                        });
+
+                        b.hits.add(e.id); // Register hit on primary target for bullet logic
+                    } else {
+                        // Standard Single Target
+                        e.hp -= damageAmount;
+                        player.damageDealt += damageAmount;
+                        b.hits.add(e.id);
+                    }
 
                     // Hyper-Pulse infinite pierce
                     if (!b.isHyperPulse) {
@@ -480,7 +544,7 @@ export function updateProjectiles(state: GameState, onEvent?: (event: string, da
                             type: 'blackhole',
                             x: b.x,
                             y: b.y,
-                            radius: 450, // Static 450px radius
+                            radius: 400, // Reduced from 450px
                             duration: blackholeDuration,
                             creationTime: now,
                             level: 1
@@ -495,12 +559,12 @@ export function updateProjectiles(state: GameState, onEvent?: (event: string, da
 
                 // --- CLASS MODIFIER: Hive-Mother Nanite Swarm ---
                 if (player.playerClass === 'hivemother' && !b.isNanite) {
-                    const gameMs = state.gameTime * 1000;
                     const resonance = getChassisResonance(state);
                     const multiplier = 1 + resonance;
                     const swarmDmgPerSecPct = 5 * multiplier;
 
-                    e.infectedUntil = Math.max(e.infectedUntil || 0, gameMs + 5000); // 5 seconds
+                    e.isInfected = true;
+                    e.infectedUntil = 999999999; // Keep as fallback/legacy check
                     const basePower = calcStat(player.dmg);
                     e.infectionDmg = basePower * (swarmDmgPerSecPct / 100); // 5%/sec * resonance, 1 tick per second
                 }
@@ -543,6 +607,7 @@ export function updateProjectiles(state: GameState, onEvent?: (event: string, da
                             let shieldGain = overflow * 2.0; // Double stolen health
 
                             if (!player.shieldChunks) player.shieldChunks = [];
+
                             const currentTotalShield = player.shieldChunks.reduce((s, c) => s + c.amount, 0);
 
                             const effMult = getHexMultiplier(state, 'ComLife');
@@ -568,22 +633,34 @@ export function updateProjectiles(state: GameState, onEvent?: (event: string, da
 
                 // ELITE SKILL: SQUARE THORNS (Blade Mail)
                 if (e.isElite && e.shape === 'square') {
-                    const rawReflectDmg = Math.max(1, Math.floor(e.maxHp * GAME_CONFIG.SKILLS.REFLECT_DAMAGE_PERCENT));
-                    const armor = calcStat(player.arm);
-                    const reflectDmg = Math.max(0, rawReflectDmg - armor);
+                    // Returns 3% of player's damage for every hit
+                    const reflectDmg = Math.max(1, Math.floor(damageAmount * 0.03));
 
                     // Cap damage to never kill player (leave at least 1 HP)
                     const safeDmg = Math.min(reflectDmg, player.curHp - 1);
                     if (safeDmg > 0) {
                         // Check Shield First
-                        if (player.shield && player.shield > 0) {
-                            if (player.shield >= safeDmg) {
-                                player.shield -= safeDmg;
-                            } else {
-                                const rem = safeDmg - player.shield;
-                                player.shield = 0;
-                                player.curHp -= rem;
-                                player.damageTaken += rem;
+                        if (player.shieldChunks && player.shieldChunks.length > 0) {
+                            // Apply to chunks
+                            let rem = safeDmg;
+                            let absorbed = 0;
+                            for (const chunk of player.shieldChunks) {
+                                if (chunk.amount >= rem) {
+                                    chunk.amount -= rem;
+                                    absorbed += rem;
+                                    rem = 0; break;
+                                } else {
+                                    absorbed += chunk.amount;
+                                    rem -= chunk.amount;
+                                    chunk.amount = 0;
+                                }
+                            }
+                            player.shieldChunks = player.shieldChunks.filter((c: any) => c.amount > 0);
+                            const finalThornDmg = safeDmg - absorbed;
+
+                            if (finalThornDmg > 0) {
+                                player.curHp -= finalThornDmg;
+                                player.damageTaken += finalThornDmg;
                             }
                         } else {
                             player.curHp -= safeDmg;
@@ -593,6 +670,13 @@ export function updateProjectiles(state: GameState, onEvent?: (event: string, da
                         if (onEvent) onEvent('player_hit', { dmg: safeDmg }); // Trigger red flash
                         spawnParticles(state, player.x, player.y, '#FF0000', 3); // Visual feedback
                         spawnFloatingNumber(state, player.x, player.y, Math.round(safeDmg).toString(), '#ef4444', false);
+
+                        // Explicit Death Check for Thorns
+                        if (player.curHp <= 0) {
+                            player.curHp = 0;
+                            state.gameOver = true;
+                            if (onEvent) onEvent('game_over');
+                        }
                     }
                 }
 
@@ -718,7 +802,7 @@ export function updateProjectiles(state: GameState, onEvent?: (event: string, da
         const distP = Math.hypot(player.x - eb.x, player.y - eb.y);
         if (distP < player.size + 10) {
             const armorValue = calcStat(player.arm);
-            const armRedMult = 1 - (0.95 * (armorValue / (armorValue + GAME_CONFIG.PLAYER.ARMOR_CONSTANT)));
+            const armRedMult = 1 - getDefenseReduction(armorValue);
 
             const projRedRaw = calculateLegendaryBonus(state, 'proj_red_per_kill');
             const projRed = Math.min(80, projRedRaw); // Cap at 80% reduction

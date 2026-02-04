@@ -39,12 +39,13 @@ export const PLAYER_CLASSES: PlayerClass[] = [
             'AoE vacuum effect on hit'
         ],
         capabilityName: 'Void Singularity',
-        capabilityDesc: 'Spawns a 450px void for 3s with 10s CD. Slowly pulls enemies inside the void and consumes them.',
+        capabilityDesc: 'Spawns a 400px void for 3s with 10s CD. Slowly pulls enemies inside the void, consuming them while bosses take 10% Max HP per second.',
         capabilityMetrics: [
-            { label: 'Singularity Radius', value: 450, unit: 'px', isPercentage: false, description: 'Static radius' },
-            { label: 'Pull Strength', value: 10, unit: '%', isPercentage: true, description: 'Base pull force' },
+            { label: 'Singularity Radius', value: 400, unit: 'px', isPercentage: false, description: 'Static radius' },
+            { label: 'Pull Strength', value: 5, unit: '%', isPercentage: true, description: 'Base pull force' },
             { label: 'Duration', value: 3, unit: 's', isPercentage: false, description: 'Static duration' },
-            { label: 'Singularity CD', value: 10, unit: 's', isPercentage: false, description: 'Static cooldown' }
+            { label: 'Singularity CD', value: 10, unit: 's', isPercentage: false, description: 'Static cooldown' },
+            { label: 'Boss DMG', value: 10, unit: '%', isPercentage: true, isStatic: true, description: 'Static Max HP per second' }
         ],
         stats: {
             armMult: 0.30,
@@ -117,10 +118,11 @@ export const PLAYER_CLASSES: PlayerClass[] = [
             'Viral spread mechanics'
         ],
         capabilityName: 'Nanite Swarm',
-        capabilityDesc: 'On hit, bullets dissolve into nanites that deal continuous damage. On death, the swarm has an infection chance to jump to the next host.',
+        capabilityDesc: 'On hit, bullets dissolve into nanites that deal continuous damage until death. On death, the swarm jumps to the next host within 400px.',
         capabilityMetrics: [
             { label: 'Infection Rate', value: 30, unit: '%', isPercentage: true, description: '' },
-            { label: 'Swarm DMG / sec', value: 5, unit: '%', isPercentage: true, description: '' }
+            { label: 'Swarm DMG / sec', value: 5, unit: '%', isPercentage: true, description: '' },
+            { label: 'Jump Range', value: 400, unit: 'px', isPercentage: false, isStatic: true, description: 'Static jump distance' }
         ],
         stats: {
             xpMult: 0.15,

@@ -78,17 +78,17 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, mete
         // 6. Projectiles
         renderProjectiles(ctx, state);
 
-        // 7. Player
-        renderPlayer(ctx, state, meteoriteImages);
-        renderEpicenterShield(ctx, state);
-
-        // 8. Entities (Enemies, Drones)
+        // 7. Entities (Enemies, Drones)
         renderDrones(ctx, state);
 
-        // 8.5. Void particles (behind enemies for layering)
+        // 7.5. Void particles (behind enemies for layering)
         renderParticles(ctx, state, 'void');
 
         renderEnemies(ctx, state, meteoriteImages);
+
+        // 8. Player (Drawn ON TOP of enemies to prevent clipping/coloring issues)
+        renderPlayer(ctx, state, meteoriteImages);
+        renderEpicenterShield(ctx, state);
 
         // 9. Particles & Floating Numbers (in front of enemies)
         renderParticles(ctx, state, 'non-void');

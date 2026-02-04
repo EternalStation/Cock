@@ -7,6 +7,7 @@ import { playSfx } from '../AudioLogic';
 import { GAME_CONFIG } from '../GameConfig';
 
 // Helper to determine current game era params
+// Helper to determine current game era params
 export function getProgressionParams(gameTime: number) {
     const minutes = Math.floor(gameTime / 60);
     const eraIndex = Math.floor(minutes / 15);
@@ -27,16 +28,13 @@ export function getProgressionParams(gameTime: number) {
 }
 
 export function getEventPalette(state: GameState): [string, string, string] | null {
-    if (state.activeEvent?.type === 'red_moon') {
-        return ['#ef4444', '#b91c1c', '#7f1d1d']; // Crimson Red
-    }
     if (state.activeEvent?.type === 'solar_emp') {
         return ['#f59e0b', '#d97706', '#92400e']; // Amber/Warning
     }
     return null;
 }
 
-export function spawnEnemy(state: GameState, x?: number, y?: number, shape?: ShapeType, isBoss: boolean = false) {
+export function spawnEnemy(state: GameState, x?: number, y?: number, shape?: ShapeType, isBoss: boolean = false, bossTier?: number) {
     const { player, gameTime } = state;
     const { shapeDef, eraPalette, fluxState } = getProgressionParams(gameTime);
 
@@ -80,15 +78,12 @@ export function spawnEnemy(state: GameState, x?: number, y?: number, shape?: Sha
     const cycleCount = Math.floor(minutes / 5);
     const difficultyMult = 1 + (minutes * Math.log2(2 + minutes) / 30);
     const hpMult = Math.pow(1.2, cycleCount) * SHAPE_DEFS[chosenShape].hpMult;
-    const baseHp = 50 * Math.pow(1.15, minutes) * difficultyMult;
+    const baseHp = 70 * Math.pow(1.186, minutes) * difficultyMult; // Tuned for 20k HP @ 20min, 250M HP @ 60min
 
-    const size = isBoss ? 60 : (20 * SHAPE_DEFS[chosenShape].sizeMult);
-    let hp = (isBoss ? baseHp * 15 : baseHp) * hpMult;
+    const isLvl2 = isBoss && (bossTier === 2 || (minutes >= 10 && bossTier !== 1));
+    const size = isBoss ? (isLvl2 ? 60 : 50) : (20 * SHAPE_DEFS[chosenShape].sizeMult);
+    let hp = (isBoss ? baseHp * 20 : baseHp) * hpMult;
 
-    // EVENT BOOST: Red Moon +50% HP
-    if (state.activeEvent?.type === 'red_moon') {
-        hp *= 1.5;
-    }
 
     const eventPalette = getEventPalette(state);
     const finalPalette = eventPalette || eraPalette.colors;
@@ -100,10 +95,11 @@ export function spawnEnemy(state: GameState, x?: number, y?: number, shape?: Sha
         size,
         hp,
         maxHp: hp,
-        spd: 2.4 * SHAPE_DEFS[chosenShape].speedMult * (state.activeEvent?.type === 'red_moon' ? 1.5 : 1),
+        spd: 2.4 * SHAPE_DEFS[chosenShape].speedMult,
         boss: isBoss,
         bossType: isBoss ? Math.floor(Math.random() * 2) : 0,
         bossAttackPattern: 0,
+        bossTier: bossTier || 0, // 0 = Auto
         dead: false,
         shape: chosenShape as ShapeType,
         shellStage: 2,
@@ -121,6 +117,7 @@ export function spawnEnemy(state: GameState, x?: number, y?: number, shape?: Sha
         glitchPhase: 0, crackPhase: 0, particleOrbit: 0,
         knockback: { x: 0, y: 0 },
         isRare: false,
+        isElite: false,
         spawnedAt: state.gameTime
     };
 

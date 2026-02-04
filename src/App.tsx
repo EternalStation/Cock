@@ -101,6 +101,9 @@ function App() {
                   fps={hook.fps}
                   onInventoryToggle={hook.toggleModuleMenu}
                   portalError={hook.portalError}
+                  portalCost={hook.portalCost}
+                  showSkillDetail={hook.showBossSkillDetail}
+                  setShowSkillDetail={hook.setShowBossSkillDetail}
                 />
 
                 {isMobile && !hook.gameOver && (

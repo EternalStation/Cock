@@ -106,13 +106,13 @@ export const ChassisDetail: React.FC<ChassisDetailProps> = ({ gameState, playerC
                             <h2 className="section-header">PERFORMANCE METRICS</h2>
                             <div className="metrics-list">
                                 {playerClass.capabilityMetrics.map((m, i) => {
-                                    // Only multiply percentage-based metrics
-                                    const finalValue = m.isPercentage
+                                    // Static metrics explicitly marked or non-percentage stay as is
+                                    const isStatic = m.isStatic || !m.isPercentage;
+
+                                    // Only multiply non-static percentage-based metrics
+                                    const finalValue = (m.isPercentage && !m.isStatic)
                                         ? m.value * multiplier
                                         : m.value;
-
-                                    // Static metrics (non-percentage) don't show multiplication
-                                    const isStatic = !m.isPercentage;
 
                                     return (
                                         <div key={i} className="metric-item">

@@ -127,6 +127,7 @@ export interface ClassMetric {
     unit: string;
     description: string;
     isPercentage: boolean;
+    isStatic?: boolean;
 }
 
 export interface PlayerClass {
@@ -220,13 +221,14 @@ export interface Enemy {
     shellStage: number; // 0, 1, 2 (Core, Inner, Outer)
     palette: string[]; // [Core, Inner, Outer]
     fluxState: number; // 0: Containment, 1: Active, 2: Overload
-    eraPalette: string[]; // Base era colors [Bright, Med, Dark]
+    eraPalette?: string[]; // Base era colors [Bright, Med, Dark]
     pulsePhase: number; // 0-1 for breathing animation
     rotationPhase: number; // For slow rotation
 
     // AI States
     summonState?: number; // 0: moving, 1: wait, 2: cast
     dashState?: number; // 0: normal, 1: dash
+    dashAngle?: number; // Angle of the dash
     timer?: number; // General purpose timer
     dodgeDir?: number; // -1 or 1 for Dodge
 
@@ -309,6 +311,7 @@ export interface Enemy {
     lastCollisionDamage?: number; // Timestamp for last collision damage dealt to player
     smokeRushEndTime?: number; // Timestamp when smoke rush ends
     hidingStateEndTime?: number; // Timestamp when hiding behavior ends
+    lastWallHit?: number; // Cooldown for boss wall collision damage
     isNeutral?: boolean; // If true, ignored by auto-aim (e.g. Barrels)
     baseColor?: string; // Immutable spawn color for projectiles
     spiralDelay?: number; // Delay in seconds before starting spiral motion (Minions)
@@ -351,6 +354,7 @@ export interface Enemy {
     slowFactor?: number; // 0-1 (e.g. 0.3 = 30% slow)
     takenDamageMultiplier?: number; // e.g. 1.2 = +20% dmg taken
     // Hive-Mother Infection
+    isInfected?: boolean;
     infectedUntil?: number;
     infectionDmg?: number;
     infectionAccumulator?: number;
@@ -361,6 +365,23 @@ export interface Enemy {
     legionShield?: number; // Shared shield value (stored on each member for simplicity or just on lead)
     maxLegionShield?: number; // Max shield for the bar indicator
     wasInLegion?: boolean; // Prevent re-joining or merging after being in a legion
+    hasHitThisBurst?: boolean; // For one-time burst abilities (like Diamond Elite Laser)
+
+    // Level 2 Boss Mechanics (10min+)
+    thorns?: number; // % damage return (0-1)
+    dashTimer?: number; // Cooldown/State timer for Circle Boss
+    dashLockX?: number; // Locked target X
+    dashLockY?: number; // Locked target Y
+    berserkState?: boolean; // Triangle Boss Berserk
+    berserkTimer?: number;
+    beamState?: number; // 0=Cd, 1=Charge, 2=Fire
+    beamTimer?: number; // Timer for states
+    beamX?: number; // Baked target X
+    beamY?: number; // Baked target Y
+    beamAngle?: number;
+    soulLinkTargets?: number[]; // IDs of linked enemies (Pentagon)
+    soulLinkHostId?: number; // ID of the boss linking this enemy
+    bossTier?: number; // 0=Auto (Time based), 1=Tier 1 (Normal), 2=Tier 2 (Enhanced)
 }
 
 export interface Upgrade {
@@ -409,7 +430,6 @@ export interface Rarity {
 }
 
 export type GameEventType =
-    | 'red_moon'
     | 'solar_emp'
     | 'legionnaire_sweep'
     | 'necrotic_surge'
@@ -469,6 +489,10 @@ export interface GameState {
     areaEffects: AreaEffect[];
     activeEvent: GameEvent | null;
     nextEventCheckTime: number;
+    directorState?: {
+        necroticCycle: number;
+        legionCycle: number;
+    };
     lastLegionWindow?: number; // Track which 10m window last had a legion event
 
 
@@ -490,6 +514,7 @@ export interface GameState {
     showStats: boolean; // Synced from React State
     showSettings: boolean; // Synced from React State
     showLegendarySelection: boolean;
+    showBossSkillDetail: boolean;
     legendaryOptions: LegendaryHex[] | null;
     pendingLegendaryHex: LegendaryHex | null; // Hex waiting to be placed
     upgradingHexIndex: number | null; // For auto-upgrade animation

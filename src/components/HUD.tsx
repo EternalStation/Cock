@@ -2,7 +2,7 @@
 import React from 'react';
 import type { GameState, UpgradeChoice } from '../logic/types';
 import { calcStat } from '../logic/MathUtils';
-import { getArenaIndex } from '../logic/MapLogic';
+import { getArenaIndex, SECTOR_NAMES } from '../logic/MapLogic';
 import { Minimap } from './Minimap';
 
 import { TopLeftPanel } from './hud/TopLeftPanel';
@@ -24,9 +24,15 @@ interface HUDProps {
     fps: number;
     onInventoryToggle: () => void;
     portalError: boolean;
+    portalCost: number;
+    showSkillDetail: boolean;
+    setShowSkillDetail: (v: boolean) => void;
 }
 
-export const HUD: React.FC<HUDProps> = ({ gameState, upgradeChoices, onUpgradeSelect, gameOver, bossWarning, fps, onInventoryToggle, portalError }) => {
+export const HUD: React.FC<HUDProps> = ({
+    gameState, upgradeChoices, onUpgradeSelect, gameOver, bossWarning,
+    fps, onInventoryToggle, portalError, portalCost, showSkillDetail, setShowSkillDetail
+}) => {
     const { player, activeEvent } = gameState;
 
     // Dynamic Max HP calculation for HUD
@@ -38,23 +44,11 @@ export const HUD: React.FC<HUDProps> = ({ gameState, upgradeChoices, onUpgradeSe
     if (gameOver) return null;
 
     // Calculate time remaining for active event
-    const timeRemaining = activeEvent ? Math.ceil(activeEvent.endTime - gameState.gameTime) : 0;
+    // timeRemaining removed (was used for event timer)
 
     return (
         <>
-            {/* Event Screen Effects: Scary Dark Red Vignette */}
-            {activeEvent && (
-                <div style={{
-                    position: 'absolute',
-                    top: 0, left: 0, width: '100%', height: '100%',
-                    background: 'radial-gradient(circle at center, transparent 20%, rgba(0, 0, 0, 0.4) 60%, rgba(127, 29, 29, 0.5) 90%, rgba(0, 0, 0, 1) 100%)',
-                    pointerEvents: 'none',
-                    zIndex: 5,
-                    animation: activeEvent.type === 'red_moon' ? 'redPulse 2s ease-in-out infinite' : 'glitchEffect 0.2s ease-in-out infinite'
-                }} />
-            )}
-
-            {/* Event Indicator (Title & Timer) */}
+            {/* Event Indicator (Title Only) */}
             {activeEvent && (
                 <div style={{
                     position: 'absolute',
@@ -74,17 +68,9 @@ export const HUD: React.FC<HUDProps> = ({ gameState, upgradeChoices, onUpgradeSe
                         marginBottom: 4,
                         animation: activeEvent.type === 'necrotic_surge' ? 'glitchText 0.5s ease-in-out infinite' : 'none'
                     }}>
-                        {activeEvent.type === 'red_moon' && 'BLOOD MOON'}
+
                         {activeEvent.type === 'necrotic_surge' && 'NECROTIC SURGE'}
                         {activeEvent.type === 'legion_formation' && 'LEGION FORMATION'}
-                    </div>
-                    <div style={{
-                        fontSize: 18,
-                        color: 'rgba(255, 255, 255, 0.7)',
-                        fontWeight: 700,
-                        letterSpacing: 1
-                    }}>
-                        {timeRemaining}s
                     </div>
                 </div>
             )}
@@ -98,11 +84,12 @@ export const HUD: React.FC<HUDProps> = ({ gameState, upgradeChoices, onUpgradeSe
                 portalState={gameState.portalState}
                 dust={gameState.player.dust}
                 portalError={portalError}
+                portalCost={portalCost}
             />
             <AlertPanel gameState={gameState} bossWarning={bossWarning} />
 
             {/* XP Bar */}
-            <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: 6, background: '#000', zIndex: 100 }}>
+            <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: 9, background: '#000', zIndex: 100 }}>
                 <div style={{
                     width: `${(player.xp.current / player.xp.needed) * 100}%`,
                     height: '100%',
@@ -110,9 +97,44 @@ export const HUD: React.FC<HUDProps> = ({ gameState, upgradeChoices, onUpgradeSe
                     boxShadow: '0 0 15px #4ade80',
                     transition: 'width 0.2s'
                 }} />
+                <div style={{
+                    position: 'absolute', width: '100%', textAlign: 'center', top: 0,
+                    color: '#fff', fontSize: 11, fontWeight: 900, textTransform: 'uppercase',
+                    letterSpacing: 2, lineHeight: '9px', textShadow: '0 0 4px #000',
+                    pointerEvents: 'none'
+                }}>
+                    XP: {Math.round(player.xp.current).toLocaleString()} / {Math.round(player.xp.needed).toLocaleString()}
+                </div>
             </div>
 
-            <BossStatus gameState={gameState} />
+            {/* SECTOR DISPLAY - Directly below XP Bar */}
+            <div style={{
+                position: 'absolute', top: 12, left: '50%', transform: 'translateX(-50%)',
+                zIndex: 90, transition: 'top 0.5s ease-in-out', pointerEvents: 'none'
+            }}>
+                <div style={{
+                    background: 'rgba(15, 23, 42, 0.4)',
+                    padding: '2px 40px',
+                    borderRadius: '4px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: '0 0 10px rgba(0,0,0,0.3)'
+                }}>
+                    <span style={{
+                        color: '#94a3b8', fontFamily: 'monospace', fontSize: 11,
+                        fontWeight: 900, letterSpacing: 2, textTransform: 'uppercase'
+                    }}>
+                        Sector 0{getArenaIndex(player.x, player.y) + 1}: {SECTOR_NAMES[getArenaIndex(player.x, player.y)]}
+                    </span>
+                </div>
+            </div>
+
+            <BossStatus
+                gameState={gameState}
+                showSkillDetail={showSkillDetail}
+                setShowSkillDetail={setShowSkillDetail}
+            />
 
             <PlayerStatus gameState={gameState} maxHp={maxHp} />
 

@@ -23,6 +23,9 @@ export function renderBackground(ctx: CanvasRenderingContext2D, state: GameState
         ctx.strokeStyle = '#1e293b';
         ctx.lineWidth = 1;
         ctx.globalAlpha = 0.25;
+        // Defensive Reset
+        ctx.shadowBlur = 0;
+        ctx.shadowColor = 'transparent';
 
         for (let i = startX; i <= endX; i++) {
             for (let j = startY; j <= endY; j++) {
@@ -61,6 +64,11 @@ export function renderMapBoundaries(ctx: CanvasRenderingContext2D) {
     ctx.globalAlpha = 0.3;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
+
+    // Defensive Reset: Ensure no leaked shadows cause "blinking"
+    ctx.shadowBlur = 0;
+    ctx.shadowColor = 'transparent';
+    ctx.filter = 'none';
 
     ARENA_CENTERS.forEach(c => {
         ctx.beginPath();

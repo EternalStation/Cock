@@ -9,7 +9,7 @@ export const createInitialPlayer = (selectedClass?: PlayerClass): Player => {
         dust: 0,
         hp: { base: 150, flat: 0, mult: 0 },
         curHp: 150,
-        dmg: { base: 50, flat: 0, mult: 0 },
+        dmg: { base: 60, flat: 0, mult: 0 },
         atk: { base: 330, flat: 0, mult: 0 },
         reg: { base: 1, flat: 0, mult: 0 },
         arm: { base: 0, flat: 0, mult: 0 },
@@ -97,6 +97,7 @@ export const createInitialGameState = (): GameState => ({
     spatialGrid: new SpatialGrid(250), // 250px cells
     activeEvent: null,
     nextEventCheckTime: 60, // First check at 1 minute
+    directorState: { necroticCycle: -1, legionCycle: -1 },
 
     // Portal / Arena Defaults
     currentArena: 0,
@@ -109,13 +110,14 @@ export const createInitialGameState = (): GameState => ({
     // Inventory Defaults
     meteoriteDust: 0,
     meteorites: [],
-    inventory: Array(78).fill(null), // 78 slots for 6x13 Grid
+    inventory: Array(300).fill(null), // 300 slots for extended storage
 
     // Module Menu Defaults
     showModuleMenu: false,
     showStats: false,
     showSettings: false,
     showLegendarySelection: false,
+    showBossSkillDetail: false,
     legendaryOptions: null,
     pendingLegendaryHex: null,
     upgradingHexIndex: null,

@@ -2,24 +2,10 @@ import type { GameState, Enemy } from '../types';
 import { ARENA_CENTERS, ARENA_RADIUS } from '../MapLogic';
 import { spawnParticles } from '../ParticleLogic';
 import { spawnEnemyBullet } from '../ProjectileLogic';
-import { SHAPE_DEFS } from '../constants';
 
-export function updateNormalCircle(e: Enemy, player: any, dx: number, dy: number, currentSpd: number, pushX: number, pushY: number) {
+export function updateNormalCircle(e: Enemy, dx: number, dy: number, currentSpd: number, pushX: number, pushY: number) {
     if (e.timer && Date.now() < e.timer) return { vx: 0, vy: 0 };
 
-    // Spiral logic if applicable (rarely used for normal circles but present in code)
-    if (e.spiralRadius && e.spiralRadius > 10) {
-        const angleToPlayer = Math.atan2(dy, dx);
-        e.spiralAngle = (e.spiralAngle || 0) + 0.0225;
-        e.spiralRadius -= 1.125;
-        e.rotationPhase = angleToPlayer;
-        const tx = player.x + Math.cos(e.spiralAngle) * e.spiralRadius;
-        const ty = player.y + Math.sin(e.spiralAngle) * e.spiralRadius;
-        const vx = tx - e.x;
-        const vy = ty - e.y;
-        if (e.spiralRadius < 20) e.spiralRadius = 0;
-        return { vx, vy };
-    }
 
     const a = Math.atan2(dy, dx);
     const vx = Math.cos(a) * currentSpd + pushX;
@@ -29,10 +15,35 @@ export function updateNormalCircle(e: Enemy, player: any, dx: number, dy: number
 
 export function updateNormalTriangle(e: Enemy, dx: number, dy: number, pushX: number, pushY: number) {
     if (!e.timer) e.timer = Date.now();
-    if (Date.now() - e.lastAttack > 5000) { e.spd = 18; e.lastAttack = Date.now(); }
-    const bSpd = 1.7 * SHAPE_DEFS['triangle'].speedMult;
-    if (e.spd > bSpd) e.spd *= 0.90; else e.spd = bSpd;
+
+    // Dash Trigger Check
+    if (e.dashState !== 1 && Date.now() - (e.lastAttack || 0) > 5000) {
+        e.dashState = 1;
+        e.timer = Date.now() + 200; // 0.2s Dash Duration
+        e.lastAttack = Date.now();
+        e.dashAngle = Math.atan2(dy, dx);
+    }
+
+    // Dashing State
+    if (e.dashState === 1) {
+        if (Date.now() < e.timer) {
+            // Dash Speed: Cover ~250px in 0.2s (approx 12 frames) -> ~21 px/frame
+            const dashSpeed = 22;
+            const angle = e.dashAngle || Math.atan2(dy, dx);
+            const vx = Math.cos(angle) * dashSpeed + pushX;
+            const vy = Math.sin(angle) * dashSpeed + pushY;
+            return { vx, vy };
+        } else {
+            // End Dash
+            e.dashState = 0;
+            e.lastAttack = Date.now(); // Reset cooldown from end of dash? Or start? usually start.
+            // Resetting here means 5s AFTER dash. Previous code was 5s from START.
+            // I'll keep the start time tracking (managed by Trigger Check above), but simple reset here is fine.
+        }
+    }
+
     const a = Math.atan2(dy, dx);
+    // Standard movement
     const vx = Math.cos(a) * e.spd + pushX;
     const vy = Math.sin(a) * e.spd + pushY;
     return { vx, vy };
@@ -84,7 +95,7 @@ export function updateNormalDiamond(e: Enemy, state: GameState, dist: number, dx
 
     // Standard shot (every 6s)
     if (Date.now() - (e.lastAttack || 0) > 6000) {
-        const dmg = Math.floor(20 * (1 + Math.floor(state.gameTime / 300) * 0.5));
+        const dmg = Math.floor(e.maxHp * 0.30); // 30% of max HP
         const bulletColor = e.baseColor || (e.originalPalette ? e.originalPalette[0] : e.palette[0]);
         spawnEnemyBullet(state, e.x, e.y, angleToPlayerD, dmg, bulletColor);
         e.lastAttack = Date.now();
@@ -98,9 +109,7 @@ import { playSfx } from '../AudioLogic';
 
 export function updateNormalPentagon(e: Enemy, state: GameState, dist: number, dx: number, dy: number, currentSpd: number, pushX: number, pushY: number) {
     // Capture original palette for state restoration
-    // Safety: Don't capture if currently in a special state (Red/Green/White) to avoid locking in a status color
-    const isTainted = e.palette[0] === '#EF4444' || e.palette[0] === '#4ade80' || e.palette[0] === '#FFFFFF' || e.palette[0] === '#B91C1C';
-    if (!e.originalPalette && !isTainted) e.originalPalette = e.palette;
+    if (!e.originalPalette) e.originalPalette = e.palette;
 
     const nearestCenter = ARENA_CENTERS.reduce((best, center) => {
         const distToCenter = Math.hypot(e.x - center.x, e.y - center.y);
@@ -110,7 +119,7 @@ export function updateNormalPentagon(e: Enemy, state: GameState, dist: number, d
 
     // Initialize random kiting distance
     if (!e.distGoal) {
-        e.distGoal = 700 + Math.random() * 150; // Random 700-850
+        e.distGoal = 600 + Math.random() * 300; // Random 600-900
     }
 
     const angleToPlayerP = Math.atan2(dy, dx);
@@ -135,86 +144,93 @@ export function updateNormalPentagon(e: Enemy, state: GameState, dist: number, d
     let vx = Math.cos(moveAngle) * currentSpd * speedMult + pushX;
     let vy = Math.sin(moveAngle) * currentSpd * speedMult + pushY;
 
-    // --- DESTRUCTION MODE (Age > 60s) ---
-    const age = state.gameTime - (e.spawnedAt || 0);
-
-    // Check for Living Minions (Used for both modes)
+    // Check for Living Minions
     const myMinions = state.enemies.filter(m => m.parentId === e.id && !m.dead && m.shape === 'minion');
     const orbitingMinions = myMinions.filter(m => m.minionState === 0);
 
+    // --- PROXIMITY-BASED HIVE LOGIC ---
+    const distToPlayer = Math.hypot(state.player.x - e.x, state.player.y - e.y);
+    const hasMinions = myMinions.length > 0;
+
+    // 1. Proximity Aggro Check
+    if (distToPlayer <= 350 && orbitingMinions.length > 0) {
+        orbitingMinions.forEach(m => m.minionState = 1);
+        playSfx('stun-disrupt');
+        e.angryUntil = Date.now() + 2000; // Stay red for 2 seconds
+    }
+
+    // 2. Visual Feedback
+    const isAngry = !!(e.angryUntil && Date.now() < e.angryUntil);
+    const isWarning = !!(distToPlayer <= 500 && hasMinions && !isAngry);
+
+    if (isAngry) {
+        // Full Red (Aggro State)
+        e.palette = ['#EF4444', '#B91C1C', '#7F1D1D'];
+        e.eraPalette = undefined; // OVERRIDE ERA PALETTE
+        vx += (Math.random() - 0.5) * 8; // Extra violent shake
+        vy += (Math.random() - 0.5) * 8;
+    } else if (isWarning) {
+        // High-Visibility Warning (Blink Red)
+        const isBlink = Math.floor(Date.now() / 150) % 2 === 0;
+        e.palette = isBlink ? ['#EF4444', '#F87171', '#7F1D1D'] : (e.originalPalette || e.palette);
+        if (isBlink) e.eraPalette = undefined; // OVERRIDE ERA PALETTE DURING BLINK
+
+        vx += (Math.random() - 0.5) * 6; // Increased shake
+        vy += (Math.random() - 0.5) * 6;
+    }
+
+    // --- AGE-BASED DESTRUCTION SEQUENCE (Age > 60s) ---
+    const age = state.gameTime - (e.spawnedAt || 0);
     if (age > 60) {
-        // --- DESTRUCTION SEQUENCE ---
         if (orbitingMinions.length > 0) {
-            // PHASE 1: RELEASE PAIN (One by one every 3s)
+            // RELEASE ONE BY ONE
             if (!e.lastAttack) e.lastAttack = Date.now();
-            if (Date.now() - e.lastAttack > 3000) {
+            if (Date.now() - e.lastAttack > 2000) {
                 const victim = orbitingMinions[0];
-                victim.minionState = 1; // Launch
-                playSfx('stun-disrupt'); // Release sound
+                victim.minionState = 1;
+                playSfx('stun-disrupt');
                 e.lastAttack = Date.now();
             }
+            // Pulsate White/Red while dying (Only if NOT in aggro red state)
+            if (!isAngry) {
+                const isBlink = Math.floor(Date.now() / 100) % 2 === 0;
+                e.palette = isBlink ? ['#FFFFFF', '#EF4444', '#7F1D1D'] : (e.originalPalette || e.palette);
+                if (isBlink) e.eraPalette = undefined; // OVERRIDE ERA PALETTE
+            }
         } else {
-            // PHASE 2: IMMINENT EXPLOSION (5s Countdown)
-            const dTimer = (e as any).destructTimer;
-            if (!dTimer) {
-                (e as any).destructTimer = Date.now() + 5000;
-                playSfx('warning');
-            }
-
-
-
-            if (Date.now() > dTimer) {
-                // PHASE 3: KABOOM
-                // No AoE damage as per request - just suicide and particles
-                e.dead = true;
-                e.hp = 0;
-                spawnParticles(state, e.x, e.y, '#EF4444', 30);
-                playSfx('rare-kill');
-            }
+            // DIE
+            e.dead = true; e.hp = 0;
+            spawnParticles(state, e.x, e.y, '#EF4444', 30);
+            playSfx('rare-kill');
         }
-    } else {
-        // --- NORMAL SPAWNING & GUARDIAN LOGIC ---
-        if (!e.summonState) e.summonState = 0; // 0: Idle, 1: Charging (Green Blink)
-        const hasMinions = myMinions.length > 0;
+        return { vx, vy };
+    }
 
-        // Calculate Explicit Distance to Player for Guardian Trigger
-        const distToPlayer = Math.hypot(state.player.x - e.x, state.player.y - e.y);
+    // Normal State / Spawning Logic (Only if age <= 60 and not in aggro)
+    if (!isAngry && !isWarning) {
+        // Normal State / Spawning Logic
+        if (e.summonState === 1) {
+            // Charging Blink (Green)
+            const isBlink = Math.floor(Date.now() / 150) % 2 === 0;
+            e.palette = isBlink ? ['#4ade80', '#22c55e', '#166534'] : (e.originalPalette || e.palette);
+            if (isBlink) e.eraPalette = undefined; // OVERRIDE ERA PALETTE
 
-        // Guardian Mode: Player close + Has Minions -> Turn RED and Trigger Minions
-        if (distToPlayer <= 550 && hasMinions) {
-
-
-            // Shake Effect (Vibration)
-            vx += (Math.random() - 0.5) * 4;
-            vy += (Math.random() - 0.5) * 4;
+            if (Date.now() > (e.timer || 0)) {
+                spawnMinion(state, e, false, 3);
+                e.lastAttack = Date.now();
+                e.summonState = 0;
+                if (e.originalPalette) e.palette = e.originalPalette;
+            }
         } else {
-            // Normal State / Charging State Handling
-
-            if (e.summonState === 1) {
-
-
-                if (Date.now() > (e.timer || 0)) {
-                    // FINISH CHARGING -> SPAWN
-                    spawnMinion(state, e, false, 3);
-
-                    e.lastAttack = Date.now();
-                    e.summonState = 0;
-                    if (e.originalPalette) e.palette = e.originalPalette;
-                }
-
-            } else {
-                // IDLE STATE
-
-
-                // Check Spawn Timer (Limit to 9 Minions)
-                const spawnInterval = 15000;
-                if (!e.lastAttack) e.lastAttack = Date.now();
-                if (Date.now() - e.lastAttack > spawnInterval && myMinions.length < 9) {
-                    // Start Charging
-                    e.summonState = 1;
-                    e.timer = Date.now() + 3000;
-                    playSfx('warning');
-                }
+            if (e.originalPalette) {
+                e.palette = e.originalPalette;
+            }
+            const spawnInterval = 20000;
+            if (!e.lastAttack) e.lastAttack = Date.now();
+            if (Date.now() - e.lastAttack > spawnInterval && myMinions.length < 9) {
+                e.summonState = 1;
+                e.timer = Date.now() + 3000;
+                playSfx('warning');
             }
         }
     }

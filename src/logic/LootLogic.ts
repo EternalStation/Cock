@@ -39,31 +39,31 @@ const PERK_POOLS: Record<number, PerkDef[]> = {
         { id: 'neighbor_bro_def', description: 'Efficiency per neighboring BROKEN meteorite from DEF arena', min: 4, max: 10 }
     ],
     5: [
-        { id: 'neighbor_leg_any', description: 'Efficiency per neighboring Legendary Upgrade', min: 6, max: 15 }
+        { id: 'neighbor_leg_any', description: 'Efficiency per (Any) neighboring Legendary Hex', min: 6, max: 15 }
     ],
     6: [
-        { id: 'neighbor_leg_eco', description: 'Efficiency per neighboring ECO Legendary Upgrade', min: 8, max: 20 },
-        { id: 'neighbor_leg_com', description: 'Efficiency per neighboring COM Legendary Upgrade', min: 8, max: 20 },
-        { id: 'neighbor_leg_def', description: 'Efficiency per neighboring DEF Legendary Upgrade', min: 8, max: 20 }
+        { id: 'neighbor_leg_eco', description: 'Efficiency per neighboring ECO Legendary Hex', min: 8, max: 20 },
+        { id: 'neighbor_leg_com', description: 'Efficiency per neighboring COM Legendary Hex', min: 8, max: 20 },
+        { id: 'neighbor_leg_def', description: 'Efficiency per neighboring DEF Legendary Hex', min: 8, max: 20 }
     ],
     7: [
-        { id: 'pair_eco_eco', description: 'Efficiency per connecting ECO-ECO Legendary pair', min: 10, max: 25 },
-        { id: 'pair_eco_com', description: 'Efficiency per connecting ECO-COM Legendary pair', min: 10, max: 25 },
-        { id: 'pair_eco_def', description: 'Efficiency per connecting ECO-DEF Legendary pair', min: 10, max: 25 },
-        { id: 'pair_com_com', description: 'Efficiency per connecting COM-COM Legendary pair', min: 10, max: 25 },
-        { id: 'pair_com_def', description: 'Efficiency per connecting COM-DEF Legendary pair', min: 10, max: 25 },
-        { id: 'pair_def_def', description: 'Efficiency per connecting DEF-DEF Legendary pair', min: 10, max: 25 }
+        { id: 'pair_eco_eco', description: 'Efficiency per connecting ECO-ECO Legendary Hex pair', min: 10, max: 25 },
+        { id: 'pair_eco_com', description: 'Efficiency per connecting ECO-COM Legendary Hex pair', min: 10, max: 25 },
+        { id: 'pair_eco_def', description: 'Efficiency per connecting ECO-DEF Legendary Hex pair', min: 10, max: 25 },
+        { id: 'pair_com_com', description: 'Efficiency per connecting COM-COM Legendary Hex pair', min: 10, max: 25 },
+        { id: 'pair_com_def', description: 'Efficiency per connecting COM-DEF Legendary Hex pair', min: 10, max: 25 },
+        { id: 'pair_def_def', description: 'Efficiency per connecting DEF-DEF Legendary Hex pair', min: 10, max: 25 }
     ],
     8: [
-        { id: 'pair_eco_eco_lvl', description: 'Efficiency per connecting ECO-ECO Legendary pair of same level', min: 12, max: 30 },
-        { id: 'pair_eco_com_lvl', description: 'Efficiency per connecting ECO-COM Legendary pair of same level', min: 12, max: 30 },
-        { id: 'pair_eco_def_lvl', description: 'Efficiency per connecting ECO-DEF Legendary pair of same level', min: 12, max: 30 },
-        { id: 'pair_com_com_lvl', description: 'Efficiency per connecting COM-COM Legendary pair of same level', min: 12, max: 30 },
-        { id: 'pair_com_def_lvl', description: 'Efficiency per connecting COM-DEF Legendary pair of same level', min: 12, max: 30 },
-        { id: 'pair_def_def_lvl', description: 'Efficiency per connecting DEF-DEF Legendary pair of same level', min: 12, max: 30 }
+        { id: 'pair_eco_eco_lvl', description: 'Efficiency per connecting ECO-ECO Legendary Hex pair of same level', min: 12, max: 30 },
+        { id: 'pair_eco_com_lvl', description: 'Efficiency per connecting ECO-COM Legendary Hex pair of same level', min: 12, max: 30 },
+        { id: 'pair_eco_def_lvl', description: 'Efficiency per connecting ECO-DEF Legendary Hex pair of same level', min: 12, max: 30 },
+        { id: 'pair_com_com_lvl', description: 'Efficiency per connecting COM-COM Legendary Hex pair of same level', min: 12, max: 30 },
+        { id: 'pair_com_def_lvl', description: 'Efficiency per connecting COM-DEF Legendary Hex pair of same level', min: 12, max: 30 },
+        { id: 'pair_def_def_lvl', description: 'Efficiency per connecting DEF-DEF Legendary Hex pair of same level', min: 12, max: 30 }
     ],
     9: [
-        { id: 'matrix_same_type_rarity', description: 'Efficiency per same type & rarity meteorite in matrix', min: 5, max: 20 }
+        { id: 'matrix_same_type_rarity', description: 'Efficiency per neighb. meteorite w/ same Type, Rarity & Arena', min: 5, max: 20 }
     ]
 };
 

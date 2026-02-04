@@ -5,7 +5,7 @@ export const GAME_CONFIG = {
     // --- PLAYER ---
     PLAYER: {
         BASE_SPEED: 5.5, // Derived from PlayerLogic (implicit) but good to explicit if needed
-        HITBOX_RADIUS: 56,
+        HITBOX_RADIUS: 64,
         WALL_BOUNCE_SPEED: 37.5,
         WALL_DAMAGE_PERCENT: 0.10, // 10% max HP
         ARMOR_CONSTANT: 171, // Precisely tuned: ~35% reduction at 100 armor, caps at 95%
@@ -15,7 +15,7 @@ export const GAME_CONFIG = {
 
     // --- ENEMIES ---
     ENEMY: {
-        BASE_SPAWN_RATE: 1.6,
+        BASE_SPAWN_RATE: 1.5,
         SPAWN_RATE_PER_MINUTE: 0.1,
         BOSS_SPAWN_INTERVAL: 120, // Seconds
 

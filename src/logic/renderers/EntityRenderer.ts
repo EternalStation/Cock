@@ -1,4 +1,5 @@
 import { PLAYER_CLASSES } from '../classes';
+import { PALETTES } from '../constants';
 import type { GameState, Enemy } from '../types';
 
 export function renderPlayer(ctx: CanvasRenderingContext2D, state: GameState, meteoriteImages: Record<string, HTMLImageElement>) {
@@ -7,7 +8,7 @@ export function renderPlayer(ctx: CanvasRenderingContext2D, state: GameState, me
     ctx.translate(player.x, player.y);
 
 
-    const cellSize = 15.7;
+    const cellSize = 18.1;
 
     const drawHexagon = (x: number, y: number, r: number) => {
         ctx.beginPath();
@@ -58,7 +59,7 @@ export function renderPlayer(ctx: CanvasRenderingContext2D, state: GameState, me
 
                 const img = meteoriteImages[imgKey];
                 if (img && img.complete) {
-                    const iconSize = cellSize * 1.8; // Increased from 1.4 to 1.8
+                    const iconSize = cellSize * 2.1; // Increased from 1.8 to 2.1
                     ctx.save();
                     ctx.globalAlpha = 0.8 * Math.min(1, ease * 2);
                     ctx.drawImage(img, -iconSize / 2, -iconSize / 2, iconSize, iconSize);
@@ -87,7 +88,7 @@ export function renderPlayer(ctx: CanvasRenderingContext2D, state: GameState, me
                 if (iconName) {
                     const img = meteoriteImages[iconName];
                     if (img && img.complete) {
-                        const iconSize = cellSize * 1.9;
+                        const iconSize = cellSize * 2.2; // Increased from 1.9 to 2.2
                         ctx.save();
                         ctx.globalAlpha = 0.7 * Math.min(1, ease * 2);
                         ctx.drawImage(img, cx - iconSize / 2, cy - iconSize / 2, iconSize, iconSize);
@@ -113,7 +114,7 @@ export function renderPlayer(ctx: CanvasRenderingContext2D, state: GameState, me
 
             const img = meteoriteImages[imgKey];
             if (img && img.complete) {
-                const iconSize = cellSize * 1.8; // Increased from 1.4 to 1.8
+                const iconSize = cellSize * 2.1; // Increased from 1.8 to 2.1
                 ctx.save();
                 ctx.globalAlpha = 0.8;
                 ctx.drawImage(img, -iconSize / 2, -iconSize / 2, iconSize, iconSize);
@@ -124,27 +125,66 @@ export function renderPlayer(ctx: CanvasRenderingContext2D, state: GameState, me
         const cellDistance = cellSize * Math.sqrt(3);
         const hexSockets = state.moduleSockets.hexagons;
         for (let i = 0; i < 6; i++) {
+            ctx.save(); // STRICT ISOLATION START
+
             const angle = (Math.PI / 3) * i; // Match UI placement (0, 60, 120...)
             const cx = cellDistance * Math.cos(angle);
             const cy = cellDistance * Math.sin(angle);
-            drawHexagon(cx, cy, cellSize);
+
+            // Strict reset of styles
+            ctx.shadowColor = 'transparent';
+            ctx.shadowBlur = 0;
+            ctx.setLineDash([]);
+            ctx.globalAlpha = 1.0;
+            ctx.globalCompositeOperation = 'source-over';
+
+            ctx.strokeStyle = themeColor;
+            ctx.fillStyle = '#020617';
+            ctx.lineWidth = 2.5;
+
+            // Draw Base Hexagon (Fill Only)
+            ctx.beginPath();
+            for (let j = 0; j < 6; j++) {
+                const ang = (Math.PI / 3) * j - Math.PI / 2;
+                const px = cx + cellSize * Math.cos(ang);
+                const py = cy + cellSize * Math.sin(ang);
+                if (j === 0) ctx.moveTo(px, py);
+                else ctx.lineTo(px, py);
+            }
+            ctx.closePath();
+            ctx.fillStyle = '#020617';
+            ctx.fill();
 
             // Draw Legendary Icon if socketed
             const hex = hexSockets[i];
             if (hex) {
-                // Extract filename from customIcon URL: e.g. "/assets/hexes/EcoDMG.png" -> "EcoDMG"
                 const iconName = hex.customIcon?.split('/').pop()?.split('.')[0];
                 if (iconName) {
                     const img = meteoriteImages[iconName];
                     if (img && img.complete) {
-                        const iconSize = cellSize * 1.9;
-                        ctx.save();
-                        ctx.globalAlpha = 0.7;
+                        const iconSize = cellSize * 2.0; // Increased from 1.7 to 2.0
+                        ctx.globalAlpha = 0.8;
                         ctx.drawImage(img, cx - iconSize / 2, cy - iconSize / 2, iconSize, iconSize);
-                        ctx.restore();
                     }
                 }
             }
+
+            // Draw Hexagon Border (Stroke Only) - Drawn LAST to overlap icon
+            ctx.beginPath();
+            for (let j = 0; j < 6; j++) {
+                const ang = (Math.PI / 3) * j - Math.PI / 2;
+                const px = cx + cellSize * Math.cos(ang);
+                const py = cy + cellSize * Math.sin(ang);
+                if (j === 0) ctx.moveTo(px, py);
+                else ctx.lineTo(px, py);
+            }
+            ctx.closePath();
+            ctx.strokeStyle = themeColor;
+            ctx.lineWidth = 2.5;
+            ctx.stroke();
+
+
+            ctx.restore(); // STRICT ISOLATION END
         }
     }
 
@@ -192,16 +232,127 @@ export function renderEnemies(ctx: CanvasRenderingContext2D, state: GameState, m
             const host = mergeHosts.get(e.mergeId);
             if (host) {
                 ctx.save();
-                ctx.strokeStyle = '#FFFFFF';
-                ctx.lineWidth = 2;
-                ctx.globalAlpha = 0.5 + Math.sin(state.gameTime * 20) * 0.5;
-                ctx.setLineDash([10, 10]);
+                ctx.strokeStyle = '#FFFFFF'; // White dashed line
+                ctx.lineWidth = 1.5;
+                ctx.globalAlpha = 0.6;
+                ctx.setLineDash([8, 8]); // Distinct dash pattern
                 ctx.beginPath();
                 ctx.moveTo(e.x, e.y);
                 ctx.lineTo(host.x, host.y);
                 ctx.stroke();
                 ctx.restore();
             }
+        }
+    });
+
+    // --- LEVEL 2 BOSS VISUALS (Underlay - Lines etc) ---
+    enemies.forEach(e => {
+        if (!e.boss || e.dead) return;
+
+        // PENTAGON SOUL LINK (Snake Lines)
+        if (e.shape === 'pentagon' && e.soulLinkTargets && e.soulLinkTargets.length > 0) {
+            // Determine Color based on Spawn Time (Era)
+            // 0-15: Green, 15-30: Blue, 30-45: Purple, 45-60: Orange -> Red
+            const minutes = (e.spawnedAt || state.gameTime) / 60;
+            const eraIndex = Math.floor(minutes / 15) % PALETTES.length;
+            const linkColor = PALETTES[eraIndex].colors[0]; // Brightest color
+
+            ctx.save();
+            ctx.strokeStyle = linkColor;
+            ctx.lineWidth = 2;
+            ctx.shadowColor = linkColor;
+            ctx.shadowBlur = 10;
+            ctx.lineCap = 'round';
+
+            const time = state.gameTime;
+
+            e.soulLinkTargets.forEach((targetId, i) => {
+                const target = enemies.find(t => t.id === targetId && !t.dead);
+                if (target) {
+                    // Draw Snake Line
+                    ctx.beginPath();
+                    ctx.moveTo(e.x, e.y);
+
+                    const angle = Math.atan2(target.y - e.y, target.x - e.x);
+
+                    // Bezier Curve with sine wave offset
+                    const midX = (e.x + target.x) / 2;
+                    const midY = (e.y + target.y) / 2;
+
+                    // Animate the curve "snaking"
+                    const offset = Math.sin(time * 10 + i) * 30;
+                    // Perpendicular vector
+                    const perpX = Math.cos(angle + Math.PI / 2) * offset;
+                    const perpY = Math.sin(angle + Math.PI / 2) * offset;
+
+                    ctx.quadraticCurveTo(midX + perpX, midY + perpY, target.x, target.y);
+                    ctx.stroke();
+                }
+            });
+            ctx.restore();
+        }
+
+        // CIRCLE DASH INDICATOR (Laser Sight)
+        if (e.shape === 'circle' && e.dashState === 1 && e.dashLockX && e.dashLockY) {
+            ctx.save();
+            ctx.strokeStyle = '#EF4444';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([10, 10]); // Dashed aim line
+            ctx.globalAlpha = 0.7;
+            ctx.beginPath();
+            ctx.moveTo(e.x, e.y);
+            ctx.lineTo(e.dashLockX, e.dashLockY);
+            ctx.stroke();
+
+            // Draw Target Reticle
+            ctx.translate(e.dashLockX, e.dashLockY);
+            ctx.strokeStyle = '#EF4444';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([]);
+            ctx.beginPath();
+            ctx.arc(0, 0, 20, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(-30, 0); ctx.lineTo(30, 0);
+            ctx.moveTo(0, -30); ctx.lineTo(0, 30);
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        // DIAMOND BEAM CHARGE (Pre-Fire)
+        if (e.shape === 'diamond' && e.beamState === 1 && e.beamX && e.beamY) {
+            ctx.save();
+            const ang = e.beamAngle || Math.atan2(e.beamY - e.y, e.beamX - e.x);
+            const isLocked = (e.beamTimer || 0) > 30;
+
+            // Thin guide line
+            ctx.strokeStyle = e.palette[1];
+            ctx.globalAlpha = isLocked ? 0.8 : 0.3; // Much brighter when locked
+            ctx.lineWidth = isLocked ? 3 : 1; // Thicker when locked
+            ctx.beginPath();
+            ctx.moveTo(e.x, e.y);
+            ctx.lineTo(e.x + Math.cos(ang) * 3000, e.y + Math.sin(ang) * 3000);
+            ctx.stroke();
+
+            // Charge buildup at source
+            const chargeProgress = (e.beamTimer || 0) / 60;
+            const chargeSize = chargeProgress * 40;
+            ctx.fillStyle = e.palette[1];
+            ctx.globalAlpha = (0.5 + Math.random() * 0.5) * (isLocked ? 1.0 : 0.7);
+            ctx.beginPath();
+            ctx.arc(e.x, e.y, chargeSize, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Internal Pulse
+            if (isLocked) {
+                ctx.fillStyle = '#FFFFFF';
+                ctx.globalAlpha = 0.3 + Math.sin(Date.now() / 50) * 0.2;
+                ctx.beginPath();
+                ctx.arc(e.x, e.y, chargeSize * 0.6, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            ctx.restore();
         }
     });
 
@@ -410,8 +561,23 @@ export function renderEnemies(ctx: CanvasRenderingContext2D, state: GameState, m
                 const p1 = wp(0, -size); const p2 = wp(size * 0.866, size * 0.5); const p3 = wp(-size * 0.866, size * 0.5);
                 ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.lineTo(p3.x, p3.y); ctx.closePath();
             } else if (e.shape === 'square') {
-                const p1 = wp(-size, -size); const p2 = wp(size, -size); const p3 = wp(size, size); const p4 = wp(-size, size);
-                ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.lineTo(p3.x, p3.y); ctx.lineTo(p4.x, p4.y); ctx.closePath();
+                if (e.isElite && !isCore) {
+                    // Elite Square (Thorns): Draw Spiked Corners
+                    const spike = size * 0.4;
+                    const p1 = wp(-size, -size); const p1a = wp(0, -size - spike); // Top Spike
+                    const p2 = wp(size, -size); const p2a = wp(size + spike, 0); // Right Spike
+                    const p3 = wp(size, size); const p3a = wp(0, size + spike); // Bottom Spike
+                    const p4 = wp(-size, size); const p4a = wp(-size - spike, 0); // Left Spike
+
+                    ctx.moveTo(p1.x, p1.y); ctx.lineTo(p1a.x, p1a.y);
+                    ctx.lineTo(p2.x, p2.y); ctx.lineTo(p2a.x, p2a.y);
+                    ctx.lineTo(p3.x, p3.y); ctx.lineTo(p3a.x, p3a.y);
+                    ctx.lineTo(p4.x, p4.y); ctx.lineTo(p4a.x, p4a.y);
+                    ctx.closePath();
+                } else {
+                    const p1 = wp(-size, -size); const p2 = wp(size, -size); const p3 = wp(size, size); const p4 = wp(-size, size);
+                    ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.lineTo(p3.x, p3.y); ctx.lineTo(p4.x, p4.y); ctx.closePath();
+                }
             } else if (e.shape === 'diamond') {
                 const p1 = wp(0, -size * 1.3); const p2 = wp(size, 0); const p3 = wp(0, size * 1.3); const p4 = wp(-size, 0);
                 ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.lineTo(p3.x, p3.y); ctx.lineTo(p4.x, p4.y); ctx.closePath();
@@ -580,6 +746,81 @@ export function renderEnemies(ctx: CanvasRenderingContext2D, state: GameState, m
             ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
             ctx.lineWidth = 0.5;
             ctx.strokeRect(-barWidth / 2, yOffset, barWidth, barHeight);
+
+            ctx.restore();
+        }
+
+        // TRIANGLE BERSERK AURA (Over everything for visibility)
+        if (e.shape === 'triangle' && e.berserkState) {
+            ctx.save();
+            // Rotation removed to allow spin
+            const auraSize = e.size * 2.0;
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = '#F59E0B'; // Amber/Gold
+            ctx.strokeStyle = '#F59E0B';
+            ctx.lineWidth = 3;
+            ctx.globalAlpha = 0.6 + Math.sin(state.gameTime * 20) * 0.4; // Rapid flicker
+
+            ctx.beginPath();
+            // Jagged Aura
+            for (let i = 0; i < 3; i++) {
+                // rough triangle
+                const ang = i * (Math.PI * 2 / 3) - Math.PI / 2;
+                const ax = Math.cos(ang) * auraSize;
+                const ay = Math.sin(ang) * auraSize;
+                if (i === 0) ctx.moveTo(ax, ay); else ctx.lineTo(ax, ay);
+            }
+            ctx.closePath();
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        // DIAMOND HYPER BEAM (FIRE STATE)
+        if (e.shape === 'diamond' && e.beamState === 2 && e.beamX && e.beamY) {
+            ctx.save();
+            // Global coords, so need to untranslate or just calculate correctly
+            // Currently inside `translate(e.x, e.y)`
+
+            const dx = e.beamX - e.x;
+            const dy = e.beamY - e.y;
+            const dist = 3000; // Screen length
+            const angle = Math.atan2(dy, dx);
+
+            ctx.rotate(angle - (e.rotationPhase || 0)); // Align with beam
+            // e.rotationPhase accumulates, so `rotate(-rot)` creates 0 aligned context?
+            // Actually `angle` is absolute. Current context is rotated by `e.rotationPhase`?
+            // Wait, line 250: `ctx.translate(e.x, e.y);`. Line 338: `if (e.rotationPhase) ctx.rotate(e.rotationPhase);`.
+            // The Elite code block (where this snippet matches) is INSIDE the main loop after rotation?
+            // checking context...
+            // YES. 
+            // We should use `ctx.save()` before rotation if possible, but we are inserting at the end of the loop where rotation might be active.
+            // Let's reset rotation by saving/restoring strictly or counter-rotating manually.
+            // Actually, inserting at the end of the `enemies.forEach` loop (Line 840ish) is safer for "Overlays".
+            // But here we are modifying the "Elite HP Bar" section which is inside the per-enemy loop.
+            // The per-enemy loop DOES apply rotation (line 338).
+            // So we need to cancel it out to draw a beam to a world coordinate.
+            // `ctx.rotate(-(e.rotationPhase || 0));`
+
+            // Draw Beam
+            const beamWidth = 40 + Math.sin(state.gameTime * 50) * 10;
+
+            // 1. Ultimate Glow Base (Broad)
+            ctx.fillStyle = e.palette[1];
+            ctx.globalAlpha = 0.3;
+            ctx.fillRect(0, -beamWidth / 2, dist, beamWidth);
+
+            // 2. Searing Core (Intense)
+            ctx.fillStyle = '#FFFFFF';
+            ctx.shadowColor = e.palette[1];
+            ctx.shadowBlur = 40;
+            ctx.globalAlpha = 0.8;
+            ctx.fillRect(0, -beamWidth / 6, dist, beamWidth / 3);
+
+            // 3. Ultra-Bright Center Line (Extreme Opacity)
+            ctx.fillStyle = '#FFFFFF';
+            ctx.globalAlpha = 1.0;
+            ctx.shadowBlur = 10;
+            ctx.fillRect(0, -1.5, dist, 3); // 3px sharp center line
 
             ctx.restore();
         }
@@ -763,6 +1004,10 @@ export function renderMeteorites(ctx: CanvasRenderingContext2D, state: GameState
 }
 
 export function renderBossIndicator(ctx: CanvasRenderingContext2D, state: GameState, width: number, height: number, camera: { x: number, y: number }, scaleFactor: number) {
+    if (state.bossPresence > 0.01) {
+        // Red vignettte or indicators?
+        // Logic handled in GameRenderer.ts main overlay
+    }
     const dpr = window.devicePixelRatio || 1;
     const zoom = scaleFactor * 0.58 * dpr;
     state.enemies.filter(e => e.boss && !e.dead).forEach(e => {

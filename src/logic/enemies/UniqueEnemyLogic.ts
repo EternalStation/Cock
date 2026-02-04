@@ -17,8 +17,8 @@ export function spawnMinion(state: GameState, parent: Enemy, isElite: boolean, c
             shape: 'minion', // Logic identifier
             x: mx, y: my,
             size: 15,
-            hp: Math.ceil(isElite ? parent.maxHp * 0.25 : parent.maxHp * 0.15),
-            maxHp: Math.ceil(isElite ? parent.maxHp * 0.25 : parent.maxHp * 0.15),
+            hp: Math.ceil(isElite ? parent.maxHp * 0.15 : parent.maxHp * 0.15),
+            maxHp: Math.ceil(isElite ? parent.maxHp * 0.15 : parent.maxHp * 0.15),
             spd: parent.spd * 1.4,
             boss: false,
             bossType: 0,

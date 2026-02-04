@@ -1,5 +1,5 @@
 import type { GameState, Enemy } from './types';
-import { isInMap, ARENA_CENTERS } from './MapLogic';
+import { isInMap, ARENA_CENTERS, getHexDistToWall } from './MapLogic';
 import { playSfx } from './AudioLogic';
 import { spawnParticles, spawnFloatingNumber } from './ParticleLogic';
 import { handleEnemyDeath } from './DeathLogic';
@@ -159,6 +159,7 @@ export function updateEnemies(state: GameState, onEvent?: (event: string, data?:
         // Sync visual progression to current game time
         const params = getProgressionParams(gameTime);
         e.fluxState = params.fluxState;
+
         if (!e.isNeutral && !e.isRare && !e.isNecroticZombie) {
             e.eraPalette = params.eraPalette.colors;
         }
@@ -187,10 +188,10 @@ export function updateEnemies(state: GameState, onEvent?: (event: string, data?:
         e.takenDamageMultiplier = 1.0;
 
         // --- CLASS MODIFIER: Hive-Mother Nanite DOT ---
-        if (e.infectedUntil && state.gameTime * 1000 < e.infectedUntil) {
-            const dotFreq = 60; // Every 60 frames (1 time per second at 60fps)
+        if (e.isInfected) {
+            const dotFreq = 30; // Every 30 frames (2 times per second at 60fps)
             if (state.frameCount % dotFreq === 0) {
-                const dmgPerTick = e.infectionDmg || 0;
+                const dmgPerTick = (e.infectionDmg || 0) / 2; // Split damage over 2 ticks per second
                 if (dmgPerTick > 0) {
                     // Accumulate damage to handle sub-integer values correctly
                     e.infectionAccumulator = (e.infectionAccumulator || 0) + dmgPerTick;
@@ -204,30 +205,56 @@ export function updateEnemies(state: GameState, onEvent?: (event: string, data?:
 
                             const themeColor = getPlayerThemeColor(state);
                             spawnFloatingNumber(state, e.x, e.y, actualDmg.toString(), themeColor, false);
-                            spawnParticles(state, e.x, e.y, themeColor, 2);
+                            spawnParticles(state, e.x, e.y, themeColor, 1); // Reduced count for higher frequency
                         }
                     }
                 }
             }
         }
 
-        // Wall collision - instant death if out of bounds
+        // Wall collision - Bosses survive with 10% Max HP penalty
         if (!isInMap(e.x, e.y)) {
-            e.dead = true;
-            e.hp = 0;
-            spawnParticles(state, e.x, e.y, e.palette[0], 20);
-            return;
+            if (e.boss) {
+                const now = state.gameTime;
+                if (!e.lastWallHit || now - e.lastWallHit > 1.0) {
+                    const wallDmg = e.maxHp * 0.1;
+                    e.hp -= wallDmg;
+                    spawnFloatingNumber(state, e.x, e.y, Math.round(wallDmg).toString(), '#ef4444', true);
+                    spawnParticles(state, e.x, e.y, e.eraPalette?.[0] || e.palette[0], 10);
+                    playSfx('impact');
+                    e.lastWallHit = now;
+
+                    const { dist, normal } = getHexDistToWall(e.x, e.y);
+                    // Strong bounce back (150px away from wall to clear boundary definitively)
+                    e.x += normal.x * (Math.abs(dist) + 150);
+                    e.y += normal.y * (Math.abs(dist) + 150);
+
+                    // Add lingering knockback velocity
+                    e.knockback.x = normal.x * 20;
+                    e.knockback.y = normal.y * 20;
+                }
+
+                if (e.hp <= 0 && !e.dead) {
+                    handleEnemyDeath(state, e, onEvent);
+                    return;
+                }
+            } else {
+                e.dead = true;
+                e.hp = 0;
+                spawnParticles(state, e.x, e.y, e.eraPalette?.[0] || e.palette[0], 20);
+                return;
+            }
         }
 
-        // Knockback handling
+        // Knockback handling - Decay faster for snappier boss bounces
         if (e.knockback && (e.knockback.x !== 0 || e.knockback.y !== 0)) {
             e.x += e.knockback.x;
             e.y += e.knockback.y;
-            e.knockback.x *= 0.9;
-            e.knockback.y *= 0.9;
+            e.knockback.x *= 0.7; // Snappier decay
+            e.knockback.y *= 0.7;
             if (Math.abs(e.knockback.x) < 0.1) e.knockback.x = 0;
             if (Math.abs(e.knockback.y) < 0.1) e.knockback.y = 0;
-            return;
+            // DO NOT RETURN - let boss/enemy AI continue to process
         }
 
         // Target Determination (Mutual Aggression)
@@ -336,7 +363,7 @@ export function updateEnemies(state: GameState, onEvent?: (event: string, data?:
                 vy: -Math.sin(angle) * currentSpd
             };
         } else if (e.boss) {
-            v = updateBossEnemy(e, currentSpd, dx, dy, pushX, pushY);
+            v = updateBossEnemy(e, currentSpd, dx, dy, pushX, pushY, state, onEvent);
         } else if (e.shape === 'minion') {
             v = updateMinion(e, state, player, dx, dy, 0, 0);
         } else if (e.shape === 'snitch') {
@@ -353,7 +380,7 @@ export function updateEnemies(state: GameState, onEvent?: (event: string, data?:
             }
         } else {
             switch (e.shape) {
-                case 'circle': v = updateNormalCircle(e, player, dx, dy, currentSpd, pushX, pushY); break;
+                case 'circle': v = updateNormalCircle(e, dx, dy, currentSpd, pushX, pushY); break;
                 case 'triangle': v = updateNormalTriangle(e, dx, dy, pushX, pushY); break;
                 case 'square': v = updateNormalSquare(currentSpd, dx, dy, pushX, pushY); break;
                 case 'diamond': v = updateNormalDiamond(e, state, dist, dx, dy, currentSpd, pushX, pushY); break;
@@ -476,7 +503,27 @@ export function updateEnemies(state: GameState, onEvent?: (event: string, data?:
         if (isInMap(nX, nY)) {
             e.x = nX; e.y = nY;
         } else {
-            if (e.shape === 'snitch' && e.rareReal) {
+            if (e.boss) {
+                const now = state.gameTime;
+                if (!e.lastWallHit || now - e.lastWallHit > 1.0) {
+                    const wallDmg = e.maxHp * 0.1;
+                    e.hp -= wallDmg;
+                    spawnFloatingNumber(state, e.x, e.y, Math.round(wallDmg).toString(), '#ef4444', true);
+                    spawnParticles(state, e.x, e.y, e.eraPalette?.[0] || e.palette[0], 10);
+                    playSfx('impact');
+                    e.lastWallHit = now;
+                }
+
+                const { dist, normal } = getHexDistToWall(e.x, e.y);
+                e.x += normal.x * (Math.abs(dist) + 150);
+                e.y += normal.y * (Math.abs(dist) + 150);
+
+                // Add lingering knockback velocity
+                e.knockback.x = normal.x * 20;
+                e.knockback.y = normal.y * 20;
+
+                if (e.hp <= 0 && !e.dead) handleEnemyDeath(state, e, onEvent);
+            } else if (e.shape === 'snitch' && e.rareReal) {
                 const c = ARENA_CENTERS[0];
                 const a = Math.atan2(c.y - e.y, c.x - e.x);
                 e.x += Math.cos(a) * 50; e.y += Math.sin(a) * 50;
@@ -485,8 +532,6 @@ export function updateEnemies(state: GameState, onEvent?: (event: string, data?:
                 if (e.legionId && e.legionLeadId) {
                     const lead = state.enemies.find(m => m.id === e.legionLeadId && !m.dead);
                     if (lead && (lead.legionShield || 0) > 0) {
-                        // Don't kill, but maybe push back to center? 
-                        // For now just don't kill.
                         return;
                     }
                 }

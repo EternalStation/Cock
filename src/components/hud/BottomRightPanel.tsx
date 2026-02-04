@@ -9,10 +9,11 @@ interface BottomRightPanelProps {
     portalState: string;
     dust: number;
     portalError: boolean;
+    portalCost: number;
 }
 
-export const BottomRightPanel: React.FC<BottomRightPanelProps> = ({ onInventoryToggle, unseenMeteorites, fps, portalKey, portalState, dust, portalError }) => {
-    const isPortalUnavailable = portalState !== 'closed' || dust < 5;
+export const BottomRightPanel: React.FC<BottomRightPanelProps> = ({ onInventoryToggle, unseenMeteorites, fps, portalKey, portalState, dust, portalError, portalCost }) => {
+    const isPortalUnavailable = portalState !== 'closed' || dust < portalCost;
 
     return (
         <div style={{
@@ -85,7 +86,7 @@ export const BottomRightPanel: React.FC<BottomRightPanelProps> = ({ onInventoryT
                         ACTIVE
                     </div>
                 )}
-                {(portalError || (portalState === 'closed' && dust < 5)) && (
+                {(portalError || (portalState === 'closed' && dust < portalCost)) && (
                     <div style={{
                         position: 'absolute',
                         top: 2,
@@ -97,7 +98,7 @@ export const BottomRightPanel: React.FC<BottomRightPanelProps> = ({ onInventoryT
                         fontWeight: 900,
                         textShadow: portalError ? '0 0 5px #000' : 'none'
                     }}>
-                        5 DUST
+                        {portalCost} DUST
                     </div>
                 )}
             </div>

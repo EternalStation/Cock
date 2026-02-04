@@ -82,10 +82,17 @@ export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClo
                 const { index, item } = removalCandidate;
                 const newItem = { ...item, isNew: false };
                 onSocketUpdate('diamond', index, null);
-                setMovedItem({ item: newItem, source: 'diamond', index });
+
+                // Find first empty inventory slot
+                const emptySlotIdx = gameState.inventory.indexOf(null);
+                if (emptySlotIdx !== -1) {
+                    onInventoryUpdate(emptySlotIdx, newItem);
+                } else {
+                    // Fallback to drag if inventory is actually full
+                    setMovedItem({ item: newItem, source: 'diamond', index });
+                }
+
                 setRemovalCandidate(null);
-            } else {
-                // Should show error feedback, but button should be disabled anyway
             }
         }
     };
@@ -334,48 +341,72 @@ export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClo
                             background: 'rgba(15, 23, 42, 0.5)',
                             pointerEvents: 'auto'
                         }}>
-                            {/* DUST RESOURCE DISPLAY */}
+                            {/* DUST & EXTRACTION GROUP */}
                             <div style={{
                                 flex: '1',
-                                background: 'linear-gradient(90deg, rgba(15, 23, 42, 0.9) 0%, rgba(30, 41, 59, 0.8) 100%)',
-                                border: '1px solid #475569',
-                                borderLeft: '4px solid #22d3ee',
-                                borderRadius: '4px',
-                                padding: '6px 10px',
-                                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                                boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
-                                minHeight: '36px'
+                                display: 'flex',
+                                alignItems: 'stretch',
+                                gap: '4px'
                             }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    <img src="/assets/Icons/MeteoriteDust.png" alt="Dust" style={{ width: '20px', height: '20px', filter: 'drop-shadow(0 0 5px #22d3ee)' }} />
-                                    <span style={{ fontSize: '10px', color: '#94a3b8', letterSpacing: '1px', fontWeight: 700 }}>DUST:</span>
-                                    <span style={{ fontSize: '18px', fontWeight: '900', color: '#fff', textShadow: '0 0 10px rgba(34, 211, 238, 0.5)' }}>{meteoriteDust}</span>
+                                {/* DUST RESOURCE DISPLAY */}
+                                <div style={{
+                                    flex: '1',
+                                    background: 'linear-gradient(90deg, rgba(15, 23, 42, 0.9) 0%, rgba(30, 41, 59, 0.8) 100%)',
+                                    border: '1px solid #475569',
+                                    borderLeft: '4px solid #22d3ee',
+                                    borderRadius: '4px',
+                                    padding: '6px 10px',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                    boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+                                    minHeight: '36px'
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <img src="/assets/Icons/MeteoriteDust.png" alt="Dust" style={{ width: '20px', height: '20px', filter: 'drop-shadow(0 0 5px #22d3ee)' }} />
+                                        <span style={{ fontSize: '10px', color: '#94a3b8', letterSpacing: '1px', fontWeight: 700 }}>DUST:</span>
+                                        <span style={{ fontSize: '18px', fontWeight: '900', color: '#fff', textShadow: '0 0 10px rgba(34, 211, 238, 0.5)' }}>{meteoriteDust}</span>
+                                    </div>
                                 </div>
+
+                                {/* EXTRACTION BUTTON (Future Level Warp) */}
+                                <button
+                                    onClick={() => {
+                                        if (meteoriteDust >= 5000) {
+                                            alert("EXTRACTION SUCCESSFUL: Warp Drive Engaged. (To be continued in next Sector)");
+                                            onClose();
+                                        }
+                                    }}
+                                    disabled={meteoriteDust < 5000}
+                                    style={{
+                                        flex: '0 0 120px',
+                                        background: meteoriteDust >= 5000
+                                            ? 'linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%)'
+                                            : 'rgba(30, 41, 59, 0.4)',
+                                        border: `1px solid ${meteoriteDust >= 5000 ? '#60a5fa' : '#475569'}`,
+                                        borderRadius: '4px',
+                                        color: meteoriteDust >= 5000 ? '#fff' : '#64748b',
+                                        fontSize: '10px',
+                                        fontWeight: 900,
+                                        letterSpacing: '1.5px',
+                                        cursor: meteoriteDust >= 5000 ? 'pointer' : 'not-allowed',
+                                        transition: 'all 0.3s',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        boxShadow: meteoriteDust >= 5000 ? '0 0 15px rgba(59, 130, 246, 0.4)' : 'none'
+                                    }}
+                                >
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginBottom: '2px' }}>
+                                        <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z" />
+                                        <path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z" />
+                                        <path d="M9 12H4s.55-3.03 2-5c1.62-2.2 5-3 5-3" />
+                                        <path d="M12 15v5s3.03-.55 5-2c2.2-1.62 3-5 3-5" />
+                                    </svg>
+                                    <span style={{ fontSize: '9px', fontWeight: 900 }}>EXTRACTION</span>
+                                    <span style={{ fontSize: '8px', opacity: 0.8, marginTop: '1px' }}>COST: 5,000</span>
+                                </button>
                             </div>
 
-                            {/* RECYCLER TOGGLE */}
-                            <button
-                                onClick={() => setIsRecycleMode(!isRecycleMode)}
-                                style={{
-                                    flex: '0 0 160px', // Fixed width for the button
-                                    height: '36px',
-                                    background: isRecycleMode
-                                        ? 'linear-gradient(135deg, rgba(220, 38, 38, 0.2) 0%, rgba(153, 27, 27, 0.3) 100%)'
-                                        : 'linear-gradient(135deg, rgba(15, 23, 42, 0.8) 0%, rgba(30, 41, 59, 0.4) 100%)',
-                                    border: '1px solid',
-                                    borderColor: isRecycleMode ? '#ef4444' : '#475569',
-                                    borderRadius: '2px',
-                                    color: isRecycleMode ? '#ef4444' : '#94a3b8',
-                                    fontSize: '10px', fontWeight: 900, letterSpacing: '1px',
-                                    cursor: 'pointer', transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
-                                    boxShadow: isRecycleMode ? '0 0 10px rgba(220, 38, 38, 0.3)' : '0 1px 2px rgba(0,0,0,0.2)',
-                                    transform: recyclingAnim ? 'scale(0.98)' : 'scale(1)'
-                                }}
-                            >
-                                <span style={{ fontSize: '14px' }}>{isRecycleMode ? '⚠' : '♻'}</span>
-                                {isRecycleMode ? 'ACTIVE' : 'RECYCLER'}
-                            </button>
                         </div>
                     </div>
 
@@ -414,6 +445,8 @@ export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClo
                                 handleMassRecycle(indices);
                             }}
                             onSort={handleSortByRarity}
+                            onToggleRecycle={() => setIsRecycleMode(!isRecycleMode)}
+                            recyclingAnim={recyclingAnim}
                         />
                     </div>
                 </div>

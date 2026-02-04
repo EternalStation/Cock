@@ -111,7 +111,21 @@ export const LEGENDARY_UPGRADES: Record<string, LegendaryHex> = {
     }
 };
 
-export function getLegendaryPerksArray(type: string, level: number): string[] {
+export function getLegendaryPerksArray(type: string, level: number, state?: GameState, hex?: LegendaryHex): string[] {
+    const getSouls = (lvl: number) => {
+        if (!state || !hex || !hex.killsAtLevel) return null;
+        const startKills = hex.killsAtLevel[lvl] ?? hex.killsAtAcquisition;
+        return Math.max(0, state.killCount - startKills);
+    };
+
+    const formatPerk = (p: string, lvl: number) => {
+        const souls = getSouls(lvl);
+        if (souls !== null && (p.includes("per kill") || p.includes("per 20 kills") || p.includes("per 50 kills") || p.includes("Resist"))) {
+            return `${p} (${souls} Souls)`;
+        }
+        return p;
+    };
+
     const perks: Record<string, string[][]> = {
         EcoDMG: [
             ["+0.2 DMG per kill"],
@@ -121,10 +135,10 @@ export function getLegendaryPerksArray(type: string, level: number): string[] {
             ["MAX LEVEL"]
         ],
         EcoXP: [
-            ["+0.2 XP per kill"],
-            ["+0.2% Meteor Drop per kill"],
-            ["+0.2% Rarity Boost per kill"],
-            ["+0.2% XP per kill"],
+            ["+1 XP per kill"],
+            ["+1 Dust per 50 kills"],
+            ["+0.1% Perk Power per 20 kills"],
+            ["+1% XP Gain per kill"],
             ["MAX LEVEL"]
         ],
         EcoHP: [
@@ -180,11 +194,13 @@ export function getLegendaryPerksArray(type: string, level: number): string[] {
     const list = perks[type];
     if (!list) return [];
 
-    return list.slice(0, level).flat();
+    return list.slice(0, level).map((perksAtLevel, idx) => {
+        return perksAtLevel.map(p => formatPerk(p, idx + 1));
+    }).flat();
 }
 
-export function getLegendaryPerkDesc(type: string, level: number): string {
-    const list = getLegendaryPerksArray(type, level);
+export function getLegendaryPerkDesc(type: string, level: number, state?: GameState, hex?: LegendaryHex): string {
+    const list = getLegendaryPerksArray(type, level, state, hex);
     return list.join("\n");
 }
 
@@ -222,15 +238,21 @@ export function getLegendaryOptions(state: GameState): LegendaryHex[] {
             level,
             killsAtAcquisition,
             killsAtLevel,
-            desc: getLegendaryPerkDesc(base.type, level),
-            perks: getLegendaryPerksArray(base.type, level)
+            desc: getLegendaryPerkDesc(base.type, level, state, existing || undefined),
+            perks: getLegendaryPerksArray(base.type, level, state, existing || undefined)
         };
     });
 }
 
-export function syncLegendaryHex(hex: LegendaryHex) {
-    hex.desc = getLegendaryPerkDesc(hex.type, hex.level);
-    hex.perks = getLegendaryPerksArray(hex.type, hex.level);
+export function syncLegendaryHex(state: GameState, hex: LegendaryHex) {
+    hex.desc = getLegendaryPerkDesc(hex.type, hex.level, state, hex);
+    hex.perks = getLegendaryPerksArray(hex.type, hex.level, state, hex);
+}
+
+export function syncAllLegendaries(state: GameState) {
+    state.moduleSockets.hexagons.forEach(hex => {
+        if (hex) syncLegendaryHex(state, hex);
+    });
 }
 
 const ACTIVE_LEGENDARIES: string[] = ['DefPuddle', 'DefEpi'];
@@ -249,7 +271,7 @@ export function applyLegendarySelection(state: GameState, selection: LegendaryHe
         // Record starting killCount for this NEW level
         existing.killsAtLevel[existing.level] = state.killCount;
 
-        syncLegendaryHex(existing); // This ensures `perks`/`desc` are updated for the new level
+        syncLegendaryHex(state, existing); // This ensures `perks`/`desc` are updated for the new level
         state.pendingLegendaryHex = null;
         state.showLegendarySelection = false;
         state.isPaused = false;
@@ -258,7 +280,7 @@ export function applyLegendarySelection(state: GameState, selection: LegendaryHe
         if (!selection.killsAtLevel) selection.killsAtLevel = {};
         selection.killsAtLevel[1] = state.killCount;
 
-        syncLegendaryHex(selection);
+        syncLegendaryHex(state, selection);
         state.pendingLegendaryHex = selection;
         state.showLegendarySelection = false;
         state.showModuleMenu = true;
@@ -315,12 +337,12 @@ export function getHexMultiplier(state: GameState, type: LegendaryType): number 
     return 1 + hexEfficiency;
 }
 
-export function calculateLegendaryBonus(state: GameState, statKey: string): number {
+export function calculateLegendaryBonus(state: GameState, statKey: string, skipMultiplier: boolean = false): number {
     let total = 0;
     state.moduleSockets.hexagons.forEach((hex) => {
         if (!hex) return;
 
-        const multiplier = getHexMultiplier(state, hex.type);
+        const multiplier = skipMultiplier ? 1.0 : getHexMultiplier(state, hex.type);
         const kl = hex.killsAtLevel || { [1]: hex.killsAtAcquisition };
 
         const getKillsSinceLevel = (lvl: number) => {
@@ -335,10 +357,16 @@ export function calculateLegendaryBonus(state: GameState, statKey: string): numb
             if (statKey === 'ats_pct_per_kill' && hex.level >= 4) total += getKillsSinceLevel(4) * 0.2 * multiplier;
         }
         if (hex.type === 'EcoXP') {
-            if (statKey === 'xp_per_kill' && hex.level >= 1) total += getKillsSinceLevel(1) * 0.2 * multiplier;
-            if (statKey === 'met_drop_per_kill' && hex.level >= 2) total += getKillsSinceLevel(2) * 0.002 * multiplier;
-            if (statKey === 'rarity_boost_per_kill' && hex.level >= 3) total += getKillsSinceLevel(3) * 0.002 * multiplier;
-            if (statKey === 'xp_pct_per_kill' && hex.level >= 4) total += getKillsSinceLevel(4) * 0.2 * multiplier;
+            if (statKey === 'xp_per_kill' && hex.level >= 1) total += getKillsSinceLevel(1) * 1 * multiplier;
+            if (statKey === 'dust_extraction' && hex.level >= 2) {
+                // Return total dust earned since reaching level 2
+                total += Math.floor(getKillsSinceLevel(2) / 50) * multiplier;
+            }
+            if (statKey === 'metric_resonance' && hex.level >= 3) {
+                // Return total % bonus to apply to perks
+                total += (getKillsSinceLevel(3) / 20) * 0.1 * multiplier;
+            }
+            if (statKey === 'xp_pct_per_kill' && hex.level >= 4) total += getKillsSinceLevel(4) * 1 * multiplier;
         }
         if (hex.type === 'EcoHP') {
             if (statKey === 'hp_per_kill' && hex.level >= 1) total += getKillsSinceLevel(1) * 0.2 * multiplier;

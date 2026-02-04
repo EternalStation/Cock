@@ -14,7 +14,7 @@ import { updateLoot } from '../logic/LootLogic';
 import { updateParticles, spawnParticles, spawnFloatingNumber } from '../logic/ParticleLogic'; // Added spawnParticles import
 import { ARENA_CENTERS, ARENA_RADIUS, PORTALS, getHexWallLine } from '../logic/MapLogic';
 import { playSfx, updateBGMPhase, duckMusic, restoreMusic, pauseMusic, resumeMusic, startBossAmbience, stopBossAmbience, startPortalAmbience, stopPortalAmbience, switchBGM } from '../logic/AudioLogic';
-import { syncLegendaryHex, applyLegendarySelection } from '../logic/LegendaryLogic';
+import { syncLegendaryHex, applyLegendarySelection, syncAllLegendaries } from '../logic/LegendaryLogic';
 import { updateDirector } from '../logic/DirectorLogic';
 
 
@@ -38,6 +38,7 @@ export function useGameLoop(gameStarted: boolean) {
     const showStatsRef = useRef(false);
     const showSettingsRef = useRef(false);
     const showModuleMenuRef = useRef(false);
+    const showBossSkillDetailRef = useRef(false);
     const upgradeChoicesRef = useRef<UpgradeChoice[] | null>(null);
 
     // Image Preloading
@@ -105,17 +106,21 @@ export function useGameLoop(gameStarted: boolean) {
     const [showModuleMenu, setShowModuleMenu] = useState(false);
     const [portalError, setPortalError] = useState(false);
     const [showLegendarySelection, setShowLegendarySelection] = useState(false);
+    const [showBossSkillDetail, setShowBossSkillDetail] = useState(false);
 
     // Sync refs with state
     showStatsRef.current = showStats;
     showSettingsRef.current = showSettings;
     showModuleMenuRef.current = showModuleMenu;
+    showBossSkillDetailRef.current = showBossSkillDetail;
     upgradeChoicesRef.current = upgradeChoices;
 
     // Critical: Sync GameState flag so input handlers know menu status immediately
     gameState.current.showModuleMenu = showModuleMenu;
     gameState.current.showStats = showStats;
     gameState.current.showSettings = showSettings;
+    gameState.current.showBossSkillDetail = showBossSkillDetail;
+    gameState.current.isPaused = showStats || showSettings || showModuleMenu || !!upgradeChoices || showLegendarySelection || showBossSkillDetail;
 
     // Reset unseen notification badge when opening matrix
     useEffect(() => {
@@ -125,9 +130,10 @@ export function useGameLoop(gameStarted: boolean) {
     }, [showModuleMenu]);
 
     const triggerPortal = useCallback(() => {
+        const cost = 5 + Math.floor(gameState.current.gameTime / 60);
         if (gameState.current.portalState === 'closed') {
-            if (gameState.current.player.dust >= 5) {
-                gameState.current.player.dust -= 5;
+            if (gameState.current.player.dust >= cost) {
+                gameState.current.player.dust -= cost;
                 gameState.current.portalState = 'warn';
                 gameState.current.portalTimer = 10; // 10s warning period
                 playSfx('warning');
@@ -195,7 +201,7 @@ export function useGameLoop(gameStarted: boolean) {
             if (!existing.killsAtLevel) existing.killsAtLevel = {};
             existing.killsAtLevel[existing.level] = state.killCount;
 
-            syncLegendaryHex(existing);
+            syncLegendaryHex(state, existing);
             state.upgradingHexIndex = existingIdx;
             state.upgradingHexTimer = 3.0;
 
@@ -296,10 +302,10 @@ export function useGameLoop(gameStarted: boolean) {
             effect.duration -= step;
 
             if (effect.type === 'puddle') {
-                if (Math.random() < 0.3) {
+                if (Math.random() < 0.05) {
                     spawnParticles(state, effect.x + (Math.random() - 0.5) * effect.radius * 1.5, effect.y + (Math.random() - 0.5) * effect.radius * 1.5, '#4ade80', 1, 2, 60, 'bubble');
                 }
-                if (Math.random() < 0.1) {
+                if (Math.random() < 0.02) {
                     spawnParticles(state, effect.x + (Math.random() - 0.5) * effect.radius, effect.y + (Math.random() - 0.5) * effect.radius, '#10b981', 1, 4, 100, 'vapor');
                 }
             } else if (effect.type === 'epicenter') {
@@ -438,14 +444,14 @@ export function useGameLoop(gameStarted: boolean) {
                 }
             } else if (effect.type === 'blackhole') {
                 // --- VOID SINGULARITY REWORK (Event-Horizon) ---
-                const pullRadius = 450; // Static 450px radius
+                const pullRadius = 400; // Reduced from 450px
                 const consumptionRadius = 40; // Static 40px core
 
                 // Scale pull strength with resonance
                 const resonance = getChassisResonance(state);
                 const pullMult = 1 + resonance;
 
-                const basePull = 40; // Initial "weak" pull (Matches 10% feel)
+                const basePull = 20; // Reduced from 40 (Matches 5% feel instead of 10%)
                 const scaledPull = basePull * (1 + resonance * 4); // Resonance greatly improves pull
 
                 state.enemies.forEach(e => {
@@ -456,8 +462,8 @@ export function useGameLoop(gameStarted: boolean) {
                         // 1. CONSUMPTION MECHANIC
                         if (dist < consumptionRadius) {
                             if (e.boss) {
-                                // Bosses take 15% Max HP/sec - They can't be "consumed" instantly but get crushed
-                                let appliedDmg = (e.maxHp * 0.15) * step;
+                                // Bosses take 10% Max HP/sec - They can't be "consumed" instantly but get crushed
+                                let appliedDmg = (e.maxHp * 0.10) * step;
 
                                 // --- LEGION SHIELD BLOCK ---
                                 if (e.legionId) {
@@ -503,13 +509,6 @@ export function useGameLoop(gameStarted: boolean) {
                         const orbitalPull = (30 * forceFactor) * step;
                         e.x += Math.cos(tangentAng) * orbitalPull;
                         e.y += Math.sin(tangentAng) * orbitalPull;
-
-                        // Amplify external damage
-                        e.voidAmplified = true;
-                        e.voidAmpMult = 1.3;
-                    } else {
-                        e.voidAmplified = false;
-                        e.voidAmpMult = 1.0;
                     }
                 });
                 // 3. Pull enemy projectiles with orbital motion
@@ -625,9 +624,10 @@ export function useGameLoop(gameStarted: boolean) {
                     playSfx('spawn');
                 }
             } else if (state.portalState === 'open') {
+                state.portalTimer -= step;
                 if (state.portalTimer <= 0) {
                     state.portalState = 'closed';
-                    state.portalTimer = 240;
+                    state.portalTimer = 0;
                     stopPortalAmbience();
                 } else {
                     const activePortals = PORTALS.filter(p => p.from === state.currentArena);
@@ -779,7 +779,7 @@ export function useGameLoop(gameStarted: boolean) {
             }
 
             // Pausing Logic
-            const isMenuOpen = showStatsRef.current || showSettingsRef.current || showModuleMenuRef.current || upgradeChoicesRef.current !== null || state.showLegendarySelection;
+            const isMenuOpen = showStatsRef.current || showSettingsRef.current || showModuleMenuRef.current || upgradeChoicesRef.current !== null || state.showLegendarySelection || showBossSkillDetailRef.current;
 
             // CRITICAL: Only clear keys when TRANSITIONING to paused.
             // This stops current movement but allows players to "buffer" their next move 
@@ -823,7 +823,13 @@ export function useGameLoop(gameStarted: boolean) {
                     // Update Logic
                     updateLogic(state, FIXED_STEP);
 
-
+                    // Failsafe Death Check (Covering all damage sources)
+                    if (state.player.curHp <= 0) {
+                        state.player.curHp = 0;
+                        state.gameOver = true;
+                        setGameOver(true);
+                        import('../logic/AudioLogic').then(mod => mod.stopAllLoops());
+                    }
                 }
             }
 
@@ -868,6 +874,7 @@ export function useGameLoop(gameStarted: boolean) {
             // Force Re-render for UI updates (Throttled to ~15 FPS)
             frameCountRef.current++;
             if (!state.isPaused && frameCountRef.current % 4 === 0) {
+                syncAllLegendaries(state);
                 setUiState(prev => prev + 1);
             }
 
@@ -904,7 +911,7 @@ export function useGameLoop(gameStarted: boolean) {
             cancelled = true;
             cancelAnimationFrame(requestRef.current!);
         };
-    }, [gameStarted, updateLogic, showLegendarySelection]); // Run when gameStarted changes, and updateLogic changes
+    }, [gameStarted, updateLogic, showLegendarySelection, showBossSkillDetail]); // Run when gameStarted changes, and updateLogic changes
 
     // FPS Calculation
     const [fps, setFps] = useState(60);
@@ -987,9 +994,12 @@ export function useGameLoop(gameStarted: boolean) {
         triggerPortal,
         fps,
         portalError,
+        portalCost: 5 + Math.floor(gameState.current.gameTime / 60),
         onViewChassisDetail: () => {
             gameState.current.chassisDetailViewed = true;
             setUiState(p => p + 1);
-        }
+        },
+        showBossSkillDetail,
+        setShowBossSkillDetail
     };
 }

@@ -3,6 +3,7 @@ import type { GameState, MeteoriteRarity } from '../logic/types';
 import { spawnEnemy, spawnRareEnemy } from '../logic/EnemyLogic';
 import { createMeteorite } from '../logic/LootLogic';
 import { castSkill } from '../logic/SkillLogic';
+import { calcStat } from '../logic/MathUtils';
 import { startBGM } from '../logic/AudioLogic';
 import { getKeybinds } from '../logic/Keybinds';
 
@@ -42,8 +43,8 @@ export function useGameInput({ gameState, setShowSettings, setShowStats, setShow
             const keybinds = currentKeybinds.current;
 
             if (key === 'escape' || code === 'escape') {
-                // If Module Menu is open, let its own listener handle the close (and don't toggle settings)
-                if (gameState.current.showModuleMenu) {
+                // If Module Menu or Boss Skill is open, let its own listener handle the close
+                if (gameState.current.showModuleMenu || gameState.current.showBossSkillDetail) {
                     return;
                 }
 
@@ -149,11 +150,20 @@ export function useGameInput({ gameState, setShowSettings, setShowStats, setShow
                 }
             }
 
-            // B1-B5 - Spawn 1 Boss
+            // B1-B5 Boss Spawning (Updated Schema)
+            // b1- : Tier 1 (Normal)
+            // b1b : Tier 2 (Enhanced)
             for (const [num, shape] of Object.entries(shapes)) {
-                if (cheatBuffer.endsWith(`b${num}`)) {
+                if (cheatBuffer.endsWith(`b${num}-`)) {
                     const p = gameState.current.player;
-                    spawnEnemy(gameState.current, p.x + 500, p.y + 500, shape, true);
+                    spawnEnemy(gameState.current, p.x + 500, p.y + 500, shape, true, 1);
+                    console.log(`Cheat: Spawned Tier 1 ${shape} Boss`);
+                    cheatBuffer = '';
+                }
+                if (cheatBuffer.endsWith(`b${num}b`)) {
+                    const p = gameState.current.player;
+                    spawnEnemy(gameState.current, p.x + 500, p.y + 500, shape, true, 2);
+                    console.log(`Cheat: Spawned Tier 2 ${shape} Boss`);
                     cheatBuffer = '';
                 }
             }
@@ -232,9 +242,27 @@ export function useGameInput({ gameState, setShowSettings, setShowStats, setShow
             const timeIntervals = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60];
             timeIntervals.forEach(min => {
                 if (cheatBuffer.endsWith(`t${min}`)) {
+                    const factor = min;
+                    console.log(`Cheat: Time Jump to ${min}m. Buffing stats by ${factor}x`);
+
                     gameState.current.gameTime = min * 60;
                     // Also warp the next boss spawn time so it doesn't trigger immediately if we jump past it
                     gameState.current.nextBossSpawnTime = (min * 60) + 120;
+
+                    // Buff Stats
+                    const p = gameState.current.player;
+                    p.hp.base *= factor;
+                    p.dmg.base *= factor;
+                    p.atk.base *= factor;
+
+                    // Heal to full (Using robust calculation)
+                    p.curHp = calcStat(p.hp);
+
+                    // XP / Level Boost
+                    p.level = min * 3;
+                    p.xp.current = 0;
+                    p.xp.needed = 100 * Math.pow(1.15, p.level); // Generic curve approximation
+
                     cheatBuffer = '';
                 }
             });

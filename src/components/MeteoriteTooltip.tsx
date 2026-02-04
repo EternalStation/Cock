@@ -43,6 +43,27 @@ const getMeteoriteImage = (m: Meteorite) => {
     return `/assets/meteorites/M${m.visualIndex}${m.quality}.png`;
 };
 
+const formatDescription = (text: string, highlightColor: string) => {
+    // Keywords to highlight - Order matters (longest first to avoid partial matches)
+    const keywords = [
+        'ECO-ECO', 'ECO-COM', 'ECO-DEF', 'COM-COM', 'COM-DEF', 'DEF-DEF',
+        'Legendary Hex', 'PRISTINE', 'DAMAGED', 'BROKEN',
+        'Type', 'Rarity', 'Arena',
+        'ECO', 'COM', 'DEF',
+        '\\(Any\\)', 'same level'
+    ];
+
+    // Case-insensitive regex
+    const regex = new RegExp(`(${keywords.join('|')})`, 'gi');
+    return text.split(regex).filter(Boolean).map((part, i) => {
+        // Check if this part matches one of the keywords (ignoring case)
+        if (keywords.some(k => new RegExp(`^${k}$`, 'i').test(part))) {
+            return <span key={i} style={{ color: highlightColor, fontWeight: 'bold' }}>{part}</span>;
+        }
+        return <span key={i}>{part}</span>;
+    });
+};
+
 export const MeteoriteTooltip: React.FC<MeteoriteTooltipProps> = ({
     meteorite, gameState, meteoriteIdx = -1, x,
     isInteractive,
@@ -274,7 +295,7 @@ export const MeteoriteTooltip: React.FC<MeteoriteTooltipProps> = ({
                                     </span>
                                 </div>
                                 <div style={{ fontSize: '10px', color: '#94a3b8', lineHeight: '1.2', marginTop: '1px', opacity: 0.9 }}>
-                                    {perk.description}
+                                    {formatDescription(perk.description, rarityColor)}
                                     {isActive && perkResult.count > 1 && <span style={{ color: '#FCD34D' }}> (x{perkResult.count})</span>}
                                 </div>
                             </div>

@@ -7,6 +7,7 @@ import { playSfx } from './AudioLogic';
 import { calculateLegendaryBonus } from './LegendaryLogic';
 import { handleEnemyDeath } from './DeathLogic';
 import { spawnFloatingNumber } from './ParticleLogic';
+import { getDefenseReduction } from './MathUtils';
 
 
 
@@ -132,9 +133,7 @@ export function updatePlayer(state: GameState, keys: Record<string, boolean>, on
             const maxHp = calcStat(player.hp);
             const rawWallDmg = maxHp * GAME_CONFIG.PLAYER.WALL_DAMAGE_PERCENT;
             const armor = calcStat(player.arm);
-            // Wall damage reduction (Using the proper reduction formula)
-            // Formula in MathUtils: 0.95 * (armor / (armor + 5263))
-            const armRedMult = 1 - (0.95 * (armor / (armor + GAME_CONFIG.PLAYER.ARMOR_CONSTANT)));
+            const armRedMult = 1 - getDefenseReduction(armor);
             let wallDmgAfterArmor = rawWallDmg * armRedMult;
 
             player.damageBlockedByArmor += (rawWallDmg - wallDmgAfterArmor);
@@ -276,7 +275,7 @@ export function updatePlayer(state: GameState, keys: Record<string, boolean>, on
         if (e.dead || e.hp <= 0 || e.isZombie) return;
 
         const dToE = Math.hypot(e.x - player.x, e.y - player.y);
-        const contactDist = e.size + 15;
+        const contactDist = e.size + 18;
 
         if (dToE < contactDist) {
             // Check collision cooldown (prevent damage every frame)
@@ -285,7 +284,65 @@ export function updatePlayer(state: GameState, keys: Record<string, boolean>, on
             // Default: 15% of enemy max HP, or custom if set. Neutral objects (barrels) deal 0 dmg.
             let rawDmg = 0;
             if (!e.isNeutral) {
-                if (e.shape === 'minion' && e.parentId !== undefined) {
+                // Check Soul Link Status
+                const isLinked = e.soulLinkHostId !== undefined || (e.soulLinkTargets && e.soulLinkTargets.length > 0);
+
+                if (isLinked) {
+                    // LINKED COLLISION LOGIC
+                    let linkSourceTime = e.spawnedAt || state.gameTime;
+
+                    // Use Host's spawn time for color consistency
+                    if (e.soulLinkHostId) {
+                        const host = state.enemies.find(h => h.id === e.soulLinkHostId);
+                        if (host && host.spawnedAt) linkSourceTime = host.spawnedAt;
+                    }
+
+                    // Determine Link Color (0-15 Green, 15-30 Blue, etc)
+                    const minutes = linkSourceTime / 60;
+                    const eraIndex = Math.floor(minutes / 15) % 5;
+                    // Start Green -> Blue -> Purple -> Orange -> Red
+                    const ERA_COLORS = ['#00FF00', '#00FFFF', '#BF00FF', '#FF9900', '#FF0000'];
+                    const linkColor = ERA_COLORS[eraIndex] || ERA_COLORS[0];
+
+                    // 1. Player takes 30% Damage (Double normal)
+                    rawDmg = e.hp * 0.30;
+
+                    // 2. Resolve Link Damage (Distribute MaxHP to others)
+                    let linkedTargets: Enemy[] = [];
+                    if (e.soulLinkHostId) {
+                        const host = state.enemies.find(h => h.id === e.soulLinkHostId && !h.dead);
+                        if (host) {
+                            linkedTargets.push(host);
+                            if (host.soulLinkTargets) {
+                                const peers = state.enemies.filter(p => host.soulLinkTargets!.includes(p.id) && !p.dead && p.id !== e.id);
+                                linkedTargets.push(...peers);
+                            }
+                        }
+                    } else if (e.soulLinkTargets && e.soulLinkTargets.length > 0) {
+                        // Host logic handled if restricted correctly (mainly for minions)
+                    }
+
+                    if (linkedTargets.length > 0) {
+                        // Distinct linked targets (remove dupes)
+                        linkedTargets = Array.from(new Set(linkedTargets));
+
+                        const dmgToDistribute = e.maxHp;
+                        const splitDmg = dmgToDistribute / linkedTargets.length;
+
+                        linkedTargets.forEach(target => {
+                            target.hp -= splitDmg;
+                            state.player.damageDealt += splitDmg;
+                            spawnFloatingNumber(state, target.x, target.y, Math.round(splitDmg).toString(), linkColor, false);
+                        });
+                    }
+
+                    // 3. Instant Death for the collider
+                    if (!e.boss) {
+                        e.hp = 0;
+                        // spawnFloatingNumber(state, e.x, e.y, "LINK BREAK", linkColor, true); // Removed as requested
+                    }
+
+                } else if (e.shape === 'minion' && e.parentId !== undefined) {
                     const mother = state.enemies.find(m => m.id === e.parentId);
                     const ratio = e.stunOnHit ? GAME_CONFIG.ENEMY.MINION_STUN_DAMAGE_RATIO : GAME_CONFIG.ENEMY.MINION_DAMAGE_RATIO;
                     rawDmg = (mother ? mother.hp : e.hp) * ratio;
@@ -302,7 +359,7 @@ export function updatePlayer(state: GameState, keys: Record<string, boolean>, on
             }
 
             const armorValue = calcStat(player.arm);
-            const armRedMult = 1 - (0.95 * (armorValue / (armorValue + GAME_CONFIG.PLAYER.ARMOR_CONSTANT)));
+            const armRedMult = 1 - getDefenseReduction(armorValue);
 
             const colRedRaw = calculateLegendaryBonus(state, 'col_red_per_kill');
             const colRed = Math.min(80, colRedRaw); // Cap at 80% reduction

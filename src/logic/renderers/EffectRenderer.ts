@@ -94,7 +94,7 @@ export function renderAreaEffects(ctx: CanvasRenderingContext2D, state: GameStat
             ctx.restore();
         } else if (effect.type === 'blackhole') {
             // --- VOID SINGULARITY VISUAL (Core + Reverted Organic Outline) ---
-            const pullRadius = 450;
+            const pullRadius = 400; // Updated to match logic
             const coreRadius = 40;
             if (isNaN(effect.x) || isNaN(effect.y)) return;
 

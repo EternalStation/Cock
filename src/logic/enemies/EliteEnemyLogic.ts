@@ -2,7 +2,15 @@ import type { GameState, Enemy } from '../types';
 import { ARENA_CENTERS, ARENA_RADIUS } from '../MapLogic';
 import { spawnParticles, spawnFloatingNumber } from '../ParticleLogic';
 import { playSfx } from '../AudioLogic';
-import { calcStat } from '../MathUtils';
+import { calcStat, getDefenseReduction } from '../MathUtils';
+// Actually, check if it is used anywhere else.
+// updateEliteCircle: No.
+// updateEliteTriangle: No.
+// updateEliteSquare: No.
+// updateEliteDiamond: No (removed).
+// updateElitePentagon: No.
+// Safe to remove.
+
 import { spawnMinion } from './UniqueEnemyLogic';
 
 
@@ -28,7 +36,9 @@ export function updateEliteCircle(e: Enemy, state: GameState, player: any, dist:
             const rDx = e.lockedTargetX - e.x, rDy = e.lockedTargetY - e.y, rDist = Math.hypot(rDx, rDy);
             if (rDist > 10) {
                 const a = Math.atan2(rDy, rDx); vx = Math.cos(a) * 10; vy = Math.sin(a) * 10;
-                spawnParticles(state, e.x, e.y, '#EF4444', 1);
+                // Use Era Color (Palette[0]) instead of fixed Red
+                const pColor = e.palette ? e.palette[0] : '#EF4444';
+                spawnParticles(state, e.x, e.y, pColor, 1);
             } else {
                 e.eliteState = 0; e.timer = Date.now() + 5000;
                 e.lockedTargetX = undefined; e.lockedTargetY = undefined;
@@ -53,7 +63,7 @@ export function updateEliteTriangle(e: Enemy, state: GameState, dist: number, dx
         const a = Math.atan2(dy, dx) + Math.sin(Date.now() / 100) * 0.5;
         const fast = currentSpd * 2.55;
         vx = Math.cos(a) * fast + pushX; vy = Math.sin(a) * fast + pushY;
-        spawnParticles(state, e.x, e.y, '#FCD34D', 1);
+        spawnParticles(state, e.x, e.y, '#fcc74dff', 1);
         if (Date.now() > (e.timer || 0)) {
             e.eliteState = 0; e.timer = Date.now() + 5000;
         }
@@ -63,8 +73,9 @@ export function updateEliteTriangle(e: Enemy, state: GameState, dist: number, dx
 
 export function updateEliteSquare(e: Enemy, state: GameState, currentSpd: number, dx: number, dy: number, pushX: number, pushY: number) {
     const aS = Math.atan2(dy, dx);
-    const vx = Math.cos(aS) * (currentSpd * 0.5) + pushX;
-    const vy = Math.sin(aS) * (currentSpd * 0.5) + pushY;
+    // Speed: 0.85x Base
+    const vx = Math.cos(aS) * (currentSpd * 0.85) + pushX;
+    const vy = Math.sin(aS) * (currentSpd * 0.85) + pushY;
     if (Math.random() < 0.1) spawnParticles(state, e.x + (Math.random() - 0.5) * e.size * 2, e.y + (Math.random() - 0.5) * e.size * 2, '#94A3B8', 1);
     return { vx, vy };
 }
@@ -76,7 +87,11 @@ export function updateEliteDiamond(e: Enemy, state: GameState, player: any, dist
     // ELITE SKILL: HYPER BEAM
     if (!e.eliteState) e.eliteState = 0;
 
-    // Keep distance logic (Internal to Elite)
+    // Keep distance logic (Variable Kiting 600-800)
+    if (!e.distGoal) {
+        e.distGoal = 600 + Math.random() * 200;
+    }
+
     const nearestCenter = ARENA_CENTERS.reduce((best, center) => {
         const distToCenter = Math.hypot(e.x - center.x, e.y - center.y);
         return distToCenter < Math.hypot(e.x - best.x, e.y - best.y) ? center : best;
@@ -85,7 +100,7 @@ export function updateEliteDiamond(e: Enemy, state: GameState, player: any, dist
     const distToWall = ARENA_RADIUS - distToCenter;
     const veryCloseToWall = distToWall < 500;
 
-    let distGoal = 600;
+    let distGoal = e.distGoal;
     const distFactor = (dist - distGoal) / 100;
 
     if (e.eliteState === 0) {
@@ -114,26 +129,27 @@ export function updateEliteDiamond(e: Enemy, state: GameState, player: any, dist
             vy = Math.sin(angleToPlayerD) * distFactor * currentSpd + pushY;
         }
 
-        // Charge Transition
-        if (Date.now() - (e.lastAttack || 0) > 3600) {
+        // Charge Transition (Every 5 seconds)
+        if (Date.now() - (e.lastAttack || 0) > 5000) {
             e.eliteState = 1;
-            e.timer = Date.now() + 1000;
+            e.timer = Date.now() + 1000; // 1s Charge
             e.dashState = angleToPlayerD; // Lock angle
-
         }
     } else if (e.eliteState === 1) {
         // Charging (Waiting)
         vx = 0; vy = 0;
         if (Date.now() > (e.timer || 0)) {
             e.eliteState = 2;
-            e.timer = Date.now() + 1500;
+            e.timer = Date.now() + 800; // Firing animation
+            e.hasHitThisBurst = false; // Reset burst hit flag
             playSfx('laser');
         }
     } else if (e.eliteState === 2) {
         // Firing
         vx = 0; vy = 0;
-        e.lockedTargetX = e.x + Math.cos(e.dashState || 0) * 2000;
-        e.lockedTargetY = e.y + Math.sin(e.dashState || 0) * 2000;
+        // Visuals can check state 2
+        e.lockedTargetX = e.x + Math.cos(e.dashState || 0) * 3000;
+        e.lockedTargetY = e.y + Math.sin(e.dashState || 0) * 3000;
 
         const laserAngle = e.dashState || 0;
         const px = player.x - e.x;
@@ -142,43 +158,46 @@ export function updateEliteDiamond(e: Enemy, state: GameState, player: any, dist
         const pAngle = Math.atan2(py, px);
         const angleDiff = Math.abs(pAngle - laserAngle);
 
-        if (angleDiff < 0.1 && pDist < 2000) {
-            if (!e.laserTick || Date.now() - e.laserTick > 100) {
-                e.laserTick = Date.now();
-                const rawTickDmg = Math.floor(5 * (1 + Math.floor(state.gameTime / 300) * 0.5));
-                const tickDmg = Math.max(0, rawTickDmg - calcStat(player.arm));
+        // Massive 3000 Range
+        if (angleDiff < 0.1 && pDist < 3000 && !e.hasHitThisBurst) {
+            e.hasHitThisBurst = true;
+            // Damage: 5% of ELITE DIAMOND MAX HP
+            // This makes them scale insanely hard if they have millions of HP? 
+            // "5% of Elite Diamond MAX HP". Yes.
+            // Should armor reduce this? "ignores defense/shielding"
+            // "ignores defense/shielding" usually implies True Damage.
+            // But previous code applied Armor.
+            // Requirement: "5% of Player's Max HP (ignores defense/shielding, flat percentage). no - 5% of Elite Diamond MAX HP"
+            // Does the "No" apply to "ignores defense"? 
+            // "no - 5% of Elite Diamond MAX HP" likely replaces "5% of Player's Max HP".
+            // I will assume it DOES IGNORE defense/shielding as stated in the first part, because "no" was about the source of the 5%.
+            // Wait, "ignores defense/shielding" means armor doesn't reduce it.
+            // And "shielding" usually refers to normal shield? Or Legendary Shield?
+            // "flat percentage" suggests pure damage.
 
-                // Check Shield Chunks
-                let absorbed = 0;
-                if (player.shieldChunks && player.shieldChunks.length > 0) {
-                    let rem = tickDmg;
-                    for (const chunk of player.shieldChunks) {
-                        if (chunk.amount >= rem) {
-                            chunk.amount -= rem;
-                            absorbed += rem;
-                            rem = 0; break;
-                        } else {
-                            absorbed += chunk.amount;
-                            rem -= chunk.amount;
-                            chunk.amount = 0;
-                        }
-                    }
-                    player.shieldChunks = player.shieldChunks.filter((c: any) => c.amount > 0);
-                }
+            const rawDmg = e.maxHp * 0.05;
 
-                const actualDmg = tickDmg - absorbed;
-                if (tickDmg > 0) {
-                    if (actualDmg > 0) {
-                        player.curHp -= actualDmg;
-                        player.damageTaken += actualDmg;
-                    }
-                    spawnFloatingNumber(state, player.x, player.y, Math.round(tickDmg).toString(), '#ef4444', false);
-                }
+            // LASER REDUCTION LOGIC
+            // User: Lasers are reduced by armor, but NOT by projectile reduction
+            const armorObject = player.arm; // This is the PlayerStats object
+            const armorValue = calcStat(armorObject);
+            const reduction = getDefenseReduction(armorValue);
+            const finalActualDmg = rawDmg * (1 - reduction);
 
-                if (player.curHp <= 0 && !state.gameOver) {
-                    state.gameOver = true;
-                    if (onEvent) onEvent('game_over');
-                }
+            // Track Stats
+            player.damageBlockedByArmor += (rawDmg - finalActualDmg);
+            player.damageBlocked += (rawDmg - finalActualDmg);
+
+            if (finalActualDmg > 0) {
+                player.curHp -= finalActualDmg;
+                player.damageTaken += finalActualDmg;
+                const beamColor = e.palette ? e.palette[0] : '#f87171';
+                spawnFloatingNumber(state, player.x, player.y, Math.ceil(finalActualDmg).toString(), beamColor, false);
+            }
+
+            if (player.curHp <= 0 && !state.gameOver) {
+                state.gameOver = true;
+                if (onEvent) onEvent('game_over');
             }
         }
 
@@ -189,20 +208,20 @@ export function updateEliteDiamond(e: Enemy, state: GameState, player: any, dist
                 const zDist = Math.hypot(zdx, zdy);
                 const zAngle = Math.atan2(zdy, zdx);
                 const zAngleDiff = Math.abs(zAngle - laserAngle);
-                if (zAngleDiff < 0.1 && zDist < 2000) {
+                if (zAngleDiff < 0.1 && zDist < 3000) {
                     z.dead = true; z.hp = 0;
                     spawnParticles(state, z.x, z.y, '#4ade80', 15);
                     playSfx('smoke-puff');
                 }
             }
         });
+    }
 
-        if (Date.now() > (e.timer || 0)) {
-            e.eliteState = 0;
-            e.lastAttack = Date.now();
-            e.lockedTargetX = undefined;
-            e.lockedTargetY = undefined;
-        }
+    if (e.eliteState !== 0 && Date.now() > (e.timer || 0)) {
+        e.eliteState = 0;
+        e.lastAttack = Date.now();
+        e.lockedTargetX = undefined;
+        e.lockedTargetY = undefined;
     }
     return { vx, vy };
 }
@@ -240,7 +259,7 @@ export function updateElitePentagon(e: Enemy, state: GameState, dist: number, dx
 
     // Initialize random kiting distance
     if (!e.distGoal) {
-        e.distGoal = 700 + Math.random() * 150; // Random 700-850
+        e.distGoal = 600 + Math.random() * 300; // Random 600-900
     }
 
     const angleToPlayerP = Math.atan2(dy, dx);
@@ -264,83 +283,91 @@ export function updateElitePentagon(e: Enemy, state: GameState, dist: number, dx
     let vx = Math.cos(moveAngle) * currentSpd * speedMult + pushX;
     let vy = Math.sin(moveAngle) * currentSpd * speedMult + pushY;
 
-    // --- DESTRUCTION MODE (Age > 60s) ---
-    const age = state.gameTime - (e.spawnedAt || 0);
-
-    // Check for Living Minions (Used for both modes)
+    // Check for Living Minions
     const myMinions = state.enemies.filter(m => m.parentId === e.id && !m.dead && m.shape === 'minion');
     const orbitingMinions = myMinions.filter(m => m.minionState === 0);
 
+    // --- PROXIMITY-BASED HIVE LOGIC ---
+    const distToPlayer = Math.hypot(state.player.x - e.x, state.player.y - e.y);
+    const hasMinions = myMinions.length > 0;
+
+    // 1. Proximity Aggro Check
+    if (distToPlayer <= 350 && orbitingMinions.length > 0) {
+        orbitingMinions.forEach(m => m.minionState = 1);
+        playSfx('stun-disrupt');
+        e.angryUntil = Date.now() + 2000; // Stay red for 2 seconds
+    }
+
+    // 2. Visual Feedback
+    const isAngry = !!(e.angryUntil && Date.now() < e.angryUntil);
+    const isWarning = !!(distToPlayer <= 500 && hasMinions && !isAngry);
+
+    if (isAngry) {
+        // Full Red (Aggro State)
+        e.palette = ['#EF4444', '#B91C1C', '#7F1D1D'];
+        e.eraPalette = undefined; // OVERRIDE ERA PALETTE
+        vx += (Math.random() - 0.5) * 8; // Extra violent shake
+        vy += (Math.random() - 0.5) * 8;
+    } else if (isWarning) {
+        // High-Visibility Warning (Blink Red)
+        const isBlink = Math.floor(Date.now() / 150) % 2 === 0;
+        e.palette = isBlink ? ['#EF4444', '#F87171', '#7F1D1D'] : (e.originalPalette || e.palette);
+        if (isBlink) e.eraPalette = undefined; // OVERRIDE ERA PALETTE DURING BLINK
+
+        vx += (Math.random() - 0.5) * 6; // Increased shake
+        vy += (Math.random() - 0.5) * 6;
+    }
+
+    // --- AGE-BASED DESTRUCTION SEQUENCE (Age > 60s) ---
+    const age = state.gameTime - (e.spawnedAt || 0);
     if (age > 60) {
-        // --- DESTRUCTION SEQUENCE ---
         if (orbitingMinions.length > 0) {
-            // PHASE 1: RELEASE PAIN (One by one every 3s)
+            // RELEASE ONE BY ONE
             if (!e.lastAttack) e.lastAttack = Date.now();
-            if (Date.now() - e.lastAttack > 3000) {
+            if (Date.now() - e.lastAttack > 2000) {
                 const victim = orbitingMinions[0];
-                victim.minionState = 1; // Launch
-                playSfx('stun-disrupt'); // Release sound
+                victim.minionState = 1;
+                playSfx('stun-disrupt');
                 e.lastAttack = Date.now();
             }
+            // Pulsate White/Red while dying (Only if NOT in aggro red state)
+            if (!isAngry) {
+                const isBlink = Math.floor(Date.now() / 100) % 2 === 0;
+                e.palette = isBlink ? ['#FFFFFF', '#EF4444', '#7F1D1D'] : (e.originalPalette || e.palette);
+                if (isBlink) e.eraPalette = undefined; // OVERRIDE ERA PALETTE
+            }
         } else {
-            // PHASE 2: IMMINENT EXPLOSION (5s Countdown)
-            const dTimer = (e as any).destructTimer;
-            if (!dTimer) {
-                (e as any).destructTimer = Date.now() + 5000;
-                playSfx('warning');
-            }
-
-
-
-            if (Date.now() > dTimer) {
-                // No AoE damage as per request - just suicide and particles
-                e.dead = true;
-                e.hp = 0;
-                spawnParticles(state, e.x, e.y, '#EF4444', 30);
-                playSfx('rare-kill');
-            }
+            // DIE
+            e.dead = true; e.hp = 0;
+            spawnParticles(state, e.x, e.y, '#EF4444', 30);
+            playSfx('rare-kill');
         }
-    } else {
-        // --- NORMAL SPAWNING & GUARDIAN LOGIC ---
-        if (!e.summonState) e.summonState = 0; // 0: Idle, 1: Charging (Green Blink)
-        const hasMinions = myMinions.length > 0;
+        return { vx, vy };
+    }
 
-        // Calculate Explicit Distance to Player for Guardian Trigger
-        const distToPlayer = Math.hypot(state.player.x - e.x, state.player.y - e.y);
+    // Normal State / Spawning Logic (Only if age <= 60 and not in aggro)
+    if (!isAngry && !isWarning) {
+        // Normal State / Spawning Logic
+        if (e.summonState === 1) {
+            // Charging Blink (Green)
+            const isBlink = Math.floor(Date.now() / 150) % 2 === 0;
+            e.palette = isBlink ? ['#4ade80', '#22c55e', '#166534'] : (e.originalPalette || e.palette);
+            if (isBlink) e.eraPalette = undefined; // OVERRIDE ERA PALETTE
 
-        // Guardian Mode: Player close + Has Minions -> Turn RED and Trigger Minions
-        if (distToPlayer <= 550 && hasMinions) {
-
-
-            // Shake Effect (Vibration)
-            vx += (Math.random() - 0.5) * 4;
-            vy += (Math.random() - 0.5) * 4;
+            if (Date.now() > (e.timer || 0)) {
+                spawnMinion(state, e, true, 3);
+                e.lastAttack = Date.now();
+                e.summonState = 0;
+                if (e.originalPalette) e.palette = e.originalPalette;
+            }
         } else {
-            // Normal State / Charging State Handling
-            if (e.summonState === 1) {
-
-
-                if (Date.now() > (e.timer || 0)) {
-                    // FINISH CHARGING -> SPAWN (Now matching normal: 3 minions)
-                    spawnMinion(state, e, true, 3);
-
-                    e.lastAttack = Date.now();
-                    e.summonState = 0;
-                    if (e.originalPalette) e.palette = e.originalPalette;
-                }
-            } else {
-                // IDLE STATE
-                if (!e.originalPalette) e.originalPalette = e.palette;
-                e.palette = e.originalPalette;
-
-                // Check Spawn Timer (Limit to 9 Minions, same as normal: 15s interval)
-                const spawnInterval = 15000;
-                if (!e.lastAttack) e.lastAttack = Date.now();
-                if (Date.now() - e.lastAttack > spawnInterval && myMinions.length < 9) {
-                    e.summonState = 1;
-                    e.timer = Date.now() + 3000;
-                    playSfx('warning');
-                }
+            if (e.originalPalette) e.palette = e.originalPalette;
+            const spawnInterval = 20000;
+            if (!e.lastAttack) e.lastAttack = Date.now();
+            if (Date.now() - e.lastAttack > spawnInterval && myMinions.length < 9) {
+                e.summonState = 1;
+                e.timer = Date.now() + 3000;
+                playSfx('warning');
             }
         }
     }

@@ -85,7 +85,8 @@ export function manageMerges(state: GameState) {
             host.lastAttack = Date.now() + 3000;
             host.size *= GAME_CONFIG.ENEMY.MERGE_SIZE_MULT;
             const mult = host.shape === 'pentagon' ? GAME_CONFIG.ENEMY.MERGE_HP_MULT_PENTAGON : GAME_CONFIG.ENEMY.MERGE_HP_MULT_DEFAULT;
-            const xpMult = host.shape === 'pentagon' ? GAME_CONFIG.ENEMY.MERGE_XP_MULT_PENTAGON : GAME_CONFIG.ENEMY.MERGE_XP_MULT_DEFAULT;
+            // XP Multipliers: Pentagon 7x, Default 14x
+            const xpMult = host.shape === 'pentagon' ? 7 : 14;
             host.hp *= mult; host.maxHp *= mult; host.hp = host.maxHp;
             host.xpRewardMult = xpMult;
 

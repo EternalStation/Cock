@@ -29,7 +29,7 @@ export const AlertPanel: React.FC<AlertPanelProps> = ({ gameState, bossWarning }
                     animation: 'pulse 0.5s infinite alternate'
                 }}>
                     <div style={{ color: '#facc15', fontWeight: 900, letterSpacing: 1, fontSize: 24 }}>
-                        ANOMALY DETECTED
+                        INTRUDER ALERT
                     </div>
                     <div style={{ color: '#fef08a', fontWeight: 700, letterSpacing: 2, fontSize: 16, marginTop: 4 }}>
                         SEARCH SURROUNDINGS

@@ -27,7 +27,8 @@ export function calculateMeteoriteEfficiency(state: GameState, meteoriteIdx: num
                     if (currentMet) {
                         count = neighbors.meteorites.filter(m =>
                             m.rarity === currentMet.rarity &&
-                            m.discoveredIn === currentMet.discoveredIn
+                            m.discoveredIn === currentMet.discoveredIn &&
+                            m.quality === currentMet.quality
                         ).length;
                     }
                     break;
@@ -100,7 +101,8 @@ export function calculateMeteoriteEfficiency(state: GameState, meteoriteIdx: num
                     break;
             }
 
-            const activeValue = count * perk.value;
+            const resonanceBonus = calculateLegendaryBonus(state, 'metric_resonance', true);
+            const activeValue = count * (perk.value + resonanceBonus);
             totalActiveBoostPct += activeValue;
             perkResults[perk.id] = { activeValue, count };
         });
@@ -108,6 +110,8 @@ export function calculateMeteoriteEfficiency(state: GameState, meteoriteIdx: num
 
     return { totalBoost: totalActiveBoostPct / 100, perkResults };
 }
+
+import { calculateLegendaryBonus } from './LegendaryLogic';
 
 function getMeteoriteNeighbors(state: GameState, idx: number) {
     const meteorites: Meteorite[] = [];

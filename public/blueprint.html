@@ -427,7 +427,8 @@
                 <li><strong>Experience Requirement:</strong> Starts at <code>250 XP</code>. Each level increases the
                     required XP by <strong>10%</strong> (compounding).</li>
                 <li><strong>XP Scaling Formula:</strong> <code>250 * (1.10 ^ (Level - 1))</code></li>
-                <li><strong>Enemy HP Growth:</strong> <code>50 * (1.15^m) * (1 + (m * log2(2 + m) / 30))</code></li>
+                <li><strong>Enemy HP Growth:</strong> <code>80 * (1.186^m) * (1 + (m * log2(2 + m) / 30))</code> → 20k @
+                    20min, 250M @ 60min</li>
                 <li><strong>Spawn Rate Scaling:</strong> Starts at <code>1.6/s</code>, increasing by <code>+0.1</code>
                     every 60 seconds.</li>
             </ul>
@@ -907,6 +908,199 @@
         <section id="enemies">
             <h1>Standard Threats</h1>
             <p>The core hostile entities encountered within the Hex Arena.</p>
+
+            <h2>Enemy Damage Formulas</h2>
+            <p>All enemy damage scales exponentially with game time through HP growth.</p>
+
+            <h3>1. Enemy HP Growth Over Time</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Component</th>
+                        <th>Formula</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Base HP</td>
+                        <td><code>80 * (1.186 ^ minutes)</code></td>
+                        <td>Exponential growth foundation</td>
+                    </tr>
+                    <tr>
+                        <td>Difficulty Mult</td>
+                        <td><code>1 + (min * log₂(2 + min) / 30)</code></td>
+                        <td>Logarithmic difficulty scaling</td>
+                    </tr>
+                    <tr>
+                        <td>Cycle Mult</td>
+                        <td><code>1.2 ^ floor(minutes / 5)</code></td>
+                        <td>5-minute cycle multiplier</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Final HP</strong></td>
+                        <td><code>baseHP * diffMult * cycleMult * shapeMult</code></td>
+                        <td>Complete formula</td>
+                    </tr>
+                    <tr>
+                        <td>Boss HP</td>
+                        <td><code>Final HP * 15</code></td>
+                        <td>Boss multiplier</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>HP Benchmarks</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Enemy HP</th>
+                        <th>Boss HP</th>
+                        <th>Collision Dmg (15%)</th>
+                        <th>Projectile Dmg (30%)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>0 min</td>
+                        <td>80</td>
+                        <td>1,200</td>
+                        <td>12</td>
+                        <td>24</td>
+                    </tr>
+                    <tr>
+                        <td>10 min</td>
+                        <td>1,392</td>
+                        <td>20,880</td>
+                        <td>209</td>
+                        <td>418</td>
+                    </tr>
+                    <tr style="background: rgba(34, 211, 238, 0.1);">
+                        <td><strong>20 min</strong></td>
+                        <td><strong>19,981</strong></td>
+                        <td><strong>299,715</strong></td>
+                        <td><strong>2,997</strong></td>
+                        <td><strong>5,994</strong></td>
+                    </tr>
+                    <tr>
+                        <td>30 min</td>
+                        <td>239,260</td>
+                        <td>3,588,900</td>
+                        <td>35,889</td>
+                        <td>71,778</td>
+                    </tr>
+                    <tr>
+                        <td>40 min</td>
+                        <td>2,589,396</td>
+                        <td>38,840,940</td>
+                        <td>388,409</td>
+                        <td>776,819</td>
+                    </tr>
+                    <tr>
+                        <td>50 min</td>
+                        <td>26,324,280</td>
+                        <td>394,864,200</td>
+                        <td>3,948,642</td>
+                        <td>7,897,284</td>
+                    </tr>
+                    <tr style="background: rgba(34, 211, 238, 0.1);">
+                        <td><strong>60 min</strong></td>
+                        <td><strong>256,577,428</strong></td>
+                        <td><strong>3,848,661,420</strong></td>
+                        <td><strong>38,486,614</strong></td>
+                        <td><strong>76,973,228</strong></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>2. Collision Damage (Contact)</h3>
+            <div class="card">
+                <div class="card-title">Base Formula</div>
+                <div class="card-body">
+                    <div class="perk-row">
+                        <span class="perk-label">Standard Arena</span>
+                        <span class="perk-value">enemy.hp * 0.15 (15%)</span>
+                    </div>
+                    <div class="perk-row">
+                        <span class="perk-label">Combat Hex</span>
+                        <span class="perk-value">enemy.hp * 0.15 * 1.15 (17.25%)</span>
+                    </div>
+                    <p class="mt-4">Damage is based on <strong>current HP</strong>, so it decreases as enemies take
+                        damage. Reduced by armor and Aegis Protocol perk (capped at 80% reduction).</p>
+                </div>
+            </div>
+
+            <h3>3. Projectile Damage (Diamond Enemies)</h3>
+            <div class="card">
+                <div class="card-title">Ranged Attack</div>
+                <div class="card-body">
+                    <div class="perk-row">
+                        <span class="perk-label">Damage</span>
+                        <span class="perk-value">floor(enemy.maxHp * 0.30)</span>
+                    </div>
+                    <div class="perk-row">
+                        <span class="perk-label">Fire Rate</span>
+                        <span class="perk-value">Every 6 seconds</span>
+                    </div>
+                    <div class="perk-row">
+                        <span class="perk-label">Speed</span>
+                        <span class="perk-value">6 units/frame</span>
+                    </div>
+                    <div class="perk-row">
+                        <span class="perk-label">Lifetime</span>
+                        <span class="perk-value">~5 seconds (300 frames)</span>
+                    </div>
+                    <p class="mt-4">Damage is based on <strong>max HP</strong> (30%), making Diamond enemies
+                        increasingly dangerous over time. Projectiles use the current era palette color.</p>
+                </div>
+            </div>
+
+            <h3>4. Shape Multipliers</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Shape</th>
+                        <th>HP Mult</th>
+                        <th>Speed Mult</th>
+                        <th>Size Mult</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Circle</td>
+                        <td>1.0x</td>
+                        <td>1.0x</td>
+                        <td>1.0x</td>
+                    </tr>
+                    <tr>
+                        <td>Triangle</td>
+                        <td>0.8x</td>
+                        <td>1.2x</td>
+                        <td>0.9x</td>
+                    </tr>
+                    <tr>
+                        <td>Square</td>
+                        <td>1.2x</td>
+                        <td>0.8x</td>
+                        <td>1.1x</td>
+                    </tr>
+                    <tr>
+                        <td>Diamond</td>
+                        <td>1.0x</td>
+                        <td>1.0x</td>
+                        <td>1.0x</td>
+                    </tr>
+                    <tr>
+                        <td>Pentagon</td>
+                        <td>1.5x</td>
+                        <td>0.7x</td>
+                        <td>1.2x</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h2>Enemy Types</h2>
 
             <div class="card-grid">
                 <div class="card">
