@@ -2,7 +2,7 @@ import { useRef, useEffect, useState, useCallback } from 'react';
 import gameWorkerUrl from '../logic/gameWorker?worker&url';
 import type { GameState, UpgradeChoice, LegendaryHex, PlayerClass } from '../logic/types';
 
-import { createInitialGameState, createInitialPlayer } from '../logic/GameState';
+import { createInitialGameState } from '../logic/GameState';
 import { updatePlayer } from '../logic/PlayerLogic';
 import { updateEnemies, resetEnemyAggro } from '../logic/EnemyLogic';
 import { getChassisResonance } from '../logic/EfficiencyLogic';
@@ -162,17 +162,11 @@ export function useGameLoop(gameStarted: boolean) {
         triggerPortal
     });
 
-    const restartGame = (selectedClass?: PlayerClass) => {
+    const restartGame = (selectedClass?: PlayerClass, startingArenaId: number = 0) => {
         // Preserve current class if not provided
         const classToUse = selectedClass || gameState.current.moduleSockets.center || undefined;
 
-        gameState.current = createInitialGameState();
-
-        // Apply selected class to player
-        gameState.current.player = createInitialPlayer(classToUse);
-        if (classToUse) {
-            gameState.current.moduleSockets.center = classToUse;
-        }
+        gameState.current = createInitialGameState(classToUse, startingArenaId);
 
         setGameOver(false);
         setUpgradeChoices(null);
@@ -680,6 +674,7 @@ export function useGameLoop(gameStarted: boolean) {
                     state.player.x = destCenter.x;
                     state.player.y = destCenter.y;
                 }
+
                 state.currentArena = newArena;
                 state.nextArenaId = null;
                 state.enemies = [];

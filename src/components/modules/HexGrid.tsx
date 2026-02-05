@@ -15,7 +15,7 @@ interface HexGridProps {
     handleMouseLeaveItem: (delay?: number) => void;
     setHoveredHex: (hex: { hex: LegendaryHex, index: number, x: number, y: number } | null) => void;
     onShowClassDetail: (playerClass: PlayerClass) => void;
-    onAttemptRemove: (index: number, item: any) => void;
+    onAttemptRemove: (index: number, item: any, replaceWith?: any) => void;
 }
 
 export const HexGrid: React.FC<HexGridProps> = ({
@@ -445,7 +445,7 @@ export const HexGrid: React.FC<HexGridProps> = ({
                             const itemAtTarget = moduleSockets.diamonds[i];
                             // FIX: If target is filled, force removal check (5-dust fee) instead of free swap
                             if (itemAtTarget) {
-                                onAttemptRemove(i, itemAtTarget);
+                                onAttemptRemove(i, itemAtTarget, movedItem);
                                 // We don't drop the new item yet; user must pay to clear the slot first
                                 setMovedItem(null);
                                 return;

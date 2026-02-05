@@ -5,9 +5,12 @@ import { SettingsMenu } from './SettingsMenu';
 
 interface MainMenuProps {
     onStart: () => void;
+    onShowLeaderboard: () => void;
+    username?: string;
+    onLogout?: () => void;
 }
 
-export const MainMenu: React.FC<MainMenuProps> = ({ onStart }) => {
+export const MainMenu: React.FC<MainMenuProps> = ({ onStart, onShowLeaderboard, username, onLogout }) => {
     const [fading, setFading] = useState(false);
     const [showBlueprint, setShowBlueprint] = useState(false);
     const [showSettings, setShowSettings] = useState(false);
@@ -215,9 +218,19 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onStart }) => {
             }}>
                 <div className="menu-title">NEON SURVIVOR</div>
 
+                {username && (
+                    <div className="user-profile-tag" style={{ marginBottom: 20 }}>
+                        <div className="user-status-dot" />
+                        PILOT_{username.toUpperCase()} // PROTOCOL_ACTIVE
+                    </div>
+                )}
+
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: '100%', alignItems: 'center', pointerEvents: 'auto' }}>
                     <button className="btn-start" onClick={handleStart}>
                         <span>ENTER VOID</span>
+                    </button>
+                    <button className="btn-logic" onClick={onShowLeaderboard}>
+                        LEADERBOARD
                     </button>
                     <button className="btn-logic" onClick={() => setShowSettings(true)}>
                         SETTINGS
@@ -225,8 +238,59 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onStart }) => {
                     <button className="btn-logic" onClick={() => setShowBlueprint(true)}>
                         DATABASE
                     </button>
+                    {onLogout && (
+                        <button className="btn-logout" onClick={onLogout}>
+                            DISCONNECT
+                        </button>
+                    )}
                 </div>
             </div>
+
+            <style>{`
+                .user-profile-tag {
+                    color: #00ffff;
+                    font-size: 14px;
+                    font-weight: 700;
+                    letter-spacing: 2px;
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    text-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+                    opacity: 0.8;
+                }
+                .user-status-dot {
+                    width: 8px;
+                    height: 8px;
+                    background: #00ffff;
+                    border-radius: 50%;
+                    box-shadow: 0 0 8px #00ffff;
+                    animation: pulse-green 2s infinite;
+                }
+                @keyframes pulse-green {
+                    0% { transform: scale(1); opacity: 1; }
+                    50% { transform: scale(1.5); opacity: 0.5; }
+                    100% { transform: scale(1); opacity: 1; }
+                }
+                .btn-logout {
+                    background: transparent;
+                    border: none;
+                    color: rgba(255, 68, 68, 0.6);
+                    font-size: 12px;
+                    font-weight: 900;
+                    letter-spacing: 3px;
+                    cursor: pointer;
+                    margin-top: 15px;
+                    padding: 8px 20px;
+                    transition: all 0.3s ease;
+                    border: 1px solid transparent;
+                }
+                .btn-logout:hover {
+                    color: #ff4444;
+                    text-shadow: 0 0 10px rgba(255, 68, 68, 0.5);
+                    border: 1px solid rgba(255, 68, 68, 0.3);
+                    background: rgba(255, 68, 68, 0.05);
+                }
+            `}</style>
 
             {/* Sub-panels */}
             {showSettings && (

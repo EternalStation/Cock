@@ -41,8 +41,8 @@ export const LEGENDARY_UPGRADES: Record<string, LegendaryHex> = {
         id: 'com_life',
         name: 'CRIMSON FEAST',
         desc: '+3% Lifesteal',
-        description: 'Advanced parasitic nanites that bleed energy from enemy hulls to fuel internal repair systems.',
-        lore: 'The Feast is a relentless hunger. As you strike, your nanites burrow deep, carrying back the vital energy needed to keep your systems operational even under heavy fire.',
+        description: 'Advanced parasitic protocols that bleed energy from enemy hulls to fuel internal repair systems.',
+        lore: 'The Feast is a relentless hunger. As you strike, your siphons burrow deep, carrying back the vital energy needed to keep your systems operational even under heavy fire.',
         category: 'Combat',
         type: 'ComLife',
         level: 1,
@@ -78,7 +78,7 @@ export const LEGENDARY_UPGRADES: Record<string, LegendaryHex> = {
         name: 'TOXIC SWAMP',
         desc: 'Active: Spawn Toxic Puddle',
         description: 'Chemical dispersal system that saturates the region with corrosive, neuro-inhibiting compounds.',
-        lore: 'The Toxic Swamp creates a localized dead-zone. Corrosive nanites melt through enemy shielding while neuro-toxins slow their movement to a crawl.',
+        lore: 'The Toxic Swamp creates a localized dead-zone. Corrosive compounds melt through enemy shielding while neuro-toxins slow their movement to a crawl.',
         category: 'Defensive',
         type: 'DefPuddle',
         level: 1,
@@ -150,9 +150,9 @@ export function getLegendaryPerksArray(type: string, level: number, state?: Game
         ],
         ComLife: [
             ["+3% Lifesteal"],
-            ["Shift: Restore 200% Overheal", "3s Shield Duration"],
-            ["2% Enemy Max HP DMG"],
-            ["10% Zombie Spawn Chance"],
+            ["Overheal becomes Shield (200% efficiency, 3s)"],
+            ["+2% Enemy Max HP as DMG (Non-Bosses)"],
+            ["10% Zombie Spawn Chance (5s Delay, Feasters)"],
             ["MAX LEVEL"]
         ],
         ComCrit: [

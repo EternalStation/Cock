@@ -55,22 +55,35 @@ export function updateDirector(state: GameState, step: number) {
             if (Math.random() < 0.0003) {
                 startEvent(state, 'legion_formation');
                 state.directorState.legionCycle = current5MinCycle;
+                state.directorState.legionSpawned = false; // Reset for new event
             }
         }
     }
 
     // 3. Update existing event
     if (state.activeEvent) {
-        updateActiveEvent(state, step);
+        if (state.activeEvent.type === 'legion_formation' && state.directorState?.legionSpawned) {
+            // Check if any legion members remain
+            const anyLegionAlive = state.enemies.some(e => e.legionId === state.directorState?.activeLegionId && !e.dead);
+            if (!anyLegionAlive) {
+                console.log(`Director: Legion destroyed, ending event`);
+                state.activeEvent = null;
+                return;
+            }
+        } else {
+            updateActiveEvent(state, step);
+        }
     }
 }
 
 function startEvent(state: GameState, type: GameEventType) {
     let duration = 60; // Default 1 minute
 
-    // Necrotic Surge and Legion Formation are shorter
-    if (type === 'necrotic_surge' || type === 'legion_formation') {
+    // Necrotic Surge is shorter, Legion Formation lasts until death
+    if (type === 'necrotic_surge') {
         duration = 30; // 30 seconds
+    } else if (type === 'legion_formation') {
+        duration = 600; // 10 minutes fallback
     }
 
     const event: GameEvent = {

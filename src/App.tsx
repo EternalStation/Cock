@@ -7,58 +7,119 @@ import { MainMenu } from './components/MainMenu';
 import { DeathScreen } from './components/DeathScreen';
 import { MobileControls } from './components/MobileControls';
 import { AudioWidget } from './components/AudioWidget';
+import AuthScreen from './components/AuthScreen';
+import Leaderboard from './components/Leaderboard';
 
 
 import { ModuleMenu } from './components/ModuleMenu';
 import { LegendarySelectionMenu } from './components/LegendarySelectionMenu';
 import { ClassSelection } from './components/ClassSelection';
+import { ArenaSelection } from './components/ArenaSelection';
 import { type PlayerClass } from './logic/types';
 
 import { useGameLoop } from './hooks/useGame';
 import { useWindowScale } from './hooks/useWindowScale';
 import { startBGM } from './logic/AudioLogic';
+import api from './api/client';
 import './styles/menu_additions.css';
 
 function App() {
   const [gameStarted, setGameStarted] = useState(false);
   const [selectingClass, setSelectingClass] = useState(false);
+  const [selectingArena, setSelectingArena] = useState(false);
+  const [selectedClass, setSelectedClass] = useState<PlayerClass | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [username, setUsername] = useState('');
+  const [showLeaderboard, setShowLeaderboard] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(true);
+
   const hook = useGameLoop(gameStarted);
   const appRef = useRef<HTMLDivElement>(null);
 
   const { scale, isMobile, isLandscape } = useWindowScale();
 
+  // Check if user is already logged in
+  useEffect(() => {
+    api.verifyToken().then(result => {
+      if (result.valid) {
+        setIsAuthenticated(true);
+        setUsername(result.user.username);
+      }
+      setCheckingAuth(false);
+    });
+  }, []);
+
   // Auto-focus logic
   useEffect(() => {
-    if (gameStarted && !hook.showStats && !hook.showSettings && !hook.showModuleMenu && !selectingClass) {
+    if (gameStarted && !hook.showStats && !hook.showSettings && !hook.showModuleMenu && !selectingClass && !selectingArena && !showLeaderboard) {
       appRef.current?.focus();
     }
-  }, [gameStarted, hook.showStats, hook.showSettings, hook.showModuleMenu, selectingClass]);
+  }, [gameStarted, hook.showStats, hook.showSettings, hook.showModuleMenu, selectingClass, selectingArena, showLeaderboard]);
 
   // Reset logic when quitting to main menu
   const handleQuit = () => {
     hook.setShowSettings(false);
     setGameStarted(false);
     setSelectingClass(false);
+    setSelectingArena(false);
     // Optional: reset game state logic if needed, but restartGame handles most
     hook.restartGame();
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('authToken');
+    setIsAuthenticated(false);
+    setUsername('');
   };
 
   const handleStart = () => {
     setSelectingClass(true);
   };
 
-  const handleClassSelect = (selectedClass: PlayerClass) => {
-    startBGM();
+  const handleClassSelect = (cls: PlayerClass) => {
+    setSelectedClass(cls);
     setSelectingClass(false);
+    setSelectingArena(true);
+  };
+
+  const handleArenaSelect = (arenaId: number) => {
+    startBGM();
+    setSelectingArena(false);
     setGameStarted(true);
-    hook.restartGame(selectedClass);
+    if (selectedClass) {
+      hook.restartGame(selectedClass, arenaId);
+    }
   };
 
   const handleRestart = () => {
     hook.restartGame(); // Reset internal game state and setGameOver(false)
     setGameStarted(false);
     setSelectingClass(true);
+    setSelectingArena(false);
   };
+
+  if (checkingAuth) {
+    return (
+      <div style={{ width: '100vw', height: '100vh', background: '#0a0e27', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#00ffff', fontStyle: 'italic', fontSize: '24px', fontWeight: 'bold', fontFamily: 'monospace' }}>
+        <div style={{ textAlign: 'center' }}>
+          <div>INITIALIZING NEON LINK...</div>
+          <div style={{ fontSize: '14px', marginTop: '10px', opacity: 0.7 }}>ESTABLISHING ENCRYPTED CONNECTION</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <AuthScreen
+        onAuthSuccess={(name) => {
+          setUsername(name);
+          setIsAuthenticated(true);
+        }}
+        onSkip={() => setIsAuthenticated(true)}
+      />
+    );
+  }
 
   return (
     <div
@@ -68,8 +129,16 @@ function App() {
       onClick={(e) => e.currentTarget.focus()}
     >
 
-      {!gameStarted && !selectingClass && <MainMenu onStart={handleStart} />}
+      {!gameStarted && !selectingClass && !selectingArena && (
+        <MainMenu
+          onStart={handleStart}
+          onShowLeaderboard={() => setShowLeaderboard(true)}
+          username={username}
+          onLogout={handleLogout}
+        />
+      )}
       {selectingClass && <ClassSelection onSelect={handleClassSelect} />}
+      {selectingArena && <ArenaSelection onSelect={handleArenaSelect} />}
 
       {gameStarted && (
         <>
@@ -163,6 +232,7 @@ function App() {
                   gameState={hook.gameState}
                   onRestart={handleRestart}
                   onQuit={handleQuit}
+                  onShowLeaderboard={() => setShowLeaderboard(true)}
                 />
               </div>
             )}
@@ -190,6 +260,11 @@ function App() {
           )}
 
         </>
+      )}
+
+      {/* Leaderboard Overlay */}
+      {showLeaderboard && (
+        <Leaderboard onClose={() => setShowLeaderboard(false)} currentUsername={username} />
       )}
     </div>
   );

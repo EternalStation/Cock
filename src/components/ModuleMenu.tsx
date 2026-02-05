@@ -30,7 +30,7 @@ export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClo
     const [recyclingAnim, setRecyclingAnim] = useState(false); // Used for visual feedback on button
 
     // Removal Confirmation State
-    const [removalCandidate, setRemovalCandidate] = useState<{ index: number, item: any } | null>(null);
+    const [removalCandidate, setRemovalCandidate] = useState<{ index: number, item: any, replaceWith?: { item: any, source: string, index: number } } | null>(null);
     const [placementAlert, setPlacementAlert] = useState(false);
 
     const hoverTimeout = useRef<number | null>(null);
@@ -75,25 +75,37 @@ export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClo
         }, delay);
     };
 
-    const handleAttemptRemove = (index: number, item: any) => {
+    const handleAttemptRemove = (index: number, item: any, replaceWith?: { item: any, source: string, index: number }) => {
         setLockedItem(null); // Clear tooltip lock so popup is visible
-        setRemovalCandidate({ index, item });
+        setRemovalCandidate({ index, item, replaceWith });
     };
 
     const confirmRemoval = () => {
         if (removalCandidate) {
             if (spendDust(5)) {
-                const { index, item } = removalCandidate;
+                const { index, item, replaceWith } = removalCandidate;
                 const newItem = { ...item, isNew: false };
-                onSocketUpdate('diamond', index, null);
 
-                // Find first empty inventory slot
+                // 1. Clear the source slot first (frees up inventory slot if needed)
+                if (replaceWith) {
+                    if (replaceWith.source === 'inventory') {
+                        onInventoryUpdate(replaceWith.index, null);
+                    } else if (replaceWith.source === 'diamond') {
+                        onSocketUpdate('diamond', replaceWith.index, null);
+                    }
+                }
+
+                // 2. Extract old item to inventory
                 const emptySlotIdx = gameState.inventory.indexOf(null);
                 if (emptySlotIdx !== -1) {
                     onInventoryUpdate(emptySlotIdx, newItem);
+                }
+
+                // 3. Place new item in target socket if replacing
+                if (replaceWith) {
+                    onSocketUpdate('diamond', index, replaceWith.item);
                 } else {
-                    // Fallback to drag if inventory is actually full
-                    setMovedItem({ item: newItem, source: 'diamond', index });
+                    onSocketUpdate('diamond', index, null);
                 }
 
                 setRemovalCandidate(null);
@@ -240,13 +252,13 @@ export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClo
                             setSelectedClassDetail(cls);
                             onViewChassisDetail();
                         }}
-                        onAttemptRemove={(index, item) => {
+                        onAttemptRemove={(index, item, replaceWith) => {
                             if (gameState.pendingLegendaryHex) {
                                 setPlacementAlert(true);
                                 setTimeout(() => setPlacementAlert(false), 2000);
                                 return;
                             }
-                            handleAttemptRemove(index, item);
+                            handleAttemptRemove(index, item, replaceWith);
                         }}
                     />
                 </div>
@@ -500,10 +512,12 @@ export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClo
                         onClick={(e) => e.stopPropagation()} // Prevent closing when clicking modal content
                     >
                         <div style={{ fontSize: '18px', fontWeight: 900, color: '#ef4444', letterSpacing: '1px' }}>
-                            UNSOCKET MODULE?
+                            {removalCandidate.replaceWith ? 'REPLACE MODULE?' : 'UNSOCKET MODULE?'}
                         </div>
                         <div style={{ color: '#94a3b8', textAlign: 'center', fontSize: '12px' }}>
-                            Removing this module requires energy to safely extract.
+                            {removalCandidate.replaceWith
+                                ? 'Replacing this module will move the current one to your inventory.'
+                                : 'Removing this module requires energy to safely extract.'}
                         </div>
 
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(239, 68, 68, 0.1)', padding: '8px 16px', borderRadius: '4px' }}>
@@ -534,7 +548,9 @@ export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClo
                                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px'
                                 }}
                             >
-                                {meteoriteDust >= 5 ? 'EXTRACT' : 'NO DUST'}
+                                {meteoriteDust >= 5
+                                    ? (removalCandidate.replaceWith ? 'REPLACE' : 'EXTRACT')
+                                    : 'NO DUST'}
                             </button>
                         </div>
                     </div>

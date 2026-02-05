@@ -229,7 +229,7 @@ export function renderEnemies(ctx: CanvasRenderingContext2D, state: GameState, m
     });
 
     enemies.forEach(e => {
-        if (e.dead || e.isAssembling) return;
+        if (e.dead) return;
         if (e.mergeState === 'warming_up' && e.mergeTimer && !e.mergeHost && e.mergeId) {
             const host = mergeHosts.get(e.mergeId);
             if (host) {
@@ -1018,38 +1018,41 @@ export function renderEnemies(ctx: CanvasRenderingContext2D, state: GameState, m
                 ctx.rotate(-(e.rotationPhase || 0)); // Un-rotate for bar/aura logic if needed or keep it dynamic
 
                 const spacing = e.size * 2.5;
-                const gridWidth = 6 * spacing;
-                const gridHeight = 5 * spacing;
-                const centerX = (gridWidth - spacing) / 2;
-                const centerY = (gridHeight - spacing) / 2;
+                const gridWidth = 5 * spacing; // 6 slots = 5 intervals
+                const gridHeight = 4 * spacing; // 5 slots = 4 intervals
+
+                // Offset from lead to formation center (slot 0,0)
+                const centerX = -(e.legionSlot?.x || 0) * spacing;
+                const centerY = -(e.legionSlot?.y || 0) * spacing;
 
                 // 1. Legion AURA
                 ctx.save();
                 ctx.translate(centerX, centerY);
                 const auraPulse = 0.5 + Math.sin(state.gameTime * 3) * 0.2;
-                const auraGradient = ctx.createRadialGradient(0, 0, gridWidth * 0.2, 0, 0, gridWidth * 0.8);
+                const auraGradient = ctx.createRadialGradient(0, 0, gridWidth * 0.3, 0, 0, gridWidth * 1.0);
                 auraGradient.addColorStop(0, 'rgba(56, 189, 248, 0)');
-                auraGradient.addColorStop(0.5, `rgba(56, 189, 248, ${0.1 * auraPulse})`);
+                auraGradient.addColorStop(0.5, `rgba(56, 189, 248, ${0.15 * auraPulse})`);
                 auraGradient.addColorStop(1, 'rgba(56, 189, 248, 0)');
 
                 ctx.fillStyle = auraGradient;
                 ctx.beginPath();
-                ctx.arc(0, 0, gridWidth * 0.8, 0, Math.PI * 2);
+                ctx.arc(0, 0, gridWidth * 1.2, 0, Math.PI * 2);
                 ctx.fill();
 
                 // Shield Border Glow
                 ctx.strokeStyle = '#38bdf8';
-                ctx.lineWidth = 3;
-                ctx.globalAlpha = 0.3 * auraPulse;
-                ctx.setLineDash([15, 15]);
-                ctx.strokeRect(-gridWidth / 2 - 10, -gridHeight / 2 - 10, gridWidth + 20, gridHeight + 20);
+                ctx.lineWidth = 4;
+                ctx.globalAlpha = 0.4 * auraPulse;
+                ctx.setLineDash([20, 10]);
+                const padding = 40;
+                ctx.strokeRect(-gridWidth / 2 - padding, -gridHeight / 2 - padding, gridWidth + padding * 2, gridHeight + padding * 2);
                 ctx.restore();
 
-                // 2. Legion SHIELD BAR
-                const barWidth = gridWidth;
-                const barHeight = 6;
-                const barX = -spacing / 2;
-                const barY = -spacing - 30;
+                // 2. Legion SHIELD BAR (Focused above the total formation)
+                const barWidth = gridWidth + padding;
+                const barHeight = 8;
+                const barX = centerX - barWidth / 2;
+                const barY = centerY - gridHeight / 2 - padding - 40;
 
                 // BG
                 ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';

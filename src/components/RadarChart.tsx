@@ -1,21 +1,24 @@
 import React from 'react';
 import type { Player } from '../logic/types';
 
+interface RadarCounts {
+    DPS: number;
+    ARM: number;
+    EXP: number;
+    HP: number;
+    REG: number;
+}
+
 interface RadarChartProps {
-    player: Player;
+    player?: Player;
+    counts?: RadarCounts;
     size?: number;
     showLabels?: boolean;
 }
 
-export const RadarChart: React.FC<RadarChartProps> = ({ player, size = 150, showLabels = true }) => {
+export const RadarChart: React.FC<RadarChartProps> = ({ player, counts: propCounts, size = 150, showLabels = true }) => {
     // Logic: Visualize Build Focus based on upgrade counts
-    // Normalized 0-100 against MAX count of any branch
-
-    // Normalization Helpers (0-100)
-    // Removed unused getVal
-
-    // Logic Update: Visualize Build Focus based on upgrade counts
-    const counts = {
+    const counts = propCounts || {
         DPS: 0,
         ARM: 0,
         EXP: 0,
@@ -23,14 +26,16 @@ export const RadarChart: React.FC<RadarChartProps> = ({ player, size = 150, show
         REG: 0
     };
 
-    player.upgradesCollected.forEach(u => {
-        const id = u.type.id;
-        if (id.startsWith('dmg') || id === 'atk_s') counts.DPS++;
-        else if (id.startsWith('arm')) counts.ARM++;
-        else if (id.startsWith('xp')) counts.EXP++;
-        else if (id.startsWith('hp')) counts.HP++;
-        else if (id.startsWith('reg')) counts.REG++;
-    });
+    if (player && !propCounts) {
+        player.upgradesCollected.forEach(u => {
+            const id = u.type.id;
+            if (id.startsWith('dmg') || id === 'atk_s') counts.DPS++;
+            else if (id.startsWith('arm')) counts.ARM++;
+            else if (id.startsWith('xp')) counts.EXP++;
+            else if (id.startsWith('hp')) counts.HP++;
+            else if (id.startsWith('reg')) counts.REG++;
+        });
+    }
 
     const maxCount = Math.max(counts.DPS, counts.ARM, counts.EXP, counts.HP, counts.REG, 1); // Avoid div by 0
 

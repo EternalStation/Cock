@@ -1,9 +1,10 @@
 import type { GameState, Player, PlayerClass } from './types';
+import { ARENA_CENTERS } from './MapLogic';
 
-export const createInitialPlayer = (selectedClass?: PlayerClass): Player => {
+export const createInitialPlayer = (selectedClass?: PlayerClass, startingArenaId: number = 0): Player => {
     const p: Player = {
-        x: 0,
-        y: 0,
+        x: ARENA_CENTERS[startingArenaId]?.x || 0,
+        y: ARENA_CENTERS[startingArenaId]?.y || 0,
         size: 10,
         speed: 5.3,
         dust: 0,
@@ -22,6 +23,7 @@ export const createInitialPlayer = (selectedClass?: PlayerClass): Player => {
         damageBlockedByArmor: 0,
         damageBlockedByCollisionReduc: 0,
         damageBlockedByProjectileReduc: 0,
+        damageBlockedByShield: 0,
         wallsHit: 0,
         upgradesCollected: [],
         lastShot: 0,
@@ -53,10 +55,14 @@ export const createInitialPlayer = (selectedClass?: PlayerClass): Player => {
         if (selectedClass.id === 'malware') {
             p.pierce = 1; // Malware starts with 1 pierce (hits 2 enemies)
         }
+    }
 
-        // Finalize HP using unified calcStat logic (but locally to avoid circular)
-        const maxHp = p.hp.base * (1 + p.hp.mult / 100);
-        p.curHp = maxHp;
+    // Finalize HP using unified calcStat logic
+    const baseMaxHp = p.hp.base * (1 + p.hp.mult / 100);
+    if (startingArenaId === 2) {
+        p.curHp = baseMaxHp * 1.2; // Match Defence Hex +20% buff
+    } else {
+        p.curHp = baseMaxHp;
     }
 
     return p;
@@ -64,8 +70,8 @@ export const createInitialPlayer = (selectedClass?: PlayerClass): Player => {
 
 import { SpatialGrid } from './SpatialGrid';
 
-export const createInitialGameState = (): GameState => ({
-    player: createInitialPlayer(),
+export const createInitialGameState = (selectedClass?: PlayerClass, startingArenaId: number = 0): GameState => ({
+    player: createInitialPlayer(selectedClass, startingArenaId),
     enemies: [],
     bullets: [],
     enemyBullets: [],
@@ -73,7 +79,10 @@ export const createInitialGameState = (): GameState => ({
     drones: [],
     particles: [],
     areaEffects: [],
-    camera: { x: 0, y: 0 },
+    camera: {
+        x: ARENA_CENTERS[startingArenaId]?.x || 0,
+        y: ARENA_CENTERS[startingArenaId]?.y || 0
+    },
     score: 0,
     killCount: 0,
     bossKills: 0,
@@ -100,7 +109,7 @@ export const createInitialGameState = (): GameState => ({
     directorState: { necroticCycle: -1, legionCycle: -1 },
 
     // Portal / Arena Defaults
-    currentArena: 0,
+    currentArena: startingArenaId,
     portalState: 'closed',
     portalTimer: 240, // 240s = 4 minutes (Cycle)
     portalOpenDuration: 10, // 10 seconds open
@@ -126,7 +135,8 @@ export const createInitialGameState = (): GameState => ({
     moduleSockets: {
         hexagons: Array(6).fill(null),
         diamonds: Array(12).fill(null),
-        center: null
+        center: selectedClass || null
     },
-    chassisDetailViewed: false
+    chassisDetailViewed: false,
+    legionLeads: {}
 });

@@ -158,6 +158,8 @@ export function updatePlayer(state: GameState, keys: Record<string, boolean>, on
                     }
                 }
                 player.shieldChunks = player.shieldChunks.filter(c => c.amount > 0);
+                player.damageBlockedByShield += absorbed;
+                player.damageBlocked += absorbed;
             }
 
             let finalWallDmg = wallDmg - absorbed;
@@ -273,7 +275,7 @@ export function updatePlayer(state: GameState, keys: Record<string, boolean>, on
 
     // --- ENEMY CONTACT DAMAGE & COLLISION ---
     state.enemies.forEach(e => {
-        if (e.dead || e.hp <= 0 || e.isZombie) return;
+        if (e.dead || e.hp <= 0 || e.isZombie || (e.legionId && !e.legionReady)) return;
 
         const dToE = Math.hypot(e.x - player.x, e.y - player.y);
         const contactDist = e.size + 18;
@@ -395,6 +397,8 @@ export function updatePlayer(state: GameState, keys: Record<string, boolean>, on
                         }
                     }
                     player.shieldChunks = player.shieldChunks.filter(c => c.amount > 0);
+                    player.damageBlockedByShield += absorbed;
+                    player.damageBlocked += absorbed;
                 }
                 const actualDmg = finalDmg - absorbed;
 

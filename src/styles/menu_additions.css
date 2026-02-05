@@ -132,7 +132,7 @@ body {
     flex-direction: column;
     align-items: center;
     justify-content: flex-start;
-    padding-top: 15vh;
+    padding-top: 12vh;
     width: 100%;
     height: 100%;
     pointer-events: none;
@@ -208,7 +208,7 @@ body {
     color: #f8fafc;
     text-transform: uppercase;
     letter-spacing: 24px;
-    margin-bottom: 80px;
+    margin-bottom: 60px;
     text-shadow: 0 10px 30px rgba(0, 0, 0, 1);
     position: relative;
     z-index: 10;
@@ -246,7 +246,6 @@ body {
     letter-spacing: 8px;
     text-transform: uppercase;
     backdrop-filter: blur(12px);
-    margin-bottom: 25px;
     position: relative;
     overflow: hidden;
     pointer-events: auto;
@@ -298,7 +297,6 @@ body {
     letter-spacing: 4px;
     text-transform: uppercase;
     backdrop-filter: blur(8px);
-    margin-bottom: 20px;
     pointer-events: auto;
     white-space: nowrap;
 }
@@ -694,6 +692,7 @@ body {
     margin-top: 8px;
     font-weight: 700;
 }
+
 /* --- SETTINGS MENU OVERHAUL --- */
 .settings-overlay {
     position: absolute;

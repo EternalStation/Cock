@@ -1,5 +1,5 @@
 import type { GameState, Enemy } from './types';
-import { isInMap, ARENA_CENTERS, getHexDistToWall } from './MapLogic';
+import { isInMap, ARENA_CENTERS, getHexDistToWall, getArenaIndex, getRandomPositionInArena } from './MapLogic';
 import { playSfx } from './AudioLogic';
 import { spawnParticles, spawnFloatingNumber } from './ParticleLogic';
 import { handleEnemyDeath } from './DeathLogic';
@@ -27,7 +27,6 @@ export function updateEnemies(state: GameState, onEvent?: (event: string, data?:
     const baseSpawnRate = GAME_CONFIG.ENEMY.BASE_SPAWN_RATE + (minutes * GAME_CONFIG.ENEMY.SPAWN_RATE_PER_MINUTE);
     let actualRate = baseSpawnRate * shapeDef.spawnWeight;
     if (state.currentArena === 1) actualRate *= 1.15; // +15% Spawn Rate in Combat Hex
-    if (state.activeEvent?.type === 'legion_formation') actualRate *= 2.0; // Double spawn rate to feed legions
 
     if (Math.random() < actualRate / 60 && state.portalState !== 'transferring') {
         spawnEnemy(state);
@@ -80,47 +79,92 @@ export function updateEnemies(state: GameState, onEvent?: (event: string, data?:
 
     const activeLegionIds = Array.from(legionGroups.keys());
 
-    // --- LEGION FORMATION (Optimization: O(N)) ---
-    if (state.activeEvent?.type === 'legion_formation' && state.frameCount % 60 === 0) {
-        const candidatesByShape = new Map<string, Enemy[]>();
-        enemies.forEach(e => {
-            if (!e.dead && !e.isElite && !e.boss && !e.isZombie && !e.isRare && !e.legionId && !e.wasInLegion) {
-                if (!candidatesByShape.has(e.shape)) candidatesByShape.set(e.shape, []);
-                candidatesByShape.get(e.shape)!.push(e);
-            }
-        });
+    // --- LEGION SPAWNING ---
+    if (state.activeEvent?.type === 'legion_formation' && !state.directorState?.legionSpawned) {
+        const { shapeDef, eraPalette } = getProgressionParams(state.gameTime);
+        const legionId = `legion_${Math.random()}`;
+        state.directorState!.legionSpawned = true;
+        state.directorState!.activeLegionId = legionId;
 
-        candidatesByShape.forEach((available, shape) => {
-            while (available.length >= 30) {
-                const legionId = `legion_${Math.random()}`;
-                const members = available.splice(0, 30);
+        const formationAngle = Math.random() * Math.PI * 2;
+        const formationDist = 1500;
+        let baseCenterX = state.player.x + Math.cos(formationAngle) * formationDist;
+        let baseCenterY = state.player.y + Math.sin(formationAngle) * formationDist;
 
-                let totalHp = 0;
-                members.forEach(m => totalHp += m.hp);
-                // User Request: 200% Shield initially (was 50%)
-                const sharedShield = totalHp * 2.0;
+        // Ensure formation center is in map/current arena roughly
+        if (!isInMap(baseCenterX, baseCenterY)) {
+            const playerArena = getArenaIndex(state.player.x, state.player.y);
+            const fallback = getRandomPositionInArena(playerArena);
+            baseCenterX = fallback.x;
+            baseCenterY = fallback.y;
+        }
 
-                members.forEach((m, idx) => {
-                    m.legionId = legionId;
-                    m.wasInLegion = true;
-                    m.legionLeadId = members[0].id;
-                    m.mergeState = undefined;
-                    m.mergeId = undefined;
-                    m.mergeTimer = undefined;
-                    m.mergeHost = undefined;
-                    m.legionSlot = { x: idx % 6, y: Math.floor(idx / 6) };
-                    m.legionShield = sharedShield;
-                    m.maxLegionShield = sharedShield;
-                });
+        const formationCenterX = baseCenterX;
+        const formationCenterY = baseCenterY;
 
-                // Add to our frame cache immediately
-                legionGroups.set(legionId, { lead: members[0], members });
-                state.legionLeads![legionId] = members[0];
-                activeLegionIds.push(legionId);
+        // Scaling (Matching EnemySpawnLogic.ts)
+        const minutes = state.gameTime / 60;
+        const cycleCount = Math.floor(minutes / 5);
+        const difficultyMult = 1 + (minutes * Math.log2(2 + minutes) / 30);
+        const hpMult = Math.pow(1.2, cycleCount) * shapeDef.hpMult;
+        const baseHp = 60 * Math.pow(1.186, minutes) * difficultyMult;
+        const finalHp = baseHp * hpMult;
 
-                console.log(`Legion formed! ${shape} formation with ${sharedShield} shield.`);
-            }
-        });
+        const sharedShield = (finalHp * 30) * 20.0; // 20x of combined HP (User Request)
+
+        for (let i = 0; i < 30; i++) {
+            const slotX = i % 6 - 2.5; // Center the 6 columns (-2.5 to 2.5)
+            const slotY = Math.floor(i / 6) - 2; // Center the 5 rows (-2 to 2)
+            const spacing = 20 * shapeDef.sizeMult * 2.5;
+
+            const newUnit: Enemy = {
+                id: Math.random(),
+                type: shapeDef.type as any,
+                shape: shapeDef.type as any,
+                x: formationCenterX + (slotX * spacing),
+                y: formationCenterY + (slotY * spacing),
+                size: 20 * shapeDef.sizeMult,
+                hp: finalHp,
+                maxHp: finalHp,
+                spd: 2.4 * shapeDef.speedMult,
+                boss: false,
+                bossType: 0,
+                bossAttackPattern: 0,
+                lastAttack: Date.now(),
+                dead: false,
+                shellStage: 2,
+                palette: eraPalette.colors,
+                eraPalette: eraPalette.colors,
+                fluxState: 0,
+                pulsePhase: 0,
+                rotationPhase: Math.random() * Math.PI * 2,
+                knockback: { x: 0, y: 0 },
+                isElite: false,
+                spawnedAt: state.gameTime,
+                legionId: legionId,
+                legionLeadId: 0, // Assigned below
+                legionSlot: { x: slotX, y: slotY },
+                legionShield: sharedShield,
+                maxLegionShield: sharedShield,
+                legionReady: true, // Fully formed instantly
+                wasInLegion: true,
+                legionCenter: { x: formationCenterX, y: formationCenterY }
+            };
+            state.enemies.push(newUnit);
+        }
+
+        // Set Lead ID and map the lead in the global legionLeads map
+        const legionMembers = state.enemies.filter(e => e.legionId === legionId);
+        const lead = legionMembers[0];
+
+        if (lead) {
+            legionMembers.forEach(m => m.legionLeadId = lead.id);
+            // CRITICAL: Must register the lead in legionLeads so ProjectileLogic sees the shield!
+            if (!state.legionLeads) state.legionLeads = {};
+            state.legionLeads[legionId] = lead;
+
+            console.log(`Director: Legion spawned with ${shapeDef.type}s at 1500px, Shield: ${sharedShield}`);
+        }
     }
 
     // --- MERGING LOGIC ---
@@ -133,6 +177,7 @@ export function updateEnemies(state: GameState, onEvent?: (event: string, data?:
         if (e.legionId && e.mergeId) compromisedMergeIds.add(e.mergeId);
     });
 
+    // User: Legion members are strictly excluded from merging and cluster logic
     if (compromisedMergeIds.size > 0) {
         enemies.forEach(e => {
             if (e.mergeId && compromisedMergeIds.has(e.mergeId)) {
@@ -264,8 +309,6 @@ export function updateEnemies(state: GameState, onEvent?: (event: string, data?:
         let targetX = player.x;
         let targetY = player.y;
         let dist = Math.hypot(player.x - e.x, player.y - e.y);
-        let targetZombie: Enemy | null = null;
-
         // Enemies target nearest: Player or Active Zombie
         for (const z of state.enemies) {
             if (z.isZombie && z.zombieState === 'active' && !z.dead) {
@@ -275,7 +318,6 @@ export function updateEnemies(state: GameState, onEvent?: (event: string, data?:
                     dist = zDist;
                     targetX = z.x;
                     targetY = z.y;
-                    targetZombie = z;
                 }
             }
         }
@@ -284,28 +326,8 @@ export function updateEnemies(state: GameState, onEvent?: (event: string, data?:
         const dy = targetY - e.y;
         if (dist === 0) dist = 0.001;
 
-        // Collision with Zombie
-        if (targetZombie && dist < e.size + targetZombie.size) {
-            const now = state.gameTime * 1000;
-            if (!e.lastAttack || now - e.lastAttack > 500) {
-                // Mutual Damage: 100% HP exchange
-                const zombieHp = e.hp;
-                const enemyHp = targetZombie.hp;
-
-                targetZombie.hp -= zombieHp; // Enemy takes 100% of Zombie HP
-                e.hp -= enemyHp; // Zombie takes 100% of Enemy HP
-
-                // Mark enemy as infected
-                e.infected = true;
-
-                e.lastAttack = now;
-                playSfx('impact');
-                spawnParticles(state, targetZombie.x, targetZombie.y, '#4ade80', 5);
-
-                if (targetZombie.hp <= 0) targetZombie.dead = true;
-                if (e.hp <= 0) e.dead = true;
-            }
-        }
+        // Collision with Zombie - (Handled in UniqueEnemyLogic.ts now)
+        // if (targetZombie && dist < e.size + targetZombie.size) { ... }
 
         // Separator
         let pushX = 0;
@@ -430,108 +452,43 @@ export function updateEnemies(state: GameState, onEvent?: (event: string, data?:
 
         // 2. Behavior (Persists after event ends)
         if (e.legionId && e.legionSlot && e.legionLeadId) {
-            const group = legionGroups.get(e.legionId);
-            const lead = group?.lead;
-            const members = group?.members || [];
-
-            if (lead && members.length > 0) {
+            const lead = state.legionLeads?.[e.legionId];
+            if (lead) {
                 // Legion members ignore fear/fleeing
                 e.fearedUntil = 0;
-
-                // Sync lead's shield to this member for projectile logic (which hits member)
-                e.legionShield = lead.legionShield;
-                e.maxLegionShield = lead.maxLegionShield;
-
-                // Legion Center Target
-                const spacing = e.size * 2.5;
-
-                // The legion moves as a unit towards the player
-                const legionSpd = currentSpd * 1.2; // User: Increased speed towards player
-
-                // Actually, let's just make them move towards their slot relative to the legion's "lead"
-                // (lead already defined above)
-
-                const targetX = lead.x + (e.legionSlot.x * spacing);
-                const targetY = lead.y + (e.legionSlot.y * spacing);
-
-                const tdx = targetX - e.x;
-                const tdy = targetY - e.y;
-                const tdist = Math.hypot(tdx, tdy);
-
-                if (tdist > 5) {
-                    const catchUpSpd = currentSpd * 2;
-                    vx = (tdx / tdist) * Math.min(catchUpSpd, tdist);
-                    vy = (tdy / tdist) * Math.min(catchUpSpd, tdist);
-                } else if (e === lead) {
-                    // Lead moves towards player (Coordinated with other legions for a side-by-side line)
-                    const myLegionIndex = activeLegionIds.indexOf(e.legionId);
-                    const totalLegions = activeLegionIds.length;
-
-                    // Direction to player
-                    const globalAngle = Math.atan2(player.y - e.y, player.x - e.x);
-                    const perpAngle = globalAngle + Math.PI / 2;
-
-                    const spacing = e.size * 2.5;
-                    const gridWidth = 6 * spacing;
-                    const offsetMultiplier = myLegionIndex - (totalLegions - 1) / 2;
-                    const sideShift = offsetMultiplier * (gridWidth + 100); // 100px gap between legions
-
-                    // Final Phalanx Target Point (where the "center" or player is)
-                    const phalanxTargetX = player.x + Math.cos(perpAngle) * sideShift;
-                    const phalanxTargetY = player.y + Math.sin(perpAngle) * sideShift;
-
-                    // NEW: Targeting - move formation so the closest member touches the phalanxTarget
-                    let closestMember = members[0];
-                    let minDist = Infinity;
-                    members.forEach(m => {
-                        const d = Math.hypot(m.x - phalanxTargetX, m.y - phalanxTargetY);
-                        if (d < minDist) {
-                            minDist = d;
-                            closestMember = m;
-                        }
-                    });
-
-                    // Offset from lead to the closest member
-                    const memberOffX = closestMember.legionSlot!.x * spacing;
-                    const memberOffY = closestMember.legionSlot!.y * spacing;
-
-                    // Lead's goal is to put that member on the target
-                    const finalTargetX = phalanxTargetX - memberOffX;
-                    const finalTargetY = phalanxTargetY - memberOffY;
-
-                    const ldx = finalTargetX - e.x;
-                    const ldy = finalTargetY - e.y;
-                    const ldist = Math.hypot(ldx, ldy);
-
-                    if (ldist > 10) {
-                        vx = (ldx / ldist) * legionSpd;
-                        vy = (ldy / ldist) * legionSpd;
-                    } else {
-                        vx = 0;
-                        vy = 0;
-                    }
-                } else {
-                    // Match lead's velocity (approx) for tight formation
-                    vx = lead.vx || 0;
-                    vy = lead.vy || 0;
-                }
-
-                // Check Assemblage Status
-                // If member is far from target slot, it is "assembling"
-                const distToSlot = Math.hypot(e.x - targetX, e.y - targetY);
-                // We consider "Assembled" if within small distance
-                if (distToSlot > 20) {
-                    e.isAssembling = true;
-                } else {
-                    e.isAssembling = false;
-                }
-
-                // Initial State Force: If just formed (e.g. first frame), ensure isAssembling is true to prevent blink
-                // The check above should handle it naturally.
 
                 // No personal push when in legion to maintain formation
                 pushX = 0;
                 pushY = 0;
+
+                const spacing = e.size * 2.5;
+                // Corrected relative slot logic: target = lead + (mySlot - leadSlot) * spacing
+                const targetX = lead.x + (e.legionSlot.x - (lead.legionSlot?.x || 0)) * spacing;
+                const targetY = lead.y + (e.legionSlot.y - (lead.legionSlot?.y || 0)) * spacing;
+
+                if (e === lead) {
+                    // Lead chases player direct
+                    const playerAngle = Math.atan2(player.y - e.y, player.x - e.x);
+                    vx = Math.cos(playerAngle) * currentSpd * 1.2;
+                    vy = Math.sin(playerAngle) * currentSpd * 1.2;
+                } else {
+                    // Move to slot relative to lead
+                    const tdx = targetX - e.x;
+                    const tdy = targetY - e.y;
+                    const tdist = Math.hypot(tdx, tdy);
+                    if (tdist > 5) {
+                        vx = (tdx / tdist) * Math.min(tdist, currentSpd * 3); // Faster catch-up
+                        vy = (tdy / tdist) * Math.min(tdist, currentSpd * 3);
+                    } else {
+                        vx = lead.vx || 0;
+                        vy = lead.vy || 0;
+                    }
+                }
+
+                // Restore Shield Ref Sync
+                e.legionShield = lead.legionShield;
+                e.maxLegionShield = lead.maxLegionShield;
+                e.legionReady = true;
             } else {
                 e.legionId = undefined;
                 e.isAssembling = false;

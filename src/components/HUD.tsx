@@ -52,7 +52,7 @@ export const HUD: React.FC<HUDProps> = ({
             {activeEvent && (
                 <div style={{
                     position: 'absolute',
-                    top: '7%',
+                    top: 140,
                     left: '50%',
                     transform: 'translateX(-50%)',
                     textAlign: 'center',
@@ -70,7 +70,13 @@ export const HUD: React.FC<HUDProps> = ({
                     }}>
 
                         {activeEvent.type === 'necrotic_surge' && 'NECROTIC SURGE'}
-                        {activeEvent.type === 'legion_formation' && 'LEGION FORMATION'}
+                        {activeEvent.type === 'legion_formation' && (
+                            <div style={{ animation: 'glitchText 0.2s ease-in-out infinite' }}>
+                                <div style={{ fontSize: 32, color: '#ff0000', fontWeight: 900, textShadow: '0 0 15px #ff0000, 0 0 30px #ff0000' }}>
+                                    LEGION INCOMING
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}

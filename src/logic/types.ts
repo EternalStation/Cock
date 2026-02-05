@@ -82,6 +82,7 @@ export interface Player {
     damageBlockedByArmor: number;
     damageBlockedByCollisionReduc: number;
     damageBlockedByProjectileReduc: number;
+    damageBlockedByShield: number;
     wallsHit: number;
     upgradesCollected: import('./types').UpgradeChoice[]; // Full objects for stat tracking
     reg: PlayerStats;
@@ -375,6 +376,9 @@ export interface Enemy {
     isAssembling?: boolean; // Invisible/Invincible during formation
     legionShield?: number; // Shared shield value (stored on each member for simplicity or just on lead)
     maxLegionShield?: number; // Max shield for the bar indicator
+    legionReady?: boolean; // True when formation is complete and shield activates
+    legionCenter?: Vector; // The center of the formation where it builds up
+    legionJoinDelay?: number; // Delay in frames before this unit starts joining the legion
     wasInLegion?: boolean; // Prevent re-joining or merging after being in a legion
     hasHitThisBurst?: boolean; // For one-time burst abilities (like Diamond Elite Laser)
 
@@ -523,6 +527,8 @@ export interface GameState {
     directorState?: {
         necroticCycle: number;
         legionCycle: number;
+        legionSpawned?: boolean;
+        activeLegionId?: string;
     };
     lastLegionWindow?: number; // Track which 10m window last had a legion event
 

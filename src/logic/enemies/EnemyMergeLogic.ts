@@ -6,7 +6,7 @@ import { GAME_CONFIG } from '../GameConfig';
 export function scanForMerges(state: GameState) {
     const { enemies, spatialGrid } = state;
     for (const e of enemies) {
-        if (e.dead || e.boss || e.isElite || e.isRare || e.mergeState) continue;
+        if (e.dead || e.boss || e.isElite || e.isRare || e.mergeState || e.legionId) continue;
         if (e.mergeCooldown && state.gameTime < e.mergeCooldown) continue;
         const neighbors = spatialGrid.query(e.x, e.y, 100);
         const candidates = neighbors.filter(n =>
@@ -14,6 +14,7 @@ export function scanForMerges(state: GameState) {
             !!n.isNecroticZombie === !!e.isNecroticZombie && // Match necrotic status
             !!n.isZombie === !!e.isZombie &&               // Match friendly zombie status
             !n.dead && !n.boss && !n.isElite && !n.isRare && !n.mergeState && !n.isNeutral &&
+            !n.legionId && // USER REQUEST: Legion members NEVER merge
             n.shape !== 'minion' && (!n.mergeCooldown || state.gameTime >= n.mergeCooldown)
         );
         const threshold = e.shape === 'pentagon' ? GAME_CONFIG.ENEMY.MERGE_THRESHOLD_PENTAGON : GAME_CONFIG.ENEMY.MERGE_THRESHOLD_DEFAULT;

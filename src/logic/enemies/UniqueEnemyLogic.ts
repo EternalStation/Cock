@@ -1,6 +1,6 @@
 import type { GameState, Enemy } from '../types';
 import { ARENA_CENTERS, isInMap } from '../MapLogic';
-import { spawnParticles } from '../ParticleLogic';
+import { spawnParticles, spawnFloatingNumber } from '../ParticleLogic';
 import { playSfx } from '../AudioLogic';
 import { handleEnemyDeath } from '../DeathLogic';
 
@@ -139,6 +139,7 @@ export function updateZombie(e: Enemy, state: GameState, step: number, onEvent?:
 
     if (e.zombieHearts === undefined) e.zombieHearts = 3;
 
+    // --- RISING STATE ---
     if (e.zombieState === 'dead') {
         if (now >= (e.zombieTimer || 0)) {
             e.zombieState = 'rising';
@@ -147,84 +148,127 @@ export function updateZombie(e: Enemy, state: GameState, step: number, onEvent?:
         }
         return;
     }
+
     if (e.zombieState === 'rising') {
         if (now >= (e.zombieTimer || 0)) {
             e.zombieState = 'active';
             e.zombieHearts = 3; // Reset hearts on rise
+            e.invincibleUntil = now + 500; // Brief invulnerability
         }
         return;
     }
 
-    // --- CLINGING STATE ---
+    // --- HELPER: DAMAGE LOGIC ---
+    const takeZombieDamage = (amount: number = 1) => {
+        if (e.invincibleUntil && now < e.invincibleUntil) return;
+
+        e.zombieHearts = (e.zombieHearts || 3) - amount;
+        e.invincibleUntil = now + 1000; // 1s Invulnerability after hit
+
+        spawnParticles(state, e.x, e.y, '#ef4444', 10);
+        // spawnFloatingNumber(state, e.x, e.y, `-${amount} HEART`, '#ef4444', true); // Removed per user request
+        playSfx('impact');
+
+        if (e.zombieHearts <= 0) {
+            e.dead = true;
+            e.hp = 0;
+            spawnParticles(state, e.x, e.y, '#4ade80', 15);
+            playSfx('rare-kill');
+        }
+    };
+
+    // --- CLINGING (EATING) STATE ---
     if (e.zombieState === 'clinging') {
-        const target = state.enemies.find(o => o.id === e.zombieTargetId && !o.dead);
-        if (!target) {
+        const target = state.enemies.find(t => t.id === e.zombieTargetId);
+
+        // 1. Target Lost Check
+        if (!target || target.dead) {
             e.zombieState = 'active';
             e.zombieTargetId = undefined;
-        } else {
-            // Position exactly on target
-            e.x = target.x;
-            e.y = target.y;
-            e.vx = target.vx || 0;
-            e.vy = target.vy || 0;
-
-            // Apply Stun/Root
-            target.frozen = 0.5; // Freeze for 0.5s every frame to keep it locked
-
-            // Check if 3s passed since latching
-            if (now >= (e.zombieTimer || 0)) {
-                // Kill target
-                target.hp = 0;
-                target.dead = true;
-                handleEnemyDeath(state, target, onEvent);
-
-                // Consume 1 heart for "finishing" the target (or maybe only if touched?)
-                // User said: "it doest it until he is touched 3 times". 
-                // Let's make it so consuming an enemy is "safe", but being touched by OTHERS hurts.
-                // Wait, "They only die after colliding with 3 enemies"
-                // Let's say finishing 1 enemy = 1 heart loss.
-                e.zombieHearts!--;
-
-                if (e.zombieHearts! <= 0) {
-                    e.dead = true;
-                    spawnParticles(state, e.x, e.y, '#4ade80', 15);
-                } else {
-                    e.zombieState = 'active';
-                    e.zombieTargetId = undefined;
-                    playSfx('rare-kill');
-                }
-            }
-
-            // Passive check: If OTHER enemies touch the zombie while it's busy
-            const others = state.spatialGrid.query(e.x, e.y, e.size * 2);
-            others.forEach(o => {
-                if (o.id !== e.id && o.id !== e.zombieTargetId && !o.isZombie && !o.dead) {
-                    const d = Math.hypot(o.x - e.x, o.y - e.y);
-                    if (d < e.size + o.size) {
-                        // Throttled heart loss (0.5s)
-                        if (!e.lastAttack || now - e.lastAttack > 500) {
-                            e.zombieHearts!--;
-                            e.lastAttack = now;
-                            spawnParticles(state, e.x, e.y, '#ef4444', 5);
-                            if (e.zombieHearts! <= 0) {
-                                e.dead = true;
-                                spawnParticles(state, e.x, e.y, '#4ade80', 15);
-                            }
-                        }
-                    }
-                }
-            });
+            e.timer = undefined;
             return;
         }
+
+        // 2. Stick to Target
+        e.x = target.x;
+        e.y = target.y;
+        e.vx = 0;
+        e.vy = 0;
+
+        // 3. Disable Target (Unless Boss)
+        if (!target.boss) {
+            target.frozen = 1.0; // Freeze for this frame + buffer
+            target.vx = 0;
+            target.vy = 0;
+        }
+
+        // 4. Boss Damage Over Time (2% per second)
+        if (target.boss) {
+            if ((state.frameCount % 60) === 0) { // Approx every second
+                const dmg = target.maxHp * 0.02;
+                target.hp -= dmg;
+                spawnFloatingNumber(state, target.x, target.y, Math.round(dmg).toString(), '#4ade80', true);
+                spawnParticles(state, target.x, target.y, '#4ade80', 5);
+
+                if (target.hp <= 0) handleEnemyDeath(state, target, onEvent);
+            }
+        }
+
+        // 5. Check Interruption (Collision with OTHER enemies)
+        // Zombie is at target.x/y. Check if any *other* enemy is touching it.
+        // We exclude the target we are eating.
+        // And we exclude Friendly/Other Zombies to prevent friendly fire chaos unless desired? 
+        // Prompt: "other enemy touched him". Usually implies hostiles.
+        const nearby = state.spatialGrid.query(e.x, e.y, e.size + 50);
+        for (const other of nearby) {
+            if (other.id !== e.id && other.id !== target.id && !other.dead && !other.isFriendly && !other.isZombie) {
+                const d = Math.hypot(other.x - e.x, other.y - e.y);
+                if (d < e.size + other.size) {
+                    takeZombieDamage(1);
+                    if (e.dead) return; // Stop if died
+                }
+            }
+        }
+
+        // 6. Completion Logic
+        if (now >= (e.timer || 0)) {
+            if (target.boss) {
+                // Boss: Finish eating (5s passed). Zombie dies (spent).
+                takeZombieDamage(3);
+            } else if (target.isElite) {
+                // Elite: Consume (5s passed). Kill Target. Zombie Dies (Cost 3).
+                target.hp = 0;
+                handleEnemyDeath(state, target, onEvent);
+                takeZombieDamage(3);
+            } else {
+                // Normal: Eat (3s passed). Kill Target. Zombie Loses 1 Heart.
+                target.hp = 0;
+                handleEnemyDeath(state, target, onEvent);
+                playSfx('rare-kill'); // Crunch sound
+                spawnParticles(state, target.x, target.y, '#ef4444', 20); // Blood/Parts
+
+                takeZombieDamage(1);
+
+                if (!e.dead) {
+                    // Reset to hunt again if still alive
+                    e.zombieState = 'active';
+                    e.zombieTargetId = undefined;
+                    e.timer = undefined;
+                    e.invincibleUntil = now + 1000; // Brief I-frame after meal
+                }
+            }
+        }
+        return;
     }
 
-    // --- ACTIVE STATE (FINDING PREY) ---
+    // --- ACTIVE STATE (HUNTING) ---
+
     // 1. Find NEAREST enemy
     let nearest: Enemy | null = null;
     let minDist = Infinity;
 
     state.enemies.forEach(other => {
-        if (other.dead || other.isZombie || other.isFriendly || other.boss) return; // Bosses are immune to Grave Root
+        if (other.dead || other.isZombie || other.isFriendly) return; // Target Bosses too!
         const d = Math.hypot(other.x - e.x, other.y - e.y);
         if (d < minDist) {
             minDist = d;
@@ -232,32 +276,61 @@ export function updateZombie(e: Enemy, state: GameState, step: number, onEvent?:
         }
     });
 
-    // 2. Frenzy Logic: If any enemy is near the player, enrage!
-    const enemyNearPlayer = state.enemies.some(o => !o.dead && !o.isZombie && Math.hypot(o.x - player.x, o.y - player.y) < 300);
-    e.isEnraged = enemyNearPlayer;
-
     if (nearest) {
         const target: Enemy = nearest;
         const dx = target.x - e.x;
         const dy = target.y - e.y;
-        const dist = minDist;
         const angle = Math.atan2(dy, dx);
 
-        let spd = 1.92 * 0.8; // 80% default
-        if (e.isEnraged) spd = 1.92 * 2.5; // 250% dash (slightly more than 200% for impact)
+        let spd = 1.92 * 1.5; // Base Speed
+        // Frenzy if near player (Legacy logic kept for flavor)
+        if (state.enemies.some(o => !o.dead && !o.isZombie && Math.hypot(o.x - player.x, o.y - player.y) < 300)) {
+            spd *= 2.0;
+        }
 
         e.vx = (e.vx || 0) * 0.8 + Math.cos(angle) * spd * 0.2 * 60;
         e.vy = (e.vy || 0) * 0.8 + Math.sin(angle) * spd * 0.2 * 60;
         e.x += (e.vx || 0) * step;
         e.y += (e.vy || 0) * step;
 
-        // Latch Trigger
-        if (dist < e.size + target.size) {
-            e.zombieState = 'clinging';
-            e.zombieTargetId = target.id;
-            e.zombieTimer = now + 3000; // 3 Seconds to "eat"
-            playSfx('impact');
-            spawnParticles(state, target.x, target.y, '#4ade80', 10);
+        // Collision Checks
+        const nearby = state.spatialGrid.query(e.x, e.y, e.size + 50);
+
+        for (const other of nearby) {
+            if (other.dead || other.id === e.id || other.isZombie || other.isFriendly) continue;
+
+            const d = Math.hypot(other.x - e.x, other.y - e.y);
+            if (d < e.size + other.size) {
+                // Is this our intended target? Or just "Nearest"?
+                // Actually, if we collide with ANY enemy, we should probably try to eat it (if active).
+                // Prioritize the one we were chasing, but if we bump into another, free meal?
+                // But prompt says: "if during running to an closeset enemy he somehow receives colides ith other enemy he looses his 1 life"
+                // This implies he ONLY wants to eat the "closest" one (Target), and others are obstacles.
+
+                if (other.id === target.id) {
+                    // START EATING
+                    e.zombieState = 'clinging';
+                    e.zombieTargetId = target.id;
+
+                    // Set Timer based on type
+                    const eatDuration = (target.boss || target.isElite) ? 5000 : 3000;
+                    e.timer = now + eatDuration;
+
+                    playSfx('zombie-rise'); // Grunt/Attack sound
+                    return; // Stop processing active state
+                } else {
+                    // Collision with OBSTACLE
+                    takeZombieDamage(1);
+
+                    // Bounce off
+                    const pushAngle = Math.atan2(e.y - other.y, e.x - other.x);
+                    e.x += Math.cos(pushAngle) * 30;
+                    e.y += Math.sin(pushAngle) * 30;
+                    e.vx = 0; e.vy = 0;
+
+                    if (e.dead) return;
+                }
+            }
         }
     }
 }

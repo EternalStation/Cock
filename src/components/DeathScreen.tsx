@@ -4,6 +4,7 @@ import type { GameState, UpgradeChoice } from '../logic/types';
 import { calcStat } from '../logic/MathUtils';
 import { calculateLegendaryBonus } from '../logic/LegendaryLogic';
 import { GAME_CONFIG } from '../logic/GameConfig';
+import { submitRunToLeaderboard } from '../utils/leaderboard';
 
 interface DeathScreenProps {
     stats: {
@@ -15,10 +16,13 @@ interface DeathScreenProps {
     gameState: GameState;
     onRestart: () => void;
     onQuit: () => void;
+    onShowLeaderboard: () => void;
 }
 
-export const DeathScreen: React.FC<DeathScreenProps> = ({ stats, gameState, onRestart, onQuit }) => {
+export const DeathScreen: React.FC<DeathScreenProps> = ({ stats, gameState, onRestart, onQuit, onShowLeaderboard }) => {
     const [activeTab, setActiveTab] = useState<'overview' | 'modules'>('overview');
+    const [rank, setRank] = useState<number | null>(null);
+    const [isSubmitting, setIsSubmitting] = useState(true);
     const [displayStats, setDisplayStats] = useState({
         kills: 0,
         level: 0,
@@ -27,6 +31,21 @@ export const DeathScreen: React.FC<DeathScreenProps> = ({ stats, gameState, onRe
         snitch: 0,
         portals: 0,
     });
+
+    const hasSubmitted = React.useRef(false);
+
+    useEffect(() => {
+        // Auto-submit run when player dies
+        if (hasSubmitted.current) return;
+        hasSubmitted.current = true;
+
+        submitRunToLeaderboard(gameState).then(result => {
+            if (result.success && result.rank) {
+                setRank(result.rank);
+            }
+            setIsSubmitting(false);
+        });
+    }, []);
 
     useEffect(() => {
         const handleKeys = (e: KeyboardEvent) => {
@@ -143,7 +162,22 @@ export const DeathScreen: React.FC<DeathScreenProps> = ({ stats, gameState, onRe
             padding: '20px 0 40px'
         }}>
             {/* Action Buttons */}
-            <div style={{ position: 'fixed', top: 20, right: 30, display: 'flex', gap: 10, zIndex: 12000 }}>
+            <div style={{ position: 'fixed', top: 20, right: 30, display: 'flex', alignItems: 'center', gap: 15, zIndex: 12000 }}>
+                {isSubmitting ? (
+                    <div style={{ color: '#22d3ee', fontSize: 10, letterSpacing: 1, fontWeight: 800 }}>UPLOADING RECORD...</div>
+                ) : rank ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                        <div style={{ color: '#94a3b8', fontSize: 9, letterSpacing: 1, fontWeight: 800 }}>GLOBAL RANK</div>
+                        <div style={{ color: rank <= 3 ? '#fbbf24' : '#22d3ee', fontSize: 20, fontWeight: 900, lineHeight: 1 }}>#{rank}</div>
+                    </div>
+                ) : null}
+
+                <button className="btn-restart" onClick={onShowLeaderboard} style={{
+                    minWidth: 100, height: 32, fontSize: 12, letterSpacing: 1,
+                    fontWeight: 800, textTransform: 'uppercase', padding: '0 10px',
+                    background: 'rgba(34, 211, 238, 0.1)', border: '1px solid #22d3ee', color: '#22d3ee'
+                }}>RANKINGS</button>
+
                 <button className="btn-restart" onClick={onRestart} style={{
                     minWidth: 100, height: 32, fontSize: 12, letterSpacing: 1,
                     fontWeight: 800, textTransform: 'uppercase', padding: '0 10px'
@@ -208,7 +242,7 @@ export const DeathScreen: React.FC<DeathScreenProps> = ({ stats, gameState, onRe
                             <StatItem label="XP Kill" value={finalXpPerKill} color="#fff" />
                             <StatItem label="Max HP" value={maxHp} color="#fff" />
                             <StatItem label="Regen" value={regen + '/s'} color="#10b981" />
-                            <StatItem label="Armor" value={calcStat(gameState.player.arm)} color="#3b82f6" subValue={`${armRed}% Reduc`} />
+                            <StatItem label="Armor" value={calcStat(gameState.player.arm).toFixed(1)} color="#3b82f6" subValue={`${armRed}% Reduc`} />
                             <StatItem label="Col Reduc" value={colRed + '%'} color="#3b82f6" />
                             <StatItem label="Proj Reduc" value={projRed + '%'} color="#3b82f6" />
                         </div>
@@ -226,6 +260,7 @@ export const DeathScreen: React.FC<DeathScreenProps> = ({ stats, gameState, onRe
                                         <StatItem label="DMG Received" value={formatDmg(gameState.player.damageTaken)} color="#ef4444" />
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '2px 0' }}>
                                             <div style={{ fontSize: 9, display: 'flex', justifyContent: 'space-between' }}><span style={{ color: '#64748b' }}>ARMOR</span><span style={{ color: '#94a3b8' }}>{formatDmg(gameState.player.damageBlockedByArmor || 0)}</span></div>
+                                            <div style={{ fontSize: 9, display: 'flex', justifyContent: 'space-between' }}><span style={{ color: '#64748b' }}>SHIELD</span><span style={{ color: '#94a3b8' }}>{formatDmg(gameState.player.damageBlockedByShield || 0)}</span></div>
                                             <div style={{ fontSize: 9, display: 'flex', justifyContent: 'space-between' }}><span style={{ color: '#64748b' }}>COLLISION</span><span style={{ color: '#94a3b8' }}>{formatDmg(gameState.player.damageBlockedByCollisionReduc || 0)}</span></div>
                                             <div style={{ fontSize: 9, display: 'flex', justifyContent: 'space-between' }}><span style={{ color: '#64748b' }}>PROJECTILE</span><span style={{ color: '#94a3b8' }}>{formatDmg(gameState.player.damageBlockedByProjectileReduc || 0)}</span></div>
                                         </div>

@@ -405,7 +405,7 @@ export function updateProjectiles(state: GameState, onEvent?: (event: string, da
             // Ignore friendly zombies or dead/immune stuff
             // Friendly zombies shouldn't be hit by player bullets? Usually yes.
             // "on your side".
-            if (e.dead || e.hp <= 0 || b.hits.has(e.id) || e.isFriendly || e.isZombie || e.isAssembling) continue;
+            if (e.dead || e.hp <= 0 || b.hits.has(e.id) || e.isFriendly || e.isZombie || (e.legionId && !e.legionReady)) continue;
 
             const dist = Math.hypot(e.x - b.x, e.y - b.y);
             const hitRadius = e.size + 10;
@@ -509,7 +509,7 @@ export function updateProjectiles(state: GameState, onEvent?: (event: string, da
                 // --- LEGION SHIELD LOGIC ---
                 if (e.legionId) {
                     const lead = state.legionLeads?.[e.legionId];
-                    if (lead && (lead.legionShield || 0) > 0) {
+                    if (lead && lead.legionReady && (lead.legionShield || 0) > 0) {
                         const shieldDmg = Math.min(damageAmount, lead.legionShield || 0);
                         lead.legionShield = (lead.legionShield || 0) - shieldDmg;
                         damageAmount -= shieldDmg;
@@ -922,7 +922,8 @@ export function updateProjectiles(state: GameState, onEvent?: (event: string, da
             }
 
             const finalDmg = Math.max(0, dmg - absorbedDmg);
-            player.damageBlocked += absorbedDmg; // Count shield absorption as blockage too generally? Or user didn't ask?
+            player.damageBlockedByShield += absorbedDmg;
+            player.damageBlocked += absorbedDmg;
             // User: "dmg blocked not working should show how much was blocked by armorm, Colision dmg reduction and projcetile reducitom"
             // I'll keep the breakdown separate as requested.
 

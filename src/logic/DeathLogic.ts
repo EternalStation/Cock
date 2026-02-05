@@ -182,6 +182,8 @@ export function handleEnemyDeath(state: GameState, e: Enemy, onEvent?: (event: s
             });
         } else {
             // FRIENDLY ZOMBIE (ComLife Legendary)
+            const crimsonRiseDelay = 5000; // 5 Seconds per request
+            const now = state.gameTime * 1000;
             const zombie: Enemy = {
                 id: Math.random(),
                 type: e.type,
@@ -197,7 +199,7 @@ export function handleEnemyDeath(state: GameState, e: Enemy, onEvent?: (event: s
                 lastAttack: 0,
                 dead: false,
                 shellStage: 0,
-                zombieTimer: state.gameTime * 1000 + riseDelay,
+                zombieTimer: now + crimsonRiseDelay,
                 zombieSpd: 1.92 * speedBoost,
                 palette: ['#4ade80', '#22c55e', '#166534'], // Undead Green for ComLife
                 pulsePhase: 0,
