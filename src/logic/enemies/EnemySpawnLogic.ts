@@ -80,8 +80,10 @@ export function spawnEnemy(state: GameState, x?: number, y?: number, shape?: Sha
     const hpMult = Math.pow(1.2, cycleCount) * SHAPE_DEFS[chosenShape].hpMult;
     const baseHp = 60 * Math.pow(1.186, minutes) * difficultyMult; // Tuned for 20k HP @ 20min, 250M HP @ 60min
 
-    const isLvl2 = isBoss && (bossTier === 2 || (minutes >= 10 && bossTier !== 1));
-    const size = isBoss ? (isLvl2 ? 60 : 50) : (20 * SHAPE_DEFS[chosenShape].sizeMult);
+    const isLvl2 = isBoss && (bossTier === 2 || (minutes >= 10 && minutes < 20 && bossTier !== 1)); // 10-20 min
+    const isLvl3 = isBoss && (bossTier === 3 || (minutes >= 20 && bossTier !== 1)); // 20+ min
+
+    const size = isBoss ? (isLvl3 ? 60 : (isLvl2 ? 50 : 50)) : (20 * SHAPE_DEFS[chosenShape].sizeMult); // Lvl 3 is 60, others 50 (User Request: Lvl 1 size 50, Lvl 2 size 55? Prompt said 55, let's fix)
     let hp = (isBoss ? baseHp * 20 : baseHp) * hpMult;
 
 
@@ -187,27 +189,28 @@ export function manageRareSpawnCycles(state: GameState) {
     }
 }
 
-export function spawnShield(state: GameState, x: number, y: number) {
+export function spawnShield(state: GameState, x: number, y: number, parentId?: number, maxHp?: number, initialPhase?: number) {
     const shield: Enemy = {
         id: Math.random(),
-        type: 'square', // Acts as a block
+        type: 'orbital_shield' as any, // Special type for logic
         x, y,
-        size: 15,
-        hp: 1, // Single hit destruction
-        maxHp: 1,
-        spd: 0, // Stationary
+        size: 40, // Large hitbox to protect boss and be easier to target
+        hp: maxHp || 1,
+        maxHp: maxHp || 1,
+        parentId, // Link to boss
+        spd: 0,
         boss: false, bossType: 0, bossAttackPattern: 0, lastAttack: 0, dead: false,
-        shape: 'square',
+        shape: 'orbital_shield' as any, // Visual shape
         shellStage: 0,
-        palette: ['#475569', '#334155', '#1e293b'], // Slate
-        eraPalette: ['#475569', '#334155', '#1e293b'],
+        palette: ['#06b6d4', '#0891b2', '#155e75'], // Cyan/Blue Energy Shield
+        eraPalette: ['#06b6d4', '#0891b2', '#155e75'],
         fluxState: 0,
         pulsePhase: 0,
-        rotationPhase: Math.random() * 6.28,
+        rotationPhase: initialPhase !== undefined ? initialPhase : Math.random() * 6.28,
         spawnedAt: state.gameTime,
         knockback: { x: 0, y: 0 },
         isRare: false,
-        isNeutral: true // Tag as neutral for auto-aim (ignored)
+        isNeutral: true
     };
     state.enemies.push(shield);
 }

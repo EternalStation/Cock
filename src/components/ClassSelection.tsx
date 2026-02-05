@@ -174,7 +174,7 @@ export const ClassSelection: React.FC<ClassSelectionProps> = ({ onSelect }) => {
                                         <span>{cls.stats.hpMult > 0 ? '+' : ''}{Math.round(cls.stats.hpMult * 100)}%</span>
                                     </div>
                                 )}
-                                {cls.stats.spdMult && (
+                                {cls.stats.spdMult && cls.id !== 'malware' && (
                                     <div className="stat-pill" style={{
                                         background: cls.stats.spdMult > 0 ? 'rgba(56, 189, 248, 0.1)' : 'rgba(239, 68, 68, 0.1)',
                                         border: cls.stats.spdMult > 0 ? '1px solid rgba(56, 189, 248, 0.2)' : '1px solid rgba(239, 68, 68, 0.2)',
@@ -191,7 +191,7 @@ export const ClassSelection: React.FC<ClassSelectionProps> = ({ onSelect }) => {
                                         <span>{cls.stats.spdMult > 0 ? '+' : ''}{Math.round(cls.stats.spdMult * 100)}%</span>
                                     </div>
                                 )}
-                                {cls.stats.dmgMult && (
+                                {cls.stats.dmgMult && cls.id !== 'malware' && (
                                     <div className="stat-pill" style={{
                                         background: cls.stats.dmgMult > 0 ? 'rgba(56, 189, 248, 0.1)' : 'rgba(239, 68, 68, 0.1)',
                                         border: cls.stats.dmgMult > 0 ? '1px solid rgba(56, 189, 248, 0.2)' : '1px solid rgba(239, 68, 68, 0.2)',
@@ -208,7 +208,7 @@ export const ClassSelection: React.FC<ClassSelectionProps> = ({ onSelect }) => {
                                         <span>{cls.stats.dmgMult > 0 ? '+' : ''}{Math.round(cls.stats.dmgMult * 100)}%</span>
                                     </div>
                                 )}
-                                {cls.stats.atkMult && (
+                                {cls.stats.atkMult && cls.id !== 'malware' && (
                                     <div className="stat-pill" style={{
                                         background: cls.stats.atkMult > 0 ? 'rgba(56, 189, 248, 0.1)' : 'rgba(239, 68, 68, 0.1)',
                                         border: cls.stats.atkMult > 0 ? '1px solid rgba(56, 189, 248, 0.2)' : '1px solid rgba(239, 68, 68, 0.2)',
@@ -225,7 +225,7 @@ export const ClassSelection: React.FC<ClassSelectionProps> = ({ onSelect }) => {
                                         <span>{cls.stats.atkMult > 0 ? '+' : ''}{Math.round(cls.stats.atkMult * 100)}%</span>
                                     </div>
                                 )}
-                                {cls.stats.armMult && (
+                                {cls.stats.armMult && cls.id !== 'malware' && (
                                     <div className="stat-pill" style={{
                                         background: cls.stats.armMult > 0 ? 'rgba(56, 189, 248, 0.1)' : 'rgba(239, 68, 68, 0.1)',
                                         border: cls.stats.armMult > 0 ? '1px solid rgba(56, 189, 248, 0.2)' : '1px solid rgba(239, 68, 68, 0.2)',
@@ -242,7 +242,7 @@ export const ClassSelection: React.FC<ClassSelectionProps> = ({ onSelect }) => {
                                         <span>{cls.stats.armMult > 0 ? '+' : ''}{Math.round(cls.stats.armMult * 100)}%</span>
                                     </div>
                                 )}
-                                {cls.stats.xpMult && (
+                                {cls.stats.xpMult && cls.id !== 'malware' && (
                                     <div className="stat-pill" style={{
                                         background: cls.stats.xpMult > 0 ? 'rgba(56, 189, 248, 0.1)' : 'rgba(239, 68, 68, 0.1)',
                                         border: cls.stats.xpMult > 0 ? '1px solid rgba(56, 189, 248, 0.2)' : '1px solid rgba(239, 68, 68, 0.2)',
@@ -259,7 +259,7 @@ export const ClassSelection: React.FC<ClassSelectionProps> = ({ onSelect }) => {
                                         <span>{cls.stats.xpMult > 0 ? '+' : ''}{Math.round(cls.stats.xpMult * 100)}%</span>
                                     </div>
                                 )}
-                                {cls.stats.regMult && (
+                                {cls.stats.regMult && cls.id !== 'malware' && (
                                     <div className="stat-pill" style={{
                                         background: cls.stats.regMult > 0 ? 'rgba(56, 189, 248, 0.1)' : 'rgba(239, 68, 68, 0.1)',
                                         border: cls.stats.regMult > 0 ? '1px solid rgba(56, 189, 248, 0.2)' : '1px solid rgba(239, 68, 68, 0.2)',
@@ -274,6 +274,23 @@ export const ClassSelection: React.FC<ClassSelectionProps> = ({ onSelect }) => {
                                     }}>
                                         <span style={{ opacity: 0.6 }}>REG</span>
                                         <span>{cls.stats.regMult > 0 ? '+' : ''}{Math.round(cls.stats.regMult * 100)}%</span>
+                                    </div>
+                                )}
+                                {cls.id === 'malware' && (
+                                    <div className="stat-pill" style={{
+                                        background: 'rgba(56, 189, 248, 0.1)',
+                                        border: '1px solid rgba(56, 189, 248, 0.2)',
+                                        padding: '4px 8px',
+                                        borderRadius: '4px',
+                                        fontSize: '0.65rem',
+                                        fontWeight: 900,
+                                        color: '#38bdf8',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '4px'
+                                    }}>
+                                        <span style={{ opacity: 0.6 }}>PIERCE</span>
+                                        <span>+1</span>
                                     </div>
                                 )}
                             </div>

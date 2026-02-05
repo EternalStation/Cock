@@ -134,7 +134,7 @@ export function spawnBullet(state: GameState, x: number, y: number, angle: numbe
     let pClass = PLAYER_CLASSES.find(c => c.id === state.player.playerClass);
     let bulletColor: string | undefined = pClass?.themeColor;
     let bulletPierce = pierce;
-    if (state.player.playerClass === 'malware') bulletPierce += 1;
+    // Malware pierce logic is now handled in player.pierce initialization in GameState.ts
 
     // --- CLASS MODIFIERS: Cosmic Beam (formerly Storm-Strike) ---
     if (state.player.playerClass === 'stormstrike') {
@@ -203,6 +203,8 @@ export function spawnBullet(state: GameState, x: number, y: number, angle: numbe
 
     // --- CLASS MODIFIERS: Stinger -> Stinger id is gone, replaced by others. 
     // Wait, I should use the new IDs.
+    const classStats = PLAYER_CLASSES.find(c => c.id === state.player.playerClass);
+    const resonance = getChassisResonance(state);
 
     const bulletId = Math.random();
     const b: any = {
@@ -212,7 +214,10 @@ export function spawnBullet(state: GameState, x: number, y: number, angle: numbe
         vy: Math.sin(angle + offsetAngle) * spd,
         dmg: finalDmg,
         pierce: bulletPierce,
-        life: state.player.playerClass === 'malware' ? 420 : 140, // Frames (Malware gets 5000 range)
+        // Dynamic Life: Base 140 * Class Mult * (1 + Resonance)
+        life: 140 * (classStats?.stats.projLifeMult || 1) * (1 + resonance),
+        bounceDmgMult: (classStats?.stats.bounceDmgMult || 0) * (1 + resonance),
+        bounceSpeedBonus: (classStats?.stats.bounceSpeedBonus || 0) * (1 + resonance),
         isEnemy: false,
         hits: new Set(),
         size: bulletSize,
@@ -279,7 +284,7 @@ export function spawnEnemyBullet(state: GameState, x: number, y: number, angle: 
         vx: Math.cos(angle) * spd,
         vy: Math.sin(angle) * spd,
         dmg,
-        pierce: 1,
+        pierce: 0,
         life: 300,
         isEnemy: true,
         hits: new Set(),
@@ -302,10 +307,23 @@ export function updateProjectiles(state: GameState, onEvent?: (event: string, da
         // Collision with Map Boundary (Walls)
         if (!isInMap(b.x, b.y)) {
             // --- CLASS MODIFIER: Malware-Prime Glitch Bounce ---
-            if (player.playerClass === 'malware' && (b.bounceCount || 0) < 5) {
+            if (player.playerClass === 'malware') {
                 b.bounceCount = (b.bounceCount || 0) + 1;
-                b.dmg *= 1.2;
-                b.color = '#ff0000';
+
+                // User Request: +20% Damage per bounce (Multiplicative) - Scaled with Resonance
+                // b.bounceDmgMult is already (0.2 * resonance_factor)
+                const dmgMult = 1 + (b.bounceDmgMult || 0.2);
+                b.dmg *= dmgMult;
+
+                // Color Shifting: Initial Purple -> First Hit Orange -> Subsequent Hits Red
+                if (b.bounceCount === 1) {
+                    b.color = '#fb923c'; // Vibrant Orange
+                } else {
+                    // Slowly shift green channel out to reach pure Red
+                    const redProgress = Math.min(1, (b.bounceCount - 1) / 6);
+                    const green = Math.floor(146 * (1 - redProgress));
+                    b.color = `rgb(255, ${green}, 0)`;
+                }
 
                 // Accurate Hexagonal Reflection
                 const { dist, normal } = getHexDistToWall(b.x, b.y);
@@ -313,15 +331,17 @@ export function updateProjectiles(state: GameState, onEvent?: (event: string, da
 
                 // Only bounce if moving OUTWARD (dot < 0 with inward normal)
                 if (dot < 0) {
-                    // Mirror Reflection + 20% Speed Increase
-                    b.vx = (b.vx - 2 * dot * normal.x) * 1.2;
-                    b.vy = (b.vy - 2 * dot * normal.y) * 1.2;
+                    // Mirror Reflection + Speed Increase (Multiplicative)
+                    // b.bounceSpeedBonus is e.g. 0.2 (scaled).
+                    const speedMult = 1 + (b.bounceSpeedBonus || 0.2);
+                    b.vx = (b.vx - 2 * dot * normal.x) * speedMult;
+                    b.vy = (b.vy - 2 * dot * normal.y) * speedMult;
 
-                    // Nudge back into bounds (slightly larger nudge to be safe)
+                    // Nudge back into bounds
                     b.x += normal.x * (Math.abs(dist) + 5);
                     b.y += normal.y * (Math.abs(dist) + 5);
 
-                    spawnParticles(state, b.x, b.y, '#ff00ff', 8);
+                    spawnParticles(state, b.x, b.y, b.color, 12);
                 }
                 continue;
             }
@@ -329,6 +349,15 @@ export function updateProjectiles(state: GameState, onEvent?: (event: string, da
             spawnParticles(state, b.x, b.y, b.color || '#22d3ee', 4);
             bullets.splice(i, 1);
             continue;
+        }
+
+        // --- Malware Trail Management ---
+        if (player.playerClass === 'malware' && (b.bounceCount || 0) > 0) {
+            if (!b.trails) b.trails = [];
+            b.trails.unshift({ x: b.x, y: b.y });
+            // Minimum trail starts after first bounce (bounceCount = 1)
+            const maxTrail = (b.bounceCount || 0) * 5;
+            if (b.trails.length > maxTrail) b.trails.pop();
         }
 
         // --- CLASS MODIFIER: Hive-Mother Nanite Swarm Homing ---
@@ -376,10 +405,31 @@ export function updateProjectiles(state: GameState, onEvent?: (event: string, da
             // Ignore friendly zombies or dead/immune stuff
             // Friendly zombies shouldn't be hit by player bullets? Usually yes.
             // "on your side".
-            if (e.dead || e.hp <= 0 || b.hits.has(e.id) || e.isFriendly || e.isZombie) continue;
+            if (e.dead || e.hp <= 0 || b.hits.has(e.id) || e.isFriendly || e.isZombie || e.isAssembling) continue;
 
             const dist = Math.hypot(e.x - b.x, e.y - b.y);
             const hitRadius = e.size + 10;
+
+            // --- SQUARE BOSS BUBBLE REFLECTION (Lvl 3) ---
+            // If boss has shields active, reflect bullets at the bubble radius
+            if (e.shape === 'square' && e.boss && e.orbitalShields && e.orbitalShields > 0) {
+                const bubbleRadius = 110; // Protective bubble radius
+                if (dist < bubbleRadius) {
+                    // Bullet is inside or touching the bubble - REFLECT IT
+                    // Calculate reflection angle (bounce off like a wall)
+                    const angleToBullet = Math.atan2(b.y - e.y, b.x - e.x);
+                    const reflectAngle = angleToBullet + Math.PI + (Math.random() - 0.5) * 0.4;
+
+                    b.vx = Math.cos(reflectAngle) * GAME_CONFIG.PROJECTILE.PLAYER_BULLET_SPEED;
+                    b.vy = Math.sin(reflectAngle) * GAME_CONFIG.PROJECTILE.PLAYER_BULLET_SPEED;
+
+                    // Visual feedback - removed particles to avoid fountain effect
+                    playSfx('impact');
+
+                    // Bullet bounces - skip ALL further checks for this enemy
+                    continue;
+                }
+            }
 
             if (dist < hitRadius) {
                 // --- ComCrit Lvl 3: Death Mark Amplification ---
@@ -402,6 +452,35 @@ export function updateProjectiles(state: GameState, onEvent?: (event: string, da
 
                     spawnParticles(state, e.x, e.y, '#FF0000', 3);
                     e.critGlitchUntil = now + 100; // Set glitch timer (100ms)
+                }
+
+                // --- TRIANGLE BOSS DEFLECTION (Lvl 3) ---
+                if (e.shape === 'triangle' && e.deflectState) {
+                    // 50% Chance to deflect
+                    if (Math.random() < 0.5) {
+                        // Deflect!
+                        // Calculate normal vector from boss center to bullet
+                        const angleToBullet = Math.atan2(b.y - e.y, b.x - e.x);
+                        // Deflect angle: Random wide angle (160 deg -> ~2.8 rad spread)
+                        // User request: "160 degrees angle" - implied separate from incoming?
+                        // Interpretation: Bounce off at a wild angle generally away from boss
+                        const deflectAngle = angleToBullet + (Math.random() - 0.5) * 2.5;
+
+                        b.vx = Math.cos(deflectAngle) * GAME_CONFIG.PROJECTILE.PLAYER_BULLET_SPEED;
+                        b.vy = Math.sin(deflectAngle) * GAME_CONFIG.PROJECTILE.PLAYER_BULLET_SPEED;
+
+                        // Extend life so it can fly away
+                        b.life = 120;
+                        // It can now kill other enemies, but not damage player (already handled by it being 'isEnemy: false')
+                        // It also shouldn't hit this boss again immediately.
+                        b.hits.add(e.id);
+
+                        // Visuals
+                        spawnParticles(state, b.x, b.y, '#FFFFFF', 5);
+                        playSfx('impact'); // Fallback since 'ricochet' might not exist
+
+                        continue; // Skip damage processing for this frame
+                    }
                 }
 
                 // --- ComLife Lvl 3: +2% Max HP Dmg (Non-Boss) ---
@@ -452,7 +531,10 @@ export function updateProjectiles(state: GameState, onEvent?: (event: string, da
                 if (e.thorns && e.thorns > 0 && damageAmount > 0) {
                     const reflected = damageAmount * e.thorns;
                     state.player.curHp -= reflected;
-                    spawnFloatingNumber(state, state.player.x, state.player.y, `-${Math.round(reflected)}`, '#FF0000', true);
+                    const displayDmg = Math.round(reflected);
+                    if (displayDmg > 0) {
+                        spawnFloatingNumber(state, state.player.x, state.player.y, `-${displayDmg}`, '#FF0000', true);
+                    }
                     spawnParticles(state, state.player.x, state.player.y, '#FF0000', 3);
                     // Play 'hurt' sound?
                 }
@@ -484,14 +566,9 @@ export function updateProjectiles(state: GameState, onEvent?: (event: string, da
                         // Remove duplicates (Host is in targets, etc)
                         linkedTargets = Array.from(new Set(linkedTargets));
 
-                        // Determine Link Color (Using Host Time)
-                        const host = linkedTargets.find(t => t.id === e.soulLinkHostId);
-                        let linkSourceTime = host?.spawnedAt || state.gameTime;
-
-                        const minutes = linkSourceTime / 60;
-                        const eraIndex = Math.floor(minutes / 15) % 5;
-                        const ERA_COLORS = ['#00FF00', '#00FFFF', '#BF00FF', '#FF9900', '#FF0000'];
-                        const linkColor = ERA_COLORS[eraIndex] || ERA_COLORS[0];
+                        // Determine Link Color
+                        // User Request: Prevent Green Color (Era 0). Use Bullet Color to maintain theme.
+                        const linkColor = b.color || '#22d3ee'; // Default to Cyan if no bullet color
 
                         const splitDmg = damageAmount / linkedTargets.length;
 
@@ -623,50 +700,62 @@ export function updateProjectiles(state: GameState, onEvent?: (event: string, da
                 }
 
                 // ELITE SKILL: SQUARE THORNS (Blade Mail)
-                if (e.isElite && e.shape === 'square') {
+                if (e.isElite && e.shape === 'square' && damageAmount > 0) {
                     // Returns 3% of player's damage for every hit
-                    const reflectDmg = Math.max(1, Math.floor(damageAmount * 0.03));
+                    let reflectDmg = damageAmount * 0.03;
 
-                    // Cap damage to never kill player (leave at least 1 HP)
-                    const safeDmg = Math.min(reflectDmg, player.curHp - 1);
-                    if (safeDmg > 0) {
-                        // Check Shield First
-                        if (player.shieldChunks && player.shieldChunks.length > 0) {
-                            // Apply to chunks
-                            let rem = safeDmg;
-                            let absorbed = 0;
-                            for (const chunk of player.shieldChunks) {
-                                if (chunk.amount >= rem) {
-                                    chunk.amount -= rem;
-                                    absorbed += rem;
-                                    rem = 0; break;
-                                } else {
-                                    absorbed += chunk.amount;
-                                    rem -= chunk.amount;
-                                    chunk.amount = 0;
+                    if (reflectDmg > 0) {
+                        // Thorns are reduced by armor
+                        const armorValue = calcStat(player.arm);
+                        const reduction = getDefenseReduction(armorValue);
+                        reflectDmg *= (1 - reduction);
+
+                        // Cap damage to never kill player (leave at least 1 HP)
+                        const safeDmg = Math.min(reflectDmg, player.curHp - 1);
+
+                        if (safeDmg > 0) {
+                            // Check Shield First
+                            if (player.shieldChunks && player.shieldChunks.length > 0) {
+                                // Apply to chunks
+                                let rem = safeDmg;
+                                let absorbed = 0;
+                                for (const chunk of player.shieldChunks) {
+                                    if (chunk.amount >= rem) {
+                                        chunk.amount -= rem;
+                                        absorbed += rem;
+                                        rem = 0; break;
+                                    } else {
+                                        absorbed += chunk.amount;
+                                        rem -= chunk.amount;
+                                        chunk.amount = 0;
+                                    }
                                 }
+                                player.shieldChunks = player.shieldChunks.filter((c: any) => c.amount > 0);
+                                const finalThornDmg = safeDmg - absorbed;
+
+                                if (finalThornDmg > 0) {
+                                    player.curHp -= finalThornDmg;
+                                    player.damageTaken += finalThornDmg;
+                                }
+                            } else {
+                                player.curHp -= safeDmg;
+                                player.damageTaken += safeDmg;
                             }
-                            player.shieldChunks = player.shieldChunks.filter((c: any) => c.amount > 0);
-                            const finalThornDmg = safeDmg - absorbed;
 
-                            if (finalThornDmg > 0) {
-                                player.curHp -= finalThornDmg;
-                                player.damageTaken += finalThornDmg;
+                            if (onEvent) onEvent('player_hit', { dmg: safeDmg }); // Trigger red flash
+                            spawnParticles(state, player.x, player.y, '#FF0000', 3); // Visual feedback
+
+                            const displayDmg = Math.round(safeDmg);
+                            if (displayDmg > 0) {
+                                spawnFloatingNumber(state, player.x, player.y, displayDmg.toString(), '#ef4444', false);
                             }
-                        } else {
-                            player.curHp -= safeDmg;
-                            player.damageTaken += safeDmg;
-                        }
 
-                        if (onEvent) onEvent('player_hit', { dmg: safeDmg }); // Trigger red flash
-                        spawnParticles(state, player.x, player.y, '#FF0000', 3); // Visual feedback
-                        spawnFloatingNumber(state, player.x, player.y, Math.round(safeDmg).toString(), '#ef4444', false);
-
-                        // Explicit Death Check for Thorns
-                        if (player.curHp <= 0) {
-                            player.curHp = 0;
-                            state.gameOver = true;
-                            if (onEvent) onEvent('game_over');
+                            // Explicit Death Check for Thorns
+                            if (player.curHp <= 0) {
+                                player.curHp = 0;
+                                state.gameOver = true;
+                                if (onEvent) onEvent('game_over');
+                            }
                         }
                     }
                 }
@@ -737,7 +826,7 @@ export function updateProjectiles(state: GameState, onEvent?: (event: string, da
                 }
 
                 // 4. Bullet Removal
-                if (b.pierce <= 0 || b.life <= 0) {
+                if (b.pierce < 0 || b.life <= 0) {
                     bullets.splice(i, 1);
                     bulletRemoved = true;
                     break;

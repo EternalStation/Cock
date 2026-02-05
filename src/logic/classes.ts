@@ -12,17 +12,18 @@ export const PLAYER_CLASSES: PlayerClass[] = [
             'Quantum Ricochet Rounds'
         ],
         capabilityName: 'QUANTUM FRAGMENTATION',
-        capabilityDesc: 'Manual Targeting. Projectiles have 300% of default range, +1 Piercing, and ricochet off all up to 5 times. Each bounce gains 20% Damage and projectile speed.',
+        capabilityDesc: 'Manual Targeting. Projectiles have 300% of default range, +1 Piercing, and ricochet off all surfaces infinitely. Each bounce gains 20% Damage, Increased Speed, and intense Heat Trail.',
         capabilityMetrics: [
             { label: 'RANGE', value: 300, unit: '%', isPercentage: true, description: 'Base projectile range multiplier' },
             { label: 'DMG/WALL', value: 20, unit: '%', isPercentage: true, description: 'Damage gain per bounce' },
-            { label: 'SPEED/WALL', value: 20, unit: '%', isPercentage: true, description: 'Speed gain per bounce' },
-            { label: 'PIERCE', value: 1, unit: '', isPercentage: false, isStatic: true, description: 'Base piercing' },
-            { label: 'RICOCHET', value: 5, unit: '', isPercentage: false, description: 'Maximum bounces (static)' }
+            { label: 'SPD/WALL', value: 20, unit: '%', isPercentage: true, description: 'Speed gain per bounce' },
         ],
         stats: {
-            spdMult: 0.20,
             hpMult: -0.15,
+            bounceDmgMult: 0.2,
+            bounceSpeedBonus: 0.2, // +20%
+            projLifeMult: 3.0,
+            pierce: 1,
         },
         icon: '#d946ef', // Pink-Purple
         themeColor: '#d946ef',
@@ -40,17 +41,17 @@ export const PLAYER_CLASSES: PlayerClass[] = [
             'AoE vacuum effect on hit'
         ],
         capabilityName: 'Void Singularity',
-        capabilityDesc: 'Spawns a 400px void for 3s with 10s CD. Slowly pulls enemies inside the void, consuming them while bosses take 10% Max HP per second.',
+        capabilityDesc: 'Spawns a 400px void for 3s with 10s CD. Instantly consumes normal enemies at core, while Elites take 25% and Bosses take 10% Max HP per second.',
         capabilityMetrics: [
             { label: 'Singularity Radius', value: 400, unit: 'px', isPercentage: false, description: 'Static radius' },
             { label: 'Pull Strength', value: 5, unit: '%', isPercentage: true, description: 'Base pull force' },
             { label: 'Duration', value: 3, unit: 's', isPercentage: false, description: 'Static duration' },
-            { label: 'Singularity CD', value: 10, unit: 's', isPercentage: false, description: 'Static cooldown' },
-            { label: 'Boss DMG', value: 10, unit: '%', isPercentage: true, isStatic: true, description: 'Static Max HP per second' }
+            { label: 'Elite DMG', value: 25, unit: '%', isPercentage: true, isStatic: true, description: 'Max HP per second' },
+            { label: 'Boss DMG', value: 10, unit: '%', isPercentage: true, isStatic: true, description: 'Max HP per second' }
         ],
         stats: {
             armMult: 0.30,
-            spdMult: -0.10,
+            spdMult: 0.10,
         },
         icon: '#8b5cf6', // Violet
         themeColor: '#8b5cf6',

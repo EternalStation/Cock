@@ -10,7 +10,7 @@ export const createInitialPlayer = (selectedClass?: PlayerClass): Player => {
         hp: { base: 150, flat: 0, mult: 0 },
         curHp: 150,
         dmg: { base: 60, flat: 0, mult: 0 },
-        atk: { base: 330, flat: 0, mult: 0 },
+        atk: { base: 300, flat: 0, mult: 0 },
         reg: { base: 1, flat: 0, mult: 0 },
         arm: { base: 0, flat: 0, mult: 0 },
         xp_per_kill: { base: 25, flat: 0, mult: 0 },
@@ -26,7 +26,7 @@ export const createInitialPlayer = (selectedClass?: PlayerClass): Player => {
         upgradesCollected: [],
         lastShot: 0,
         multi: 1,
-        pierce: 1,
+        pierce: 0,
         droneCount: 0,
         lastAngle: 0,
         targetAngle: 0,
@@ -50,9 +50,8 @@ export const createInitialPlayer = (selectedClass?: PlayerClass): Player => {
         if (selectedClass.stats.regFlat) p.reg.flat += selectedClass.stats.regFlat;
 
         // Custom start conditions
-        if (selectedClass.id === 'aigis') {
-            // Aigis starts with higher durability focus? 
-            // Most class logic is in ProjectileLogic.
+        if (selectedClass.id === 'malware') {
+            p.pierce = 1; // Malware starts with 1 pierce (hits 2 enemies)
         }
 
         // Finalize HP using unified calcStat logic (but locally to avoid circular)
@@ -91,6 +90,7 @@ export const createInitialGameState = (): GameState => ({
     rareSpawnCycle: 0,
     rareSpawnActive: false,
     spawnTimer: 3.0, // 3 Second animation
+    unpauseDelay: 0,
     hasPlayedSpawnSound: false,
     bossPresence: 0,
     critShake: 0,

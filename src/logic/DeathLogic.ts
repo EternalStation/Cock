@@ -8,18 +8,33 @@ import { spawnFloatingNumber } from './ParticleLogic';
 export function handleEnemyDeath(state: GameState, e: Enemy, onEvent?: (event: string, data?: any) => void) {
     if (e.dead) return;
     e.dead = true; e.hp = 0;
-    state.killCount++; state.score++;
+
+    // Soul Reward Multipliers (Kill Count)
+    let soulCount = 1;
+    if (e.soulRewardMult !== undefined) {
+        soulCount = e.soulRewardMult;
+    } else if (e.isElite) {
+        soulCount = 12; // Default elite = 12 kills
+    }
+
+    state.killCount += soulCount;
+    state.score += soulCount;
 
     // --- EcoXP Lvl 2: Dust Extraction ---
     const ecoXp = state.moduleSockets.hexagons.find(h => h?.type === 'EcoXP');
     if (ecoXp && ecoXp.level >= 2) {
         const kl = ecoXp.killsAtLevel?.[2] ?? ecoXp.killsAtAcquisition;
         const killsSinceLvl2 = state.killCount - kl;
-        if (killsSinceLvl2 > 0 && killsSinceLvl2 % 50 === 0) {
-            const multiplier = getHexMultiplier(state, 'EcoXP'); // getHexMultiplier returns 1 + boost
-            const dustAmount = 1 * multiplier;
+        const prevKillsSinceLvl2 = killsSinceLvl2 - soulCount;
+
+        const currentThresholds = Math.floor(killsSinceLvl2 / 50);
+        const prevThresholds = Math.floor(prevKillsSinceLvl2 / 50);
+
+        if (currentThresholds > prevThresholds && killsSinceLvl2 > 0) {
+            const multiplier = getHexMultiplier(state, 'EcoXP');
+            const dustAmount = (currentThresholds - prevThresholds) * 1 * multiplier;
             state.player.dust += dustAmount;
-            playSfx('socket-place'); // Subtle sound for direct extraction
+            playSfx('socket-place');
             spawnFloatingNumber(state, e.x, e.y, `+${dustAmount.toFixed(1)} DUST`, '#a855f7', false);
         }
     }
@@ -103,7 +118,7 @@ export function handleEnemyDeath(state: GameState, e: Enemy, onEvent?: (event: s
         if (e.xpRewardMult !== undefined) {
             xpBase *= e.xpRewardMult;
         } else if (e.isElite) {
-            xpBase *= 12; // Elite = 12x XP
+            xpBase *= 14; // Elite = 14x XP
         }
 
         if (state.currentArena === 0) xpBase *= 1.15; // +15% XP in Economic Hex

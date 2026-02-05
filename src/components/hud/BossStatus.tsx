@@ -22,35 +22,73 @@ const BOSS_SKILLS: Record<string, { name: string; desc: string; color: string; i
         desc: 'Hardened shell reflects 3% of incoming damage back to the source.',
         color: '#94a3b8',
         iconLabel: 'T',
-        iconUrl: '/assets/BossSkills/Thorns.JPG'
+        iconUrl: '/assets/BossSkills/ThornsLVL2.JPG'
     },
     pentagon: {
         name: 'SOUL LINK',
         desc: 'Links minions to the hive mind. Contact with linked targets deals 30% HP damage but destroys the target and damages the Boss. Shared HP pool.',
         color: '#bf00ff',
         iconLabel: 'L',
-        iconUrl: '/assets/BossSkills/Link.JPG'
+        iconUrl: '/assets/BossSkills/LinkLVL2.JPG'
     },
     circle: {
         name: 'BERSERK RUSH',
         desc: 'Initiates a high-velocity dash towards the player, dealing 30% Max HP damage on impact.',
         color: '#ef4444',
         iconLabel: 'R',
-        iconUrl: '/assets/BossSkills/Rush.JPG'
+        iconUrl: '/assets/BossSkills/RushLVL2.JPG'
     },
     triangle: {
         name: 'BLADE SPIN',
         desc: 'Spins violently during dash phases, increasing movement speed and generating a jagged yellow aura.',
         color: '#eab308',
         iconLabel: 'S',
-        iconUrl: '/assets/BossSkills/Dush.JPG'
+        iconUrl: '/assets/BossSkills/DushLVL2.JPG'
     },
     diamond: {
         name: 'HYPER BEAM',
         desc: 'Fires a high-intensity laser burst. LVL 1 is reduced by Armor. LVL 2 PIERCES ALL ARMOR.',
         color: '#f87171',
         iconLabel: '⚡',
-        iconUrl: '/assets/BossSkills/Laser.JPG'
+        iconUrl: '/assets/BossSkills/LaserLVL2.JPG'
+    }
+};
+
+const BOSS_SKILLS_L3: Record<string, { name: string; desc: string; color: string; iconLabel: string; iconUrl?: string }> = {
+    square: {
+        name: 'ORBITAL PLATING',
+        desc: 'Deploys 3 localized shield generators that grant invulnerability. Shields must be destroyed to damage the boss. Regenerates every 15s.',
+        color: '#cbd5e1',
+        iconLabel: 'P',
+        iconUrl: '/assets/BossSkills/ShieldLVL3.JPG'
+    },
+    pentagon: {
+        name: 'PARASITIC LINK',
+        desc: ' Tethers to the player if close, draining 3% Max HP per second to heal the boss. moved > 800px away to break.',
+        color: '#a855f7',
+        iconLabel: 'L',
+        iconUrl: '/assets/BossSkills/ParasiticLinkLVL3.JPG'
+    },
+    circle: {
+        name: 'CYCLONE PULL',
+        desc: 'Generates a massive vacuum that pulls the player and projectiles towards the boss. 10s Cooldown.',
+        color: '#d1d5db', // windy grey
+        iconLabel: 'C',
+        iconUrl: '/assets/BossSkills/CycloneLVL3.JPG'
+    },
+    triangle: {
+        name: 'DEFLECTION FIELD',
+        desc: 'While spinning, deflects 50% of incoming projectiles in random directions.',
+        color: '#fde047',
+        iconLabel: 'D',
+        iconUrl: '/assets/BossSkills/BladeLVL3.JPG'
+    },
+    diamond: {
+        name: 'SATELLITE STRIKE',
+        desc: 'Marks 3 zones around the player and strikes them with orbital beams after a short delay. Deals 3% Boss HP damage.',
+        color: '#ef4444',
+        iconLabel: 'S',
+        iconUrl: '/assets/BossSkills/SateliteLVL3.JPG'
     }
 };
 
@@ -73,8 +111,21 @@ export const BossStatus: React.FC<BossStatusProps> = ({ gameState, showSkillDeta
     const hasBoss = !!boss;
     const hpPct = boss ? (boss.hp / boss.maxHp) * 100 : 0;
 
-    const isLevel2 = boss && (boss.bossTier === 2 || gameState.gameTime > 600);
-    const skillData = boss ? BOSS_SKILLS[boss.shape] : null;
+    const isLevel3 = boss && (boss.bossTier === 3 || (gameState.gameTime > 1200 && boss.bossTier !== 1));
+    const isLevel2 = boss && (boss.bossTier === 2 || gameState.gameTime > 600 || isLevel3);
+
+    // Collect Skills
+    const skills = [];
+    if (boss) {
+        // Level 2 Skill (Available for L2 and L3 bosses)
+        if (isLevel2 && BOSS_SKILLS[boss.shape]) {
+            skills.push(BOSS_SKILLS[boss.shape]);
+        }
+        // Level 3 Skill (Available only for L3 bosses)
+        if (isLevel3 && BOSS_SKILLS_L3[boss.shape]) {
+            skills.push(BOSS_SKILLS_L3[boss.shape]);
+        }
+    }
 
     return (
         <>
@@ -90,7 +141,14 @@ export const BossStatus: React.FC<BossStatusProps> = ({ gameState, showSkillDeta
                         letterSpacing: 2, textShadow: '0 0 10px rgba(239, 68, 68, 0.5)', marginBottom: 2
                     }}>
                         <span>{boss ? (BOSS_NAMES[boss.shape] || 'ANOMALY') : ''}</span>
-                        <span style={{ color: '#ef4444' }}>LVL {isLevel2 ? '2' : '1'}</span>
+                        <span style={{
+                            color: (() => {
+                                const minutes = gameState.gameTime / 60;
+                                const eraIndex = Math.floor(minutes / 15) % 4;
+                                const eraColors = ['#4ade80', '#3b82f6', '#a855f7', '#f97316'];
+                                return eraColors[eraIndex];
+                            })()
+                        }}>LVL {isLevel3 ? '3' : (isLevel2 ? '2' : '1')}</span>
                     </div>
 
                     {/* HP BAR SECTION */}
@@ -113,42 +171,42 @@ export const BossStatus: React.FC<BossStatusProps> = ({ gameState, showSkillDeta
                         </div>
                     </div>
 
-                    {/* SKILL ICONS SECTION - Starting from left */}
-                    {isLevel2 && skillData && (
+                    {/* SKILL ICONS SECTION */}
+                    {skills.length > 0 && (
                         <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
-                            <div
-                                onClick={() => {
-                                    setLocalSkillData(skillData);
-                                    setShowSkillDetail(true);
-                                }}
-                                style={{
-                                    width: 28, height: 28, background: 'rgba(0,0,0,0.8)', border: `2px solid ${skillData.color}`,
-                                    borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                    color: skillData.color, fontWeight: 900, cursor: 'pointer',
-                                    transition: 'all 0.2s ease',
-                                    boxShadow: `0 0 10px ${skillData.color}44`,
-                                    pointerEvents: 'auto',
-                                    overflow: 'hidden'
-                                }}
-                                onMouseEnter={(e) => {
-                                    e.currentTarget.style.transform = 'scale(1.1)';
-                                    e.currentTarget.style.boxShadow = `0 0 15px ${skillData.color}aa`;
-                                }}
-                                onMouseLeave={(e) => {
-                                    e.currentTarget.style.transform = 'scale(1)';
-                                    e.currentTarget.style.boxShadow = `0 0 10px ${skillData.color}44`;
-                                }}
-                            >
-                                {skillData.iconUrl ? (
-                                    <img
-                                        src={skillData.iconUrl}
-                                        alt={skillData.name}
-                                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                    />
-                                ) : (
-                                    skillData.iconLabel
-                                )}
-                            </div>
+                            {skills.map((skill, idx) => (
+                                <div
+                                    key={idx}
+                                    onClick={() => {
+                                        setLocalSkillData(skill);
+                                        setShowSkillDetail(true);
+                                    }}
+                                    style={{
+                                        width: 28, height: 28,
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                        color: skill.color, fontWeight: 900, cursor: 'pointer',
+                                        transition: 'all 0.2s ease',
+                                        pointerEvents: 'auto',
+                                        overflow: 'hidden'
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        e.currentTarget.style.transform = 'scale(1.1)';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        e.currentTarget.style.transform = 'scale(1)';
+                                    }}
+                                >
+                                    {skill.iconUrl ? (
+                                        <img
+                                            src={skill.iconUrl}
+                                            alt={skill.name}
+                                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                        />
+                                    ) : (
+                                        skill.iconLabel
+                                    )}
+                                </div>
+                            ))}
                         </div>
                     )}
                 </div>

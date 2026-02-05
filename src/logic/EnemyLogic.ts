@@ -97,7 +97,8 @@ export function updateEnemies(state: GameState, onEvent?: (event: string, data?:
 
                 let totalHp = 0;
                 members.forEach(m => totalHp += m.hp);
-                const sharedShield = totalHp * 0.5;
+                // User Request: 200% Shield initially (was 50%)
+                const sharedShield = totalHp * 2.0;
 
                 members.forEach((m, idx) => {
                     m.legionId = legionId;
@@ -184,8 +185,10 @@ export function updateEnemies(state: GameState, onEvent?: (event: string, data?:
             return;
         }
 
-        // Reset Frame-based Multipliers
-        e.takenDamageMultiplier = 1.0;
+        // Reset Frame-based Multipliers (but not for bosses - they manage their own)
+        if (!e.boss) {
+            e.takenDamageMultiplier = 1.0;
+        }
 
         // --- CLASS MODIFIER: Hive-Mother Nanite DOT ---
         if (e.isInfected) {
@@ -362,6 +365,38 @@ export function updateEnemies(state: GameState, onEvent?: (event: string, data?:
                 vx: -Math.cos(angle) * currentSpd,
                 vy: -Math.sin(angle) * currentSpd
             };
+        } else if ((e.type as string) === 'orbital_shield') {
+            // --- ORBITAL SHIELD LOGIC ---
+            if (e.parentId) {
+                const parent = state.enemies.find(p => p.id === e.parentId);
+                if (!parent || parent.dead) {
+                    e.dead = true;
+                    e.hp = 0;
+                } else {
+                    // Orbit Logic
+                    const orbitSpeed = 0.01; // Slower orbit (3x slower)
+                    const orbitDist = 150; // Increased to properly cover boss (boss size is 60)
+                    e.rotationPhase = (e.rotationPhase || 0) + orbitSpeed;
+
+                    // Assign position directly (lock to parent)
+                    // We also add the index offset to space them out? 
+                    // No, usually we spawn them with different phases. 
+                    // spawnShield sets random phase, but Boss spawns them with specific angles.
+                    // We should let rotationPhase drive the position.
+
+                    // Recalculate position based on Parent + Phase
+                    // Note: BossSpawnLogic sets initial pos, but here we override it to orbit.
+                    const targetX = parent.x + Math.cos(e.rotationPhase) * orbitDist;
+                    const targetY = parent.y + Math.sin(e.rotationPhase) * orbitDist;
+
+                    // Direct set or smooth move? Direct set is better for rigid shield feel.
+                    e.x = targetX;
+                    e.y = targetY;
+                    v = { vx: 0, vy: 0 }; // No independent velocity
+                }
+            } else {
+                e.dead = true; // Orphaned shield
+            }
         } else if (e.boss) {
             v = updateBossEnemy(e, currentSpd, dx, dy, pushX, pushY, state, onEvent);
         } else if (e.shape === 'minion') {
@@ -481,11 +516,25 @@ export function updateEnemies(state: GameState, onEvent?: (event: string, data?:
                     vy = lead.vy || 0;
                 }
 
+                // Check Assemblage Status
+                // If member is far from target slot, it is "assembling"
+                const distToSlot = Math.hypot(e.x - targetX, e.y - targetY);
+                // We consider "Assembled" if within small distance
+                if (distToSlot > 20) {
+                    e.isAssembling = true;
+                } else {
+                    e.isAssembling = false;
+                }
+
+                // Initial State Force: If just formed (e.g. first frame), ensure isAssembling is true to prevent blink
+                // The check above should handle it naturally.
+
                 // No personal push when in legion to maintain formation
                 pushX = 0;
                 pushY = 0;
             } else {
                 e.legionId = undefined;
+                e.isAssembling = false;
             }
         }
 
@@ -543,6 +592,39 @@ export function updateEnemies(state: GameState, onEvent?: (event: string, data?:
         e.pulsePhase = (e.pulsePhase + (Math.PI * 2) / pulseDef.interval) % (Math.PI * 2);
         e.rotationPhase = (e.rotationPhase || 0) + 0.01;
         if (e.hp <= 0 && !e.dead) handleEnemyDeath(state, e, onEvent);
+    });
+}
+
+/**
+ * Resets the attack states and timers of all elite and boss enemies.
+ * This is called when the game is unpaused to prevent immediate hits
+ * from telegraphed attacks that were mid-animation.
+ */
+export function resetEnemyAggro(state: GameState) {
+    state.enemies.forEach(e => {
+        // Reset Elite States
+        if (e.isElite) {
+            e.eliteState = 0;
+            e.timer = Date.now() + 1000; // Force a delay before stalking again
+            e.lastAttack = Date.now();
+            e.lockedTargetX = undefined;
+            e.lockedTargetY = undefined;
+            e.hasHitThisBurst = false;
+        }
+
+        // Reset Boss States
+        if (e.boss) {
+            if (e.shape === 'circle') e.dashState = 0;
+            if (e.shape === 'triangle') e.berserkState = false;
+            if (e.shape === 'diamond') e.beamState = 0;
+
+            // Shared Boss Timers
+            e.dashTimer = 0;
+            e.beamTimer = 0;
+            e.berserkTimer = 0;
+            e.lastAttack = Date.now();
+            e.hasHitThisBurst = false;
+        }
     });
 }
 

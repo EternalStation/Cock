@@ -150,21 +150,40 @@ export function useGameInput({ gameState, setShowSettings, setShowStats, setShow
                 }
             }
 
-            // B1-B5 Boss Spawning (Updated Schema)
+            // B1-B5 Boss Spawning
             // b1- : Tier 1 (Normal)
             // b1b : Tier 2 (Enhanced)
+            // b1b1: Tier 3 (Ascended)
             for (const [num, shape] of Object.entries(shapes)) {
                 if (cheatBuffer.endsWith(`b${num}-`)) {
                     const p = gameState.current.player;
                     spawnEnemy(gameState.current, p.x + 500, p.y + 500, shape, true, 1);
                     console.log(`Cheat: Spawned Tier 1 ${shape} Boss`);
-                    cheatBuffer = '';
+                    // Do NOT clear buffer to allow chaining/extensions if needed, though '-' ends it usually.
+                    // Actually, '-' is unique. But let's keep it consistent.
                 }
                 if (cheatBuffer.endsWith(`b${num}b`)) {
                     const p = gameState.current.player;
                     spawnEnemy(gameState.current, p.x + 500, p.y + 500, shape, true, 2);
                     console.log(`Cheat: Spawned Tier 2 ${shape} Boss`);
-                    cheatBuffer = '';
+                    // Do NOT clear buffer so 'b1b' can become 'b1b1'
+                }
+                if (cheatBuffer.endsWith(`b${num}b${num}`) || (num === '5' && cheatBuffer.endsWith('b5b5'))) {
+                    // Check if a Tier 2 boss of this shape was just spawned and remove it to avoid duplicates
+                    // We look for a T2 boss of same shape spawned very recently (within last 2 seconds)
+                    const recentT2Index = gameState.current.enemies.findIndex(e =>
+                        e.boss && e.bossTier === 2 && e.shape === shape && (gameState.current.gameTime - (e.spawnedAt || 0)) < 2
+                    );
+
+                    if (recentT2Index !== -1) {
+                        gameState.current.enemies.splice(recentT2Index, 1);
+                        console.log(`Cheat: Upgraded existing T2 ${shape} to T3`);
+                    }
+
+                    const p = gameState.current.player;
+                    spawnEnemy(gameState.current, p.x + 500, p.y + 500, shape, true, 3);
+                    console.log(`Cheat: Spawned Tier 3 ${shape} Boss`);
+                    cheatBuffer = ''; // Clear after T3
                 }
             }
 

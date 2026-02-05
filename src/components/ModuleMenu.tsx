@@ -41,6 +41,10 @@ export const ModuleMenu: React.FC<ModuleMenuProps> = ({ gameState, isOpen, onClo
             setIsRecycleMode(false);
             setRemovalCandidate(null);
             setSelectedClassDetail(null);
+            setHoveredItem(null);
+            setLockedItem(null);
+            setHoveredHex(null);
+            setMovedItem(null);
         }
 
         const handleKeyDown = (e: KeyboardEvent) => {

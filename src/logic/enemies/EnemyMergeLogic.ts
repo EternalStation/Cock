@@ -85,10 +85,12 @@ export function manageMerges(state: GameState) {
             host.lastAttack = Date.now() + 3000;
             host.size *= GAME_CONFIG.ENEMY.MERGE_SIZE_MULT;
             const mult = host.shape === 'pentagon' ? GAME_CONFIG.ENEMY.MERGE_HP_MULT_PENTAGON : GAME_CONFIG.ENEMY.MERGE_HP_MULT_DEFAULT;
-            // XP Multipliers: Pentagon 7x, Default 14x
-            const xpMult = host.shape === 'pentagon' ? 7 : 14;
+            const xpMult = host.shape === 'pentagon' ? GAME_CONFIG.ENEMY.MERGE_XP_MULT_PENTAGON : GAME_CONFIG.ENEMY.MERGE_XP_MULT_DEFAULT;
+            const soulMult = host.shape === 'pentagon' ? GAME_CONFIG.ENEMY.MERGE_SOUL_MULT_PENTAGON : GAME_CONFIG.ENEMY.MERGE_SOUL_MULT_DEFAULT;
+
             host.hp *= mult; host.maxHp *= mult; host.hp = host.maxHp;
             host.xpRewardMult = xpMult;
+            host.soulRewardMult = soulMult;
 
             // Retain identity status if merging zombies
             if (host.isNecroticZombie) {

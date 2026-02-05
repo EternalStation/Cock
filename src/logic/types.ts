@@ -149,6 +149,11 @@ export interface PlayerClass {
         xpMult?: number;
         regMult?: number;
         armMult?: number;
+        // Malware-Prime Specifics
+        bounceDmgMult?: number;
+        bounceSpeedBonus?: number;
+        projLifeMult?: number;
+        pierce?: number;
     };
     icon: string;
     iconUrl?: string;
@@ -177,9 +182,13 @@ export interface Bullet {
     orbitAngle?: number;
     orbitDist?: number;
     spawnTime?: number;
+    trails?: { x: number; y: number }[];
     // Nanite Swarm
     isNanite?: boolean;
     naniteTargetId?: number;
+    // Malware Props
+    bounceDmgMult?: number;
+    bounceSpeedBonus?: number;
 }
 
 export type ShapeType = 'circle' | 'triangle' | 'square' | 'diamond' | 'pentagon' | 'minion' | 'snitch';
@@ -281,6 +290,7 @@ export interface Enemy {
 
     // XP Reward
     xpRewardMult?: number; // Multiplier for XP gain (overrides isElite check if present)
+    soulRewardMult?: number; // Multiplier for souls (kill count) gain
     mergeState?: 'none' | 'warming_up' | 'merging';
     mergeId?: string; // Group ID for merging cluster
     mergeTimer?: number; // Timestamp when merge completes
@@ -362,6 +372,7 @@ export interface Enemy {
     legionId?: string;
     legionLeadId?: number;
     legionSlot?: { x: number; y: number }; // Index in the grid (e.g. 0-4, 0-3 for 20 enemies)
+    isAssembling?: boolean; // Invisible/Invincible during formation
     legionShield?: number; // Shared shield value (stored on each member for simplicity or just on lead)
     maxLegionShield?: number; // Max shield for the bar indicator
     wasInLegion?: boolean; // Prevent re-joining or merging after being in a legion
@@ -381,7 +392,26 @@ export interface Enemy {
     beamAngle?: number;
     soulLinkTargets?: number[]; // IDs of linked enemies (Pentagon)
     soulLinkHostId?: number; // ID of the boss linking this enemy
-    bossTier?: number; // 0=Auto (Time based), 1=Tier 1 (Normal), 2=Tier 2 (Enhanced)
+    bossTier?: number; // 0=Auto (Time based), 1=Tier 1 (Normal), 2=Tier 2 (Enhanced), 3=Tier 3 (Ascended)
+
+    // Level 3 Boss Mechanics (20min+)
+    cycloneState?: number; // 0=Idle, 1=Spinning (Circle)
+    cycloneTimer?: number;
+    shieldsInitialized?: boolean; // Square Boss - tracks if initial shields have been spawned
+
+
+    deflectState?: boolean; // Triangle Spin/Deflect
+
+    orbitalShields?: number; // Current active shields (Square)
+    maxOrbitalShields?: number;
+    shieldRegenTimer?: number;
+
+    satelliteState?: number; // 0=Idle, 1=Charge, 2=Fire (Diamond)
+    satelliteTimer?: number;
+    satelliteTargets?: { x: number, y: number }[]; // Locked zones
+
+    parasiteLinkActive?: boolean; // Pentagon Link
+    parasiteTimer?: number;
 }
 
 export interface Upgrade {
@@ -481,6 +511,7 @@ export interface GameState {
     rareSpawnActive: boolean; // Is a rare enemy currently alive?
     rareRewardActive?: boolean; // Flag to show "Increased Rarity" text on next level up
     spawnTimer: number; // For start/restart animation
+    unpauseDelay?: number; // Grace period after closing menus
     hasPlayedSpawnSound?: boolean;
     bossPresence: number; // 0 to 1 smooth transition for boss effects
     critShake: number; // Screenshake intensity from crits

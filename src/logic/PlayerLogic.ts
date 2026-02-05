@@ -1,4 +1,5 @@
 import type { GameState, Enemy } from './types';
+import { getPlayerThemeColor } from './helpers';
 import { isInMap, ARENA_CENTERS, PORTALS, getHexWallLine, ARENA_RADIUS } from './MapLogic';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from './constants';
 import { GAME_CONFIG } from './GameConfig';
@@ -11,7 +12,7 @@ import { getDefenseReduction } from './MathUtils';
 
 
 
-export function updatePlayer(state: GameState, keys: Record<string, boolean>, onEvent?: (type: string, data?: any) => void, inputVector?: { x: number, y: number }, worldMousePos?: { x: number, y: number }) {
+export function updatePlayer(state: GameState, keys: Record<string, boolean>, onEvent?: (type: string, data?: any) => void, inputVector?: { x: number, y: number }, mouseOffset?: { x: number, y: number }) {
     const { player } = state;
 
     // Track player position history for laser prediction (last 60 frames = ~1 second at 60fps)
@@ -242,11 +243,11 @@ export function updatePlayer(state: GameState, keys: Record<string, boolean>, on
     player.curHp = Math.min(maxHp, player.curHp + regenAmount);
 
     // Aiming Logic
-    if (player.playerClass === 'malware' && worldMousePos) {
-        // --- CLASS MODIFIER: Malware-Prime Mouse Aim ---
-        player.targetAngle = Math.atan2(worldMousePos.y - player.y, worldMousePos.x - player.x);
-        player.targetX = worldMousePos.x;
-        player.targetY = worldMousePos.y;
+    if (player.playerClass === 'malware' && mouseOffset) {
+        // --- CLASS MODIFIER: Malware-Prime Mouse Aim (Screen Relative) ---
+        player.targetAngle = Math.atan2(mouseOffset.y, mouseOffset.x);
+        player.targetX = player.x + mouseOffset.x;
+        player.targetY = player.y + mouseOffset.y;
     } else {
         // Auto-Aim Logic (skip barrels - they're neutral)
         let nearest: Enemy | null = null;
@@ -283,26 +284,18 @@ export function updatePlayer(state: GameState, keys: Record<string, boolean>, on
             // Apply Contact Damage to Player
             // Default: 15% of enemy max HP, or custom if set. Neutral objects (barrels) deal 0 dmg.
             let rawDmg = 0;
-            if (!e.isNeutral) {
+            if (!e.isNeutral && !e.isAssembling) {
                 // Check Soul Link Status
                 const isLinked = e.soulLinkHostId !== undefined || (e.soulLinkTargets && e.soulLinkTargets.length > 0);
 
                 if (isLinked) {
                     // LINKED COLLISION LOGIC
-                    let linkSourceTime = e.spawnedAt || state.gameTime;
+                    // LINKED COLLISION LOGIC
+                    // (linkSourceTime logic removed as it was for Era Color which is now replaced)
 
-                    // Use Host's spawn time for color consistency
-                    if (e.soulLinkHostId) {
-                        const host = state.enemies.find(h => h.id === e.soulLinkHostId);
-                        if (host && host.spawnedAt) linkSourceTime = host.spawnedAt;
-                    }
-
-                    // Determine Link Color (0-15 Green, 15-30 Blue, etc)
-                    const minutes = linkSourceTime / 60;
-                    const eraIndex = Math.floor(minutes / 15) % 5;
-                    // Start Green -> Blue -> Purple -> Orange -> Red
-                    const ERA_COLORS = ['#00FF00', '#00FFFF', '#BF00FF', '#FF9900', '#FF0000'];
-                    const linkColor = ERA_COLORS[eraIndex] || ERA_COLORS[0];
+                    // Determine Link Color
+                    // User Request: Prevent specific green color change. Use Theme Color.
+                    const linkColor = getPlayerThemeColor(state);
 
                     // 1. Player takes 30% Damage (Double normal)
                     rawDmg = e.hp * 0.30;

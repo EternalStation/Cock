@@ -53,17 +53,16 @@ export function updateEliteTriangle(e: Enemy, state: GameState, dist: number, dx
     if (!e.eliteState) e.eliteState = 0;
     if (e.eliteState === 0) {
         if ((!e.timer || Date.now() > e.timer) && dist < 600) {
-            e.eliteState = 1; e.timer = Date.now() + 3500;
-
+            e.eliteState = 1; e.timer = Date.now() + 2500; // 2.5s Berserk Duration
         }
         const a = Math.atan2(dy, dx);
         vx = Math.cos(a) * e.spd + pushX; vy = Math.sin(a) * e.spd + pushY;
     } else {
         e.rotationPhase = (e.rotationPhase || 0) + 0.5;
         const a = Math.atan2(dy, dx) + Math.sin(Date.now() / 100) * 0.5;
-        const fast = currentSpd * 2.55;
+        const fast = currentSpd * 1.75;
         vx = Math.cos(a) * fast + pushX; vy = Math.sin(a) * fast + pushY;
-        spawnParticles(state, e.x, e.y, '#fcc74dff', 1);
+        spawnParticles(state, e.x, e.y, e.eraPalette?.[0] || e.palette[0], 1);
         if (Date.now() > (e.timer || 0)) {
             e.eliteState = 0; e.timer = Date.now() + 5000;
         }

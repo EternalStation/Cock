@@ -4,7 +4,7 @@ import type { GameState, UpgradeChoice, LegendaryHex, PlayerClass } from '../log
 
 import { createInitialGameState, createInitialPlayer } from '../logic/GameState';
 import { updatePlayer } from '../logic/PlayerLogic';
-import { updateEnemies } from '../logic/EnemyLogic';
+import { updateEnemies, resetEnemyAggro } from '../logic/EnemyLogic';
 import { getChassisResonance } from '../logic/EfficiencyLogic';
 import { updateProjectiles, spawnBullet } from '../logic/ProjectileLogic';
 
@@ -130,7 +130,7 @@ export function useGameLoop(gameStarted: boolean) {
     }, [showModuleMenu]);
 
     const triggerPortal = useCallback(() => {
-        const cost = 5 + Math.floor(gameState.current.gameTime / 60);
+        const cost = 3 + Math.floor(gameState.current.gameTime / 60);
         if (gameState.current.portalState === 'closed') {
             if (gameState.current.player.dust >= cost) {
                 gameState.current.player.dust -= cost;
@@ -229,23 +229,24 @@ export function useGameLoop(gameStarted: boolean) {
             if (event === 'level_up') {
                 const choices = spawnUpgrades(state, false);
                 setUpgradeChoices(choices);
+                state.isPaused = true; // Force immediate pause to stop further steps this frame
                 playSfx('level');
             }
             if (event === 'boss_kill') {
                 state.bossKills = (state.bossKills || 0) + 1;
-                // Legendary selection is handled in logic files (PlayerLogic/ProjectileLogic),
-                // but we trigger the React UI here.
+                state.isPaused = true; // Force immediate pause
                 setShowLegendarySelection(true);
             }
             if (event === 'snitch_kill') {
                 const choices = spawnSnitchUpgrades(state);
                 setUpgradeChoices(choices);
+                state.isPaused = true; // Force immediate pause
                 playSfx('level');
             }
             if (event === 'game_over') {
+                state.isPaused = true;
                 setGameOver(true);
                 import('../logic/AudioLogic').then(mod => mod.stopAllLoops());
-
             }
         };
         state.legionLeads = state.legionLeads || {};
@@ -260,10 +261,10 @@ export function useGameLoop(gameStarted: boolean) {
                 // 1 world unit = (windowScaleFactor * 0.58) logical pixels
                 const logicalZoom = windowScaleFactor.current * 0.58;
 
-                const worldX = (screenX - rect.width / 2) / logicalZoom + state.camera.x;
-                const worldY = (screenY - rect.height / 2) / logicalZoom + state.camera.y;
+                const offsetX = (screenX - rect.width / 2) / logicalZoom;
+                const offsetY = (screenY - rect.height / 2) / logicalZoom;
 
-                updatePlayer(state, keys.current, eventHandler, inputVector.current, { x: worldX, y: worldY });
+                updatePlayer(state, keys.current, eventHandler, inputVector.current, { x: offsetX, y: offsetY });
             } else {
                 updatePlayer(state, keys.current, eventHandler, inputVector.current);
             }
@@ -461,9 +462,10 @@ export function useGameLoop(gameStarted: boolean) {
                     if (dist < pullRadius) {
                         // 1. CONSUMPTION MECHANIC
                         if (dist < consumptionRadius) {
-                            if (e.boss) {
-                                // Bosses take 10% Max HP/sec - They can't be "consumed" instantly but get crushed
-                                let appliedDmg = (e.maxHp * 0.10) * step;
+                            if (e.boss || e.isElite) {
+                                // Bosses take 10% Max HP/sec, Elites take 25% Max HP/sec - They can't be "consumed" instantly but get crushed
+                                const dmgPct = e.isElite ? 0.25 : 0.10;
+                                let appliedDmg = (e.maxHp * dmgPct) * step;
 
                                 // --- LEGION SHIELD BLOCK ---
                                 if (e.legionId) {
@@ -697,8 +699,20 @@ export function useGameLoop(gameStarted: boolean) {
 
 
         const { player } = state;
-        const atkScore = Math.min(9999, calcStat(player.atk));
-        const fireDelay = 200000 / atkScore;
+        const atkScore = calcStat(player.atk);
+
+        // Logarithmic + Linear Scaling (User Request v5)
+        // 1.65 SPS @ 300
+        // 4.0 SPS @ 700
+        // ~35.5 SPS @ 1,500,000
+        // Fit: SPS = 2.8 * ln(Atk) - 14.3 + (Atk / 150,000)
+
+        let shotsPerSec = Math.max(1.65, 2.8 * Math.log(atkScore) - 14.3 + atkScore / 150000);
+
+        // Cap max SPS to avoid infinity/physics breaks if stats go wild (e.g. 60 FPS limit)
+        // 60 SPS = ~3 Million Atk with this formula
+
+        const fireDelay = 1000 / shotsPerSec;
 
         if (Date.now() - player.lastShot > fireDelay && state.spawnTimer <= 0 && state.portalState !== 'transferring') {
             const d = calcStat(player.dmg);
@@ -781,6 +795,12 @@ export function useGameLoop(gameStarted: boolean) {
             // Pausing Logic
             const isMenuOpen = showStatsRef.current || showSettingsRef.current || showModuleMenuRef.current || upgradeChoicesRef.current !== null || state.showLegendarySelection || showBossSkillDetailRef.current;
 
+            // Detect transition from paused to unpaused
+            if (!isMenuOpen && state.isPaused) {
+                state.unpauseDelay = 1.0; // 1s grace period
+                resetEnemyAggro(state); // Reset all elite/boss attack animations
+            }
+
             // CRITICAL: Only clear keys when TRANSITIONING to paused.
             // This stops current movement but allows players to "buffer" their next move 
             // by pressing keys while the menu is open or closing.
@@ -814,21 +834,27 @@ export function useGameLoop(gameStarted: boolean) {
             const FIXED_STEP = 1 / 60;
 
             if (!state.isPaused && !state.gameOver) {
-                // Fixed Update Step
-                let steps = 0;
-                // Increased max steps to 20 to prioritize simulation speed over frame consistency during lag spikes
-                while (accRef.current >= FIXED_STEP && steps < 20) {
-                    accRef.current -= FIXED_STEP;
-                    steps++;
-                    // Update Logic
-                    updateLogic(state, FIXED_STEP);
+                // Grace Period: Skip logic updates during unpause delay
+                if (state.unpauseDelay && state.unpauseDelay > 0) {
+                    state.unpauseDelay -= safeDt;
+                    accRef.current = 0; // Don't accumulate while waiting
+                } else {
+                    // Fixed Update Step
+                    let steps = 0;
+                    // Increased max steps to 20 to prioritize simulation speed over frame consistency during lag spikes
+                    while (accRef.current >= FIXED_STEP && steps < 20 && !state.isPaused && !state.gameOver) {
+                        accRef.current -= FIXED_STEP;
+                        steps++;
+                        // Update Logic
+                        updateLogic(state, FIXED_STEP);
 
-                    // Failsafe Death Check (Covering all damage sources)
-                    if (state.player.curHp <= 0) {
-                        state.player.curHp = 0;
-                        state.gameOver = true;
-                        setGameOver(true);
-                        import('../logic/AudioLogic').then(mod => mod.stopAllLoops());
+                        // Failsafe Death Check (Covering all damage sources)
+                        if (state.player.curHp <= 0) {
+                            state.player.curHp = 0;
+                            state.gameOver = true;
+                            setGameOver(true);
+                            import('../logic/AudioLogic').then(mod => mod.stopAllLoops());
+                        }
                     }
                 }
             }
@@ -994,7 +1020,7 @@ export function useGameLoop(gameStarted: boolean) {
         triggerPortal,
         fps,
         portalError,
-        portalCost: 5 + Math.floor(gameState.current.gameTime / 60),
+        portalCost: 3 + Math.floor(gameState.current.gameTime / 60),
         onViewChassisDetail: () => {
             gameState.current.chassisDetailViewed = true;
             setUiState(p => p + 1);

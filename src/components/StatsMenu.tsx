@@ -171,6 +171,12 @@ const EnemyPreview: React.FC<{ shape: string; color: string }> = ({ shape, color
 
 // --- MAIN MENU ---
 
+/**
+ * UPDATED SYSTEM STATS MENU (Version 2.1)
+ * Removed Level display as requested.
+ * Restored Movement Speed and Regeneration.
+ * Fixed Pierce display for non-Malware classes.
+ */
 export const StatsMenu: React.FC<StatsMenuProps> = ({ gameState }) => {
     const { player } = gameState;
     const [tab, setTab] = useState<'stats' | 'blueprint'>('stats');
@@ -265,7 +271,7 @@ export const StatsMenu: React.FC<StatsMenuProps> = ({ gameState }) => {
                         borderBottom: tab === 'stats' ? '2px solid #22d3ee' : 'none'
                     }}
                 >
-                    SYSTEM STATS
+                    SYSTEM DIAGNOSTICS
                 </div>
                 <div
                     onClick={() => setTab('blueprint')}
@@ -291,7 +297,7 @@ export const StatsMenu: React.FC<StatsMenuProps> = ({ gameState }) => {
                             <RadarChart player={player} size={180} />
                         </div>
 
-                        {/* Left: Table */}
+                        {/* Stats Table */}
                         <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 4 }}>
                             {(() => {
                                 const arenaIdx = getArenaIndex(player.x, player.y);
@@ -312,7 +318,13 @@ export const StatsMenu: React.FC<StatsMenuProps> = ({ gameState }) => {
                                             stat={player.atk}
                                             legendaryBonusFlat={calculateLegendaryBonus(gameState, 'ats_per_kill')}
                                             legendaryBonusPct={calculateLegendaryBonus(gameState, 'ats_pct_per_kill')}
-                                            extraInfo={`(${(((calcStat(player.atk) + calculateLegendaryBonus(gameState, 'ats_per_kill')) * (1 + calculateLegendaryBonus(gameState, 'ats_pct_per_kill') / 100)) / 200).toFixed(1)}/s)`}
+                                            extraInfo={(() => {
+                                                // Correlate with Game Loop logic (useGame.ts)
+                                                // calcStat(player.atk) includes hexFlat/hexMult because they are updated in PlayerLogic every frame
+                                                const score = calcStat(player.atk);
+                                                const sps = Math.max(1.65, 2.8 * Math.log(score) - 14.3 + score / 150000);
+                                                return `(${sps.toFixed(2)}/s)`;
+                                            })()}
                                         />
                                         <StatRow label="Regeneration" stat={player.reg} legendaryBonusFlat={calculateLegendaryBonus(gameState, 'reg_per_kill')} legendaryBonusPct={calculateLegendaryBonus(gameState, 'reg_pct_per_kill')} arenaMult={regMult} />
                                         <StatRow
@@ -322,6 +334,12 @@ export const StatsMenu: React.FC<StatsMenuProps> = ({ gameState }) => {
                                             legendaryBonusPct={calculateLegendaryBonus(gameState, 'arm_pct_per_kill')}
                                             extraInfo={`(${(0.95 * (calcStat(player.arm) / (calcStat(player.arm) + GAME_CONFIG.PLAYER.ARMOR_CONSTANT)) * 100).toFixed(1)}%)`}
                                         />
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #1e293b' }}>
+                                            <span style={{ color: '#94a3b8', fontSize: 16, fontWeight: 700 }}>Movement Speed</span>
+                                            <span style={{ color: '#4ade80', fontSize: 18, fontWeight: 600 }}>
+                                                {player.speed.toFixed(1)}
+                                            </span>
+                                        </div>
                                         {(() => {
                                             const colRed = calculateLegendaryBonus(gameState, 'col_red_per_kill');
                                             if (colRed <= 0) return null;
@@ -358,66 +376,56 @@ export const StatsMenu: React.FC<StatsMenuProps> = ({ gameState }) => {
                                                 </div>
                                             );
                                         })()}
+
+                                        {/* XP Breakdown */}
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #1e293b' }}>
+                                            <span style={{ color: '#94a3b8', fontSize: 16, fontWeight: 700 }}>XP Gain per kill</span>
+                                            <div style={{ display: 'flex', gap: 6, alignItems: 'center', justifyContent: 'flex-end' }}>
+                                                {(() => {
+                                                    const flatBase = 40 + (player.level * 3) + player.xp_per_kill.flat;
+                                                    const hexFlat = calculateLegendaryBonus(gameState, 'xp_per_kill');
+                                                    const baseSum = flatBase + hexFlat;
+                                                    const normalMult = 1 + player.xp_per_kill.mult / 100;
+                                                    const hexMult = 1 + calculateLegendaryBonus(gameState, 'xp_pct_per_kill') / 100;
+                                                    const total = baseSum * normalMult * hexMult;
+                                                    const showBreakdown = hexFlat > 0;
+
+                                                    return (
+                                                        <>
+                                                            {showBreakdown ? (
+                                                                <span style={{ color: '#64748b', fontSize: 12 }}>
+                                                                    ({Math.round(flatBase)} <span style={{ color: '#fbbf24' }}>+{Math.round(hexFlat)}</span>)
+                                                                </span>
+                                                            ) : (
+                                                                <span style={{ color: '#64748b', fontSize: 12 }}>{Math.round(baseSum)}</span>
+                                                            )}
+                                                            <span style={{ color: '#64748b', fontSize: 12 }}> x </span>
+                                                            <span style={{ color: '#94a3b8', fontSize: 12 }}>{Math.round(normalMult * 100)}%</span>
+                                                            {hexMult > 1 && (
+                                                                <>
+                                                                    <span style={{ color: '#64748b', fontSize: 12 }}> x </span>
+                                                                    <span style={{ color: '#fbbf24', fontSize: 12 }}>{Math.round(hexMult * 100)}%</span>
+                                                                </>
+                                                            )}
+                                                            <span style={{ color: '#64748b', fontSize: 12 }}> = </span>
+                                                            <span style={{ color: '#4ade80', fontSize: 18, fontWeight: 600, minWidth: 30, textAlign: 'right' }}>
+                                                                {Math.round(total)}
+                                                            </span>
+                                                        </>
+                                                    );
+                                                })()}
+                                            </div>
+                                        </div>
+
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderTop: '1px solid #334155', marginTop: 10 }}>
+                                            <span style={{ color: '#94a3b8', fontSize: 16, fontWeight: 700 }}>Pierce</span>
+                                            <span style={{ color: '#fbbf24', fontSize: 18, fontWeight: 600 }}>
+                                                {player.pierce}
+                                            </span>
+                                        </div>
                                     </>
                                 );
                             })()}
-
-                            {/* XP Display: Explicit Breakdown */}
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #1e293b' }}>
-                                <span style={{ color: '#94a3b8', fontSize: 16, fontWeight: 700 }}>XP Gain per kill</span>
-                                <div style={{ display: 'flex', gap: 6, alignItems: 'center', justifyContent: 'flex-end' }}>
-                                    {(() => {
-                                        const flatBase = 40 + (player.level * 3) + player.xp_per_kill.flat;
-                                        const hexFlat = calculateLegendaryBonus(gameState, 'xp_per_kill');
-                                        const baseSum = flatBase + hexFlat;
-
-                                        const normalMult = 1 + player.xp_per_kill.mult / 100;
-                                        const hexMult = 1 + calculateLegendaryBonus(gameState, 'xp_pct_per_kill') / 100;
-
-                                        const total = baseSum * normalMult * hexMult;
-
-                                        // Visual breakdown logic
-                                        const showBreakdown = hexFlat > 0;
-
-                                        return (
-                                            <>
-                                                {showBreakdown ? (
-                                                    <span style={{ color: '#64748b', fontSize: 12 }}>
-                                                        ({Math.round(flatBase)} <span style={{ color: '#fbbf24' }}>+{Math.round(hexFlat)}</span>)
-                                                    </span>
-                                                ) : (
-                                                    <span style={{ color: '#64748b', fontSize: 12 }}>{Math.round(baseSum)}</span>
-                                                )}
-
-                                                <span style={{ color: '#64748b', fontSize: 12 }}> x </span>
-                                                <span style={{ color: '#94a3b8', fontSize: 12 }}>{Math.round(normalMult * 100)}%</span>
-
-                                                {hexMult > 1 && (
-                                                    <>
-                                                        <span style={{ color: '#64748b', fontSize: 12 }}> x </span>
-                                                        <span style={{ color: '#fbbf24', fontSize: 12 }}>{Math.round(hexMult * 100)}%</span>
-                                                    </>
-                                                )}
-
-                                                <span style={{ color: '#64748b', fontSize: 12 }}> = </span>
-                                                <span style={{ color: '#4ade80', fontSize: 18, fontWeight: 600, minWidth: 30, textAlign: 'right' }}>
-                                                    {Math.round(total)}
-                                                </span>
-                                            </>
-                                        );
-                                    })()}
-                                </div>
-                            </div>
-
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderTop: '1px solid #333', marginTop: 10 }}>
-                                <span style={{ color: '#94a3b8', fontSize: 16, fontWeight: 700 }}>PROJECTILES</span>
-                                <span style={{ color: '#fff', fontSize: 16, fontWeight: 900 }}>{player.multi} <span style={{ color: '#666', fontWeight: 600 }}>(Pierce: {player.pierce})</span></span>
-                            </div>
-
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0' }}>
-                                <span style={{ color: '#94a3b8', fontSize: 16, fontWeight: 700 }}>LEVEL</span>
-                                <span style={{ color: '#00FF88', fontSize: 18, fontWeight: 600 }}>{player.level}</span>
-                            </div>
                         </div>
                     </div>
                 )}

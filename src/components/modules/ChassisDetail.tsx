@@ -105,38 +105,39 @@ export const ChassisDetail: React.FC<ChassisDetailProps> = ({ gameState, playerC
                         <section className="chassis-section metrics-section">
                             <h2 className="section-header">PERFORMANCE METRICS</h2>
                             <div className="metrics-list">
-                                {playerClass.capabilityMetrics.map((m, i) => {
-                                    // Static metrics explicitly marked or non-percentage stay as is
-                                    const isStatic = m.isStatic || !m.isPercentage;
+                                {playerClass.capabilityMetrics
+                                    .map((m, i) => {
+                                        // Static metrics explicitly marked or non-percentage stay as is
+                                        const isStatic = m.isStatic || !m.isPercentage;
 
-                                    // Only multiply non-static percentage-based metrics
-                                    const finalValue = (m.isPercentage && !m.isStatic)
-                                        ? m.value * multiplier
-                                        : m.value;
+                                        // Only multiply non-static percentage-based metrics
+                                        const finalValue = (m.isPercentage && !m.isStatic)
+                                            ? m.value * multiplier
+                                            : m.value;
 
-                                    return (
-                                        <div key={i} className="metric-item">
-                                            <div className="metric-row">
-                                                <div className="metric-base-group">
-                                                    <span className="metric-base-val">{m.value}{m.unit}</span>
-                                                    <span className="metric-label">{m.label}</span>
+                                        return (
+                                            <div key={i} className="metric-item">
+                                                <div className="metric-row">
+                                                    <div className="metric-base-group">
+                                                        <span className="metric-base-val">{m.value}{m.unit}</span>
+                                                        <span className="metric-label">{m.label}</span>
+                                                    </div>
+                                                    {!isStatic ? (
+                                                        <div className="metric-calculation">
+                                                            <span className="multiplier-sym">×</span>
+                                                            <span className="res-mult">{multiplier.toFixed(2)}</span>
+                                                            <div className="metric-divider">|</div>
+                                                            <span className="final-val">{finalValue.toFixed(0)}{m.unit}</span>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="metric-calculation">
+                                                            <span className="final-val" style={{ color: '#94a3b8' }}>STATIC</span>
+                                                        </div>
+                                                    )}
                                                 </div>
-                                                {!isStatic ? (
-                                                    <div className="metric-calculation">
-                                                        <span className="multiplier-sym">×</span>
-                                                        <span className="res-mult">{multiplier.toFixed(2)}</span>
-                                                        <div className="metric-divider">|</div>
-                                                        <span className="final-val">{finalValue.toFixed(0)}{m.unit}</span>
-                                                    </div>
-                                                ) : (
-                                                    <div className="metric-calculation">
-                                                        <span className="final-val" style={{ color: '#94a3b8' }}>STATIC</span>
-                                                    </div>
-                                                )}
                                             </div>
-                                        </div>
-                                    );
-                                })
+                                        );
+                                    })
                                 }
                             </div>
                         </section>
@@ -242,6 +243,21 @@ export const ChassisDetail: React.FC<ChassisDetailProps> = ({ gameState, playerC
                                                     {playerClass.stats.spdMult > 0 ? '+' : ''}{Math.round(playerClass.stats.spdMult * 100)}%
                                                 </span>
                                                 <span className="metric-label">MOVEMENT SPEED</span>
+                                            </div>
+                                            <div className="metric-calculation">
+                                                <span className="final-val" style={{ color: '#94a3b8' }}>STATIC</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                                {playerClass.stats.pierce && (
+                                    <div className="metric-item">
+                                        <div className="metric-row">
+                                            <div className="metric-base-group">
+                                                <span className="final-val positive">
+                                                    +{playerClass.stats.pierce}
+                                                </span>
+                                                <span className="metric-label">PIERCE</span>
                                             </div>
                                             <div className="metric-calculation">
                                                 <span className="final-val" style={{ color: '#94a3b8' }}>STATIC</span>

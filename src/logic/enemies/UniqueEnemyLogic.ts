@@ -118,6 +118,18 @@ export function updateSnitch(e: Enemy, state: GameState, player: any, timeS: num
     if (e.panicCooldown && timeS < e.panicCooldown) { vx *= 2; vy *= 2; }
 
     // Snitch moves are handled by return
+    // Check for collision with Elite Squares to turn Green
+    const others = state.spatialGrid.query(e.x, e.y, e.size + 100);
+    for (const other of others) {
+        if (other.id !== e.id && !other.dead && other.isElite && other.shape === 'square') {
+            const dist = Math.hypot(other.x - e.x, other.y - e.y);
+            if (dist < e.size + other.size) {
+                // Change center color to green
+                e.palette = ['#4ade80', e.palette[1], e.palette[2]];
+            }
+        }
+    }
+
     return { vx, vy };
 }
 

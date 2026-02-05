@@ -1,6 +1,7 @@
 import { PLAYER_CLASSES } from '../classes';
 import { PALETTES } from '../constants';
 import type { GameState, Enemy } from '../types';
+import { spawnParticles } from '../ParticleLogic';
 
 export function renderPlayer(ctx: CanvasRenderingContext2D, state: GameState, meteoriteImages: Record<string, HTMLImageElement>) {
     const { player } = state;
@@ -228,6 +229,7 @@ export function renderEnemies(ctx: CanvasRenderingContext2D, state: GameState, m
     });
 
     enemies.forEach(e => {
+        if (e.dead || e.isAssembling) return;
         if (e.mergeState === 'warming_up' && e.mergeTimer && !e.mergeHost && e.mergeId) {
             const host = mergeHosts.get(e.mergeId);
             if (host) {
@@ -292,6 +294,61 @@ export function renderEnemies(ctx: CanvasRenderingContext2D, state: GameState, m
             ctx.restore();
         }
 
+        // PENTAGON LVL 3 PLAYER TETHER (Distorted Glitchy Link)
+        if (e.shape === 'pentagon' && e.boss && e.parasiteLinkActive && (e.bossTier === 3 || (state.gameTime > 1200 && e.bossTier !== 1))) {
+            // Determine Color based on Era
+            const minutes = (e.spawnedAt || state.gameTime) / 60;
+            const eraIndex = Math.floor(minutes / 15) % PALETTES.length;
+            const tetherColor = PALETTES[eraIndex].colors[0]; // Brightest era color
+            const tetherColorDark = PALETTES[eraIndex].colors[2]; // Darkest for contrast
+
+            ctx.save();
+            const time = state.gameTime;
+
+            // Glitchy distorted line - multiple overlapping segments
+            const segments = 8;
+            for (let s = 0; s < segments; s++) {
+                const progress = s / segments;
+                const nextProgress = (s + 1) / segments;
+
+                // Calculate positions with glitch offset
+                const glitchAmp = 15 + Math.sin(time * 20 + s) * 10;
+                const glitchX1 = (Math.random() - 0.5) * glitchAmp;
+                const glitchY1 = (Math.random() - 0.5) * glitchAmp;
+                const glitchX2 = (Math.random() - 0.5) * glitchAmp;
+                const glitchY2 = (Math.random() - 0.5) * glitchAmp;
+
+                const x1 = e.x + (state.player.x - e.x) * progress + glitchX1;
+                const y1 = e.y + (state.player.y - e.y) * progress + glitchY1;
+                const x2 = e.x + (state.player.x - e.x) * nextProgress + glitchX2;
+                const y2 = e.y + (state.player.y - e.y) * nextProgress + glitchY2;
+
+                // Alternating colors for glitch effect
+                ctx.strokeStyle = s % 2 === 0 ? tetherColor : tetherColorDark;
+                ctx.lineWidth = 3 + Math.sin(time * 15 + s) * 1.5;
+                ctx.globalAlpha = 0.6 + Math.sin(time * 10 + s * 0.5) * 0.3;
+
+                // Add shadow for scary effect
+                ctx.shadowColor = tetherColor;
+                ctx.shadowBlur = 15;
+
+                ctx.beginPath();
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+                ctx.stroke();
+            }
+
+            // Add crackling particles along the line
+            if (state.frameCount % 3 === 0) {
+                const particlePos = Math.random();
+                const px = e.x + (state.player.x - e.x) * particlePos;
+                const py = e.y + (state.player.y - e.y) * particlePos;
+                spawnParticles(state, px, py, tetherColor, 2);
+            }
+
+            ctx.restore();
+        }
+
         // CIRCLE DASH INDICATOR (Laser Sight)
         if (e.shape === 'circle' && e.dashState === 1 && e.dashLockX && e.dashLockY) {
             ctx.save();
@@ -351,6 +408,94 @@ export function renderEnemies(ctx: CanvasRenderingContext2D, state: GameState, m
                 ctx.arc(e.x, e.y, chargeSize * 0.6, 0, Math.PI * 2);
                 ctx.fill();
             }
+
+
+            ctx.restore();
+        }
+
+        // DIAMOND LVL 3 SATELLITE STRIKE BEAMS (Cosmic Beam Style)
+        if (e.shape === 'diamond' && e.satelliteState === 2 && e.satelliteTargets && (e.satelliteTimer || 0) <= 20) {
+            // Determine era color
+            const minutes = (e.spawnedAt || state.gameTime) / 60;
+            const eraIndex = Math.floor(minutes / 15) % PALETTES.length;
+            const beamColor = PALETTES[eraIndex].colors[0]; // Brightest era color
+            const beamColorMid = PALETTES[eraIndex].colors[1];
+
+            e.satelliteTargets.forEach(t => {
+                ctx.save();
+                ctx.translate(t.x, t.y);
+
+                // Beam animation (fades over 20 frames)
+                const beamAlpha = 1 - (e.satelliteTimer || 0) / 20;
+                const beamHeight = 2000;
+                const beamWidth = 120; // Slightly wider than crater
+
+                // Gradient: High center opacity (Cosmic Beam style)
+                const beamGrad = ctx.createLinearGradient(-beamWidth / 2, 0, beamWidth / 2, 0);
+                beamGrad.addColorStop(0, `${beamColor}00`); // Transparent
+                beamGrad.addColorStop(0.2, beamColorMid.replace(')', `, ${0.5 * beamAlpha})`).replace('rgb', 'rgba'));
+                beamGrad.addColorStop(0.5, `rgba(255, 255, 255, ${1.0 * beamAlpha})`);
+                beamGrad.addColorStop(0.8, beamColorMid.replace(')', `, ${0.5 * beamAlpha})`).replace('rgb', 'rgba'));
+                beamGrad.addColorStop(1, `${beamColor}00`); // Transparent
+
+                ctx.fillStyle = beamGrad;
+                ctx.fillRect(-beamWidth / 2, -beamHeight, beamWidth, beamHeight);
+
+                // Core beam line
+                ctx.globalCompositeOperation = 'lighter';
+                ctx.strokeStyle = `rgba(255, 255, 255, ${0.8 * beamAlpha})`;
+                ctx.lineWidth = 6;
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.lineTo(0, -beamHeight);
+                ctx.stroke();
+
+                // Side streaks with era color
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = beamColor.replace(')', `, ${0.4 * beamAlpha})`).replace('rgb', 'rgba');
+                ctx.beginPath();
+                ctx.moveTo(-60, 0); ctx.lineTo(-60, -beamHeight);
+                ctx.moveTo(60, 0); ctx.lineTo(60, -beamHeight);
+                ctx.stroke();
+
+                ctx.globalCompositeOperation = 'source-over';
+                ctx.restore();
+            });
+        }
+
+        // DIAMOND LVL 3 SATELLITE (Orbiting UI indicator)
+        if (e.shape === 'diamond' && e.boss && (e.bossTier === 3 || (state.gameTime > 1200 && e.bossTier !== 1))) {
+            ctx.save();
+            // Orbit around boss
+            const orbitRadius = e.size * 2.5;
+            const orbitSpeed = state.gameTime * 1.5; // Slow orbit
+            const satX = Math.cos(orbitSpeed) * orbitRadius;
+            const satY = Math.sin(orbitSpeed) * orbitRadius;
+
+            ctx.translate(satX, satY);
+
+            // Draw small satellite
+            const satSize = 8;
+            ctx.fillStyle = e.eraPalette?.[0] || e.palette[0];
+            ctx.shadowColor = e.eraPalette?.[0] || e.palette[0];
+            ctx.shadowBlur = 10;
+
+            // Diamond shape for satellite
+            ctx.beginPath();
+            ctx.moveTo(0, -satSize);
+            ctx.lineTo(satSize * 0.7, 0);
+            ctx.lineTo(0, satSize);
+            ctx.lineTo(-satSize * 0.7, 0);
+            ctx.closePath();
+            ctx.fill();
+
+            // Glow ring
+            ctx.strokeStyle = e.eraPalette?.[0] || e.palette[0];
+            ctx.lineWidth = 1;
+            ctx.globalAlpha = 0.5;
+            ctx.beginPath();
+            ctx.arc(0, 0, satSize * 1.5, 0, Math.PI * 2);
+            ctx.stroke();
 
             ctx.restore();
         }
@@ -449,11 +594,42 @@ export function renderEnemies(ctx: CanvasRenderingContext2D, state: GameState, m
 
         if (e.rotationPhase) ctx.rotate(e.rotationPhase);
 
+        // BOSS SHIELDED AURA (Level 3 protection)
+        if (e.orbitalShields && e.orbitalShields > 0) {
+            ctx.save();
+            // Counter-rotate a bit or just spin a slow barrier
+            // e.rotationPhase rotates the context, so this barrier spins with the boss.
+            // Draw a protective energy field
+            ctx.strokeStyle = '#06b6d4'; // Cyan
+            ctx.lineWidth = 2;
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = '#06b6d4';
+            ctx.globalAlpha = 0.4;
+
+            // Draw a hexagonal force field barrier
+            const barrierSize = 110; // Protective bubble radius
+            ctx.beginPath();
+            for (let i = 0; i < 6; i++) {
+                const ang = (Math.PI / 3) * i;
+                const px = Math.cos(ang) * barrierSize;
+                const py = Math.sin(ang) * barrierSize;
+                if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+            }
+            ctx.closePath();
+            ctx.stroke();
+
+            // Inner fill
+            ctx.fillStyle = '#06b6d4';
+            ctx.globalAlpha = 0.1;
+            ctx.fill();
+            ctx.restore();
+        }
+
         // ELITE AURA
         if (e.isElite) {
             ctx.save();
             ctx.rotate(-(e.rotationPhase || 0) * 2);
-            ctx.strokeStyle = e.palette[0];
+            ctx.strokeStyle = e.eraPalette?.[0] || e.palette[0];
             ctx.lineWidth = 4;
             ctx.globalAlpha = 1;
             const r = e.size * 1.5;
@@ -587,6 +763,15 @@ export function renderEnemies(ctx: CanvasRenderingContext2D, state: GameState, m
                     const p = wp(Math.cos(angle) * size, Math.sin(angle) * size);
                     if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
                 }
+                ctx.closePath();
+            } else if ((e.type as any) === 'orbital_shield') {
+                // Shield Plate Design: Curved rectangle/Arc
+                // Wider arc for better coverage
+                const arcLen = Math.PI / 1.5; // 120 degrees coverage (wider than before)
+                // Draw a thick arc section
+                ctx.beginPath();
+                ctx.arc(0, 0, size, -arcLen / 2, arcLen / 2); // Outer arc
+                ctx.arc(0, 0, size * 0.6, arcLen / 2, -arcLen / 2, true); // Inner arc
                 ctx.closePath();
             } else if (e.shape === 'snitch') {
                 const bodyR = size * 0.7;
@@ -953,7 +1138,24 @@ export function renderProjectiles(ctx: CanvasRenderingContext2D, state: GameStat
             ctx.restore();
         } else {
             // Standard Bullet (corrected to use b.color)
-            ctx.fillStyle = b.color || '#22d3ee';
+            const baseColor = b.color || '#22d3ee';
+
+            // Malware Trail Rendering
+            if (b.trails && b.trails.length > 0) {
+                ctx.save();
+                b.trails.forEach((pos, idx) => {
+                    const alpha = 0.5 * (1 - idx / b.trails!.length);
+                    const trailSize = b.size * (0.9 - (idx / b.trails!.length) * 0.4);
+                    ctx.globalAlpha = alpha;
+                    ctx.fillStyle = baseColor;
+                    ctx.beginPath();
+                    ctx.arc(pos.x, pos.y, trailSize, 0, Math.PI * 2);
+                    ctx.fill();
+                });
+                ctx.restore();
+            }
+
+            ctx.fillStyle = baseColor;
             ctx.beginPath();
             ctx.arc(b.x, b.y, b.size, 0, Math.PI * 2);
             ctx.fill();
