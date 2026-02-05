@@ -76,7 +76,7 @@ export async function startBGM(arenaId: number | string = 0) {
     initMasterGains();
 
     isBgmPlaying = true;
-    await switchBGM(arenaId);
+    await switchBGM(arenaId, 0.1);
 
     // Load SFX Assets
     await loadSfxAssets();
@@ -91,19 +91,45 @@ const BGM_TRACKS: Record<number | string, string> = {
 
 let currentTrackId: number | string | null = null;
 
-export async function switchBGM(arenaId: number | string) {
+// Fade out current music manually (for portal transition)
+export function fadeOutMusic(duration: number = 0.5) {
+    if (bgmGain && audioCtx.state === 'running') {
+        // Cancel any pending scheduled changes
+        bgmGain.gain.cancelScheduledValues(audioCtx.currentTime);
+        bgmGain.gain.setValueAtTime(bgmGain.gain.value, audioCtx.currentTime);
+        bgmGain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + duration);
+
+        // Stop the source after fade
+        const s = bgmSource;
+        setTimeout(() => {
+            if (s === bgmSource && s) { // Only stop if it's still the same source
+                try { s.stop(); } catch (e) { }
+                bgmSource = null;
+                isBgmPlaying = false;
+            }
+        }, duration * 1000 + 50);
+    }
+}
+
+export async function switchBGM(arenaId: number | string, fadeInDuration: number = 0.5) {
     if (currentTrackId === arenaId && bgmSource) return;
 
     if (bgmSource) {
-        // Fade out
+        // Default quick Fade out if not already faded manually
         const fadeOutTime = 0.5;
-        if (bgmGain) {
+        if (bgmGain && bgmGain.gain.value > 0.01) { // Only fade if clear volume
+            bgmGain.gain.cancelScheduledValues(audioCtx.currentTime);
+            bgmGain.gain.setValueAtTime(bgmGain.gain.value, audioCtx.currentTime);
             bgmGain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + fadeOutTime);
+
+            const oldSource = bgmSource;
+            setTimeout(() => {
+                try { oldSource.stop(); } catch (e) { }
+            }, fadeOutTime * 1000 + 100);
+        } else {
+            // Already silent/fading, just stop
+            try { bgmSource.stop(); } catch (e) { }
         }
-        const oldSource = bgmSource;
-        setTimeout(() => {
-            try { oldSource.stop(); } catch (e) { }
-        }, fadeOutTime * 1000 + 100);
     }
 
     currentTrackId = arenaId;
@@ -113,13 +139,13 @@ export async function switchBGM(arenaId: number | string) {
         const response = await fetch(trackUrl);
         const arrayBuffer = await response.arrayBuffer();
         bgmBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-        playBgmLoop();
+        playBgmLoop(fadeInDuration);
     } catch (e) {
         console.error(`Failed to load BGM track ${trackUrl}:`, e);
     }
 }
 
-function playBgmLoop() {
+function playBgmLoop(fadeInDuration: number = 0.5) {
     if (!bgmBuffer || !isBgmPlaying) return;
 
     if (bgmSource) {
@@ -131,7 +157,11 @@ function playBgmLoop() {
     bgmSource.loop = true; // Loop the entire track
 
     bgmGain = audioCtx.createGain();
-    bgmGain.gain.value = savedMusicVolume;
+
+    // Handle Fade In
+    bgmGain.gain.value = 0;
+    bgmGain.gain.setValueAtTime(0, audioCtx.currentTime);
+    bgmGain.gain.linearRampToValueAtTime(savedMusicVolume, audioCtx.currentTime + fadeInDuration);
 
     bgmSource.connect(bgmGain);
     bgmGain.connect(masterMusicGain!);

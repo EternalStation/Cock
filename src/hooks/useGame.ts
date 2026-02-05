@@ -13,7 +13,7 @@ import { calcStat } from '../logic/MathUtils';
 import { updateLoot } from '../logic/LootLogic';
 import { updateParticles, spawnParticles, spawnFloatingNumber } from '../logic/ParticleLogic'; // Added spawnParticles import
 import { ARENA_CENTERS, ARENA_RADIUS, PORTALS, getHexWallLine } from '../logic/MapLogic';
-import { playSfx, updateBGMPhase, duckMusic, restoreMusic, pauseMusic, resumeMusic, startBossAmbience, stopBossAmbience, startPortalAmbience, stopPortalAmbience, switchBGM } from '../logic/AudioLogic';
+import { playSfx, updateBGMPhase, duckMusic, restoreMusic, pauseMusic, resumeMusic, startBossAmbience, stopBossAmbience, startPortalAmbience, stopPortalAmbience, switchBGM, fadeOutMusic } from '../logic/AudioLogic';
 import { syncLegendaryHex, applyLegendarySelection, syncAllLegendaries } from '../logic/LegendaryLogic';
 import { updateDirector } from '../logic/DirectorLogic';
 
@@ -642,7 +642,7 @@ export function useGameLoop(gameStarted: boolean) {
                         const wallLen = den;
                         if (dist < 100 && distToCenter < wallLen / 2 + 50) {
                             state.portalState = 'transferring';
-                            state.transferTimer = 3.0;
+                            state.transferTimer = 5.0; // 5s fade out
                             state.nextArenaId = p.to;
                             state.portalsUsed++;
 
@@ -654,6 +654,7 @@ export function useGameLoop(gameStarted: boolean) {
 
                             playSfx('rare-despawn');
                             stopPortalAmbience();
+                            fadeOutMusic(5.0); // Slow fade out
                             break;
                         }
                     }
@@ -687,7 +688,7 @@ export function useGameLoop(gameStarted: boolean) {
                 state.portalTimer = 0;
 
                 // Switch BGM for the new arena
-                switchBGM(newArena);
+                switchBGM(newArena, 5.0);
 
                 playSfx('spawn');
             }

@@ -83,7 +83,7 @@ function App() {
   };
 
   const handleArenaSelect = (arenaId: number) => {
-    startBGM();
+    startBGM(arenaId);
     setSelectingArena(false);
     setGameStarted(true);
     if (selectedClass) {
