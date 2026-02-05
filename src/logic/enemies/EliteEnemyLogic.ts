@@ -131,7 +131,7 @@ export function updateEliteDiamond(e: Enemy, state: GameState, player: any, dist
         // Charge Transition (Every 5 seconds)
         if (Date.now() - (e.lastAttack || 0) > 5000) {
             e.eliteState = 1;
-            e.timer = Date.now() + 1000; // 1s Charge
+            e.timer = Date.now() + 1200; // 1.2s Charge
             e.dashState = angleToPlayerD; // Lock angle
         }
     } else if (e.eliteState === 1) {
@@ -174,7 +174,7 @@ export function updateEliteDiamond(e: Enemy, state: GameState, player: any, dist
             // And "shielding" usually refers to normal shield? Or Legendary Shield?
             // "flat percentage" suggests pure damage.
 
-            const rawDmg = e.maxHp * 0.05;
+            const rawDmg = e.maxHp * 0.04;
 
             // LASER REDUCTION LOGIC
             // User: Lasers are reduced by armor, but NOT by projectile reduction
@@ -196,6 +196,7 @@ export function updateEliteDiamond(e: Enemy, state: GameState, player: any, dist
 
             if (player.curHp <= 0 && !state.gameOver) {
                 state.gameOver = true;
+                player.deathCause = 'Elite Diamond Laser';
                 if (onEvent) onEvent('game_over');
             }
         }

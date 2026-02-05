@@ -754,6 +754,7 @@ export function updateProjectiles(state: GameState, onEvent?: (event: string, da
                             if (player.curHp <= 0) {
                                 player.curHp = 0;
                                 state.gameOver = true;
+                                player.deathCause = 'Elite Square Thorns';
                                 if (onEvent) onEvent('game_over');
                             }
                         }
@@ -932,6 +933,12 @@ export function updateProjectiles(state: GameState, onEvent?: (event: string, da
                     player.curHp -= finalDmg;
                     player.damageTaken += finalDmg;
                     if (onEvent) onEvent('player_hit', { dmg: finalDmg });
+
+                    if (player.curHp <= 0 && !state.gameOver) {
+                        state.gameOver = true;
+                        player.deathCause = 'Enemy Projectile';
+                        if (onEvent) onEvent('game_over');
+                    }
                 }
                 spawnFloatingNumber(state, player.x, player.y, Math.round(dmg).toString(), '#ef4444', false);
             }

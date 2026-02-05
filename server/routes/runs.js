@@ -31,7 +31,8 @@ router.post('/', authenticateToken, async (req, res) => {
             arenaTimes,
             legendaryHexes,
             hexLevelupOrder,
-            snitchesCaught
+            snitchesCaught,
+            deathCause
         } = req.body;
 
         // Validation
@@ -62,7 +63,8 @@ router.post('/', authenticateToken, async (req, res) => {
                 arena_times,
                 legendary_hexes,
                 hex_levelup_order,
-                snitches_caught
+                snitches_caught,
+                death_cause
             ) VALUES (
                 ${playerId},
                 ${score},
@@ -84,7 +86,8 @@ router.post('/', authenticateToken, async (req, res) => {
                 ${JSON.stringify(arenaTimes || { 0: 0, 1: 0, 2: 0 })},
                 ${JSON.stringify(legendaryHexes || [])},
                 ${JSON.stringify(hexLevelupOrder || [])},
-                ${snitchesCaught || 0}
+                ${snitchesCaught || 0},
+                ${deathCause || 'Unknown'}
             )
             RETURNING id, score, completed_at, survival_time
         `;
@@ -136,7 +139,9 @@ router.get('/me', authenticateToken, async (req, res) => {
                 arena_times,
                 legendary_hexes,
                 hex_levelup_order,
+                hex_levelup_order,
                 snitches_caught,
+                death_cause,
                 completed_at
             FROM game_runs
             WHERE player_id = ${playerId}
@@ -176,6 +181,8 @@ router.get('/me/best', authenticateToken, async (req, res) => {
                 arena_times,
                 legendary_hexes,
                 hex_levelup_order,
+                snitches_caught,
+                death_cause,
                 completed_at
             FROM game_runs
             WHERE player_id = ${playerId}
@@ -239,6 +246,7 @@ router.get('/:runId', async (req, res) => {
         const result = await sql`
             SELECT 
                 gr.*,
+                gr.death_cause,
                 p.username
             FROM game_runs gr
             JOIN players p ON gr.player_id = p.id

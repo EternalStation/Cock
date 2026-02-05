@@ -32,12 +32,14 @@ export const DeathScreen: React.FC<DeathScreenProps> = ({ stats, gameState, onRe
         portals: 0,
     });
 
-    const hasSubmitted = React.useRef(false);
-
     useEffect(() => {
         // Auto-submit run when player dies
-        if (hasSubmitted.current) return;
-        hasSubmitted.current = true;
+        if (gameState.runSubmitted) {
+            setIsSubmitting(false); // Already submitted, stop loading
+            return;
+        }
+
+        gameState.runSubmitted = true; // Mark as submitted immediately
 
         submitRunToLeaderboard(gameState).then(result => {
             if (result.success && result.rank) {

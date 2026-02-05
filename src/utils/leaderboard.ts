@@ -23,8 +23,9 @@ export interface RunSubmissionData {
     portalsUsed: number;
     arenaTimes: Record<number, number>;
     legendaryHexes: any[];
-    hexLevelupOrder: any[];
+    hexLevelupOrder: Array<{ hexId: string; level: number; killCount: number; gameTime?: number }>;
     snitchesCaught: number;
+    deathCause?: string;
 }
 
 /**
@@ -40,27 +41,35 @@ export function prepareRunData(gameState: GameState): RunSubmissionData {
             type: hex!.type,
             level: hex!.level,
             killsAtAcquisition: hex!.killsAtAcquisition,
-            killsAtLevel: hex!.killsAtLevel || {}
+            timeAtAcquisition: hex!.timeAtAcquisition,
+            killsAtLevel: hex!.killsAtLevel || {},
+            timeAtLevel: hex!.timeAtLevel || {}
         }));
 
     // Create level-up order array from killsAtLevel data
-    const hexLevelupOrder: Array<{ hexId: string; level: number; killCount: number }> = [];
+    const hexLevelupOrder: Array<{ hexId: string; level: number; killCount: number; gameTime?: number }> = [];
 
     legendaryHexes.forEach(hex => {
         // Add initial acquisition
         hexLevelupOrder.push({
             hexId: hex.id,
             level: 1,
-            killCount: hex.killsAtAcquisition
+            killCount: hex.killsAtAcquisition,
+            gameTime: hex.timeAtAcquisition
         });
 
         // Add each level up
         if (hex.killsAtLevel) {
             Object.entries(hex.killsAtLevel).forEach(([level, kills]) => {
+                const lvl = parseInt(level);
+                if (lvl === 1) return; // Skip Level 1 to avoid duplication with acquisition
+
+                const time = hex.timeAtLevel?.[lvl];
                 hexLevelupOrder.push({
                     hexId: hex.id,
-                    level: parseInt(level),
-                    killCount: kills as number
+                    level: lvl,
+                    killCount: kills as number,
+                    gameTime: time
                 });
             });
         }
@@ -103,7 +112,8 @@ export function prepareRunData(gameState: GameState): RunSubmissionData {
         arenaTimes: gameState.timeInArena,
         legendaryHexes,
         hexLevelupOrder,
-        snitchesCaught: gameState.snitchCaught || 0
+        snitchesCaught: gameState.snitchCaught || 0,
+        deathCause: gameState.player.deathCause || 'Unknown'
     };
 }
 

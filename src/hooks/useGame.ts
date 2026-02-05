@@ -195,6 +195,9 @@ export function useGameLoop(gameStarted: boolean) {
             if (!existing.killsAtLevel) existing.killsAtLevel = {};
             existing.killsAtLevel[existing.level] = state.killCount;
 
+            if (!existing.timeAtLevel) existing.timeAtLevel = {};
+            existing.timeAtLevel[existing.level] = state.gameTime;
+
             syncLegendaryHex(state, existing);
             state.upgradingHexIndex = existingIdx;
             state.upgradingHexTimer = 3.0;

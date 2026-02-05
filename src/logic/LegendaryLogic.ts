@@ -137,7 +137,7 @@ export function getLegendaryPerksArray(type: string, level: number, state?: Game
         EcoXP: [
             ["+1 XP per kill"],
             ["+1 Dust per 50 kills"],
-            ["+0.1% Perk Power per 20 kills"],
+            ["+0.1% Perk Power per 100 kills"],
             ["+1% XP Gain per kill"],
             ["MAX LEVEL"]
         ],
@@ -226,6 +226,7 @@ export function getLegendaryOptions(state: GameState): LegendaryHex[] {
 
         const level = existing ? Math.min(5, existing.level + 1) : 1;
         const killsAtAcquisition = existing ? existing.killsAtAcquisition : state.killCount;
+        const timeAtAcquisition = existing ? existing.timeAtAcquisition : state.gameTime;
 
         // Pass existing killsAtLevel or create new one
         const killsAtLevel = existing ? { ...existing.killsAtLevel } : {};
@@ -233,11 +234,18 @@ export function getLegendaryOptions(state: GameState): LegendaryHex[] {
             killsAtLevel[level] = state.killCount;
         }
 
+        const timeAtLevel = existing ? { ...existing.timeAtLevel } : {};
+        if (!timeAtLevel[level]) {
+            timeAtLevel[level] = state.gameTime;
+        }
+
         return {
             ...base,
             level,
             killsAtAcquisition,
+            timeAtAcquisition,
             killsAtLevel,
+            timeAtLevel,
             desc: getLegendaryPerkDesc(base.type, level, state, existing || undefined),
             perks: getLegendaryPerksArray(base.type, level, state, existing || undefined)
         };
@@ -271,6 +279,10 @@ export function applyLegendarySelection(state: GameState, selection: LegendaryHe
         // Record starting killCount for this NEW level
         existing.killsAtLevel[existing.level] = state.killCount;
 
+        // Initialize timeAtLevel
+        if (!existing.timeAtLevel) existing.timeAtLevel = {};
+        existing.timeAtLevel[existing.level] = state.gameTime;
+
         syncLegendaryHex(state, existing); // This ensures `perks`/`desc` are updated for the new level
         state.pendingLegendaryHex = null;
         state.showLegendarySelection = false;
@@ -279,6 +291,11 @@ export function applyLegendarySelection(state: GameState, selection: LegendaryHe
         // Initial Acquisition
         if (!selection.killsAtLevel) selection.killsAtLevel = {};
         selection.killsAtLevel[1] = state.killCount;
+
+        if (!selection.timeAtLevel) selection.timeAtLevel = {};
+        selection.timeAtLevel[1] = state.gameTime;
+        // Ensure acquisition time is set
+        if (selection.timeAtAcquisition === undefined) selection.timeAtAcquisition = state.gameTime;
 
         syncLegendaryHex(state, selection);
         state.pendingLegendaryHex = selection;
@@ -364,7 +381,7 @@ export function calculateLegendaryBonus(state: GameState, statKey: string, skipM
             }
             if (statKey === 'metric_resonance' && hex.level >= 3) {
                 // Return total % bonus to apply to perks
-                total += (getKillsSinceLevel(3) / 20) * 0.1 * multiplier;
+                total += (getKillsSinceLevel(3) / 100) * 0.1 * multiplier;
             }
             if (statKey === 'xp_pct_per_kill' && hex.level >= 4) total += getKillsSinceLevel(4) * 1 * multiplier;
         }

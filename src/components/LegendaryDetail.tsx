@@ -164,7 +164,7 @@ export const LegendaryDetail: React.FC<LegendaryDetailProps> = ({ hex, gameState
                             const effectiveKills = useFloor ? Math.floor(levelKills / divisor) : (levelKills / divisor);
                             const totalValue = finalValuePerKill * effectiveKills;
 
-                            displayValue = `+${totalValue.toFixed(2)}${hasPercent ? '%' : ''}`;
+                            displayValue = `+${totalValue.toFixed(1)}${hasPercent ? '%' : ''}`;
                             isNumeric = p.includes('per kill') || p.includes('per 20 kills') || p.includes('per 50 kills');
                             cleanLabel = p.replace(/[+]\d+\.?\d*%?\s*/, '')
                                 .replace('per kill', '')

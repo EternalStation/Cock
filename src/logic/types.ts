@@ -120,6 +120,7 @@ export interface Player {
     classShotCount?: number; // For Storm-Strike Hyper-Pulse
     lastCosmicStrikeTime?: number; // For Cosmic Beam class tracking
     blackholeCooldown?: number; // Timestamp when next blackhole can be created (Event Horizon)
+    deathCause?: string; // Reason for game over
 }
 
 export interface ClassMetric {
@@ -443,7 +444,9 @@ export interface LegendaryHex {
     type: LegendaryType;
     level: number;
     killsAtAcquisition: number;
+    timeAtAcquisition?: number;
     killsAtLevel?: Record<number, number>; // Track killCount when each level was unlocked
+    timeAtLevel?: Record<number, number>; // Track gameTime when each level was unlocked
     customIcon?: string;
     description?: string;
     lore?: string;
@@ -540,6 +543,7 @@ export interface GameState {
     portalOpenDuration: number; // 10s
     transferTimer: number; // 3s delay during teleport
     nextArenaId: number | null; // Destination
+    runSubmitted?: boolean;
 
     // Inventory System
     meteoriteDust: number; // Currency from recycling

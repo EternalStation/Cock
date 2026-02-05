@@ -35,6 +35,7 @@ router.get('/global', async (req, res) => {
                 gr.portals_used,
                 gr.hex_levelup_order,
                 gr.snitches_caught,
+                gr.death_cause,
                 gr.patch_version
             FROM game_runs gr
             JOIN players p ON gr.player_id = p.id
@@ -82,6 +83,7 @@ router.get('/daily', async (req, res) => {
                 gr.portals_used,
                 gr.hex_levelup_order,
                 gr.snitches_caught,
+                gr.death_cause,
                 gr.patch_version
             FROM game_runs gr
             JOIN players p ON gr.player_id = p.id
@@ -129,6 +131,7 @@ router.get('/weekly', async (req, res) => {
                 gr.portals_used,
                 gr.hex_levelup_order,
                 gr.snitches_caught,
+                gr.death_cause,
                 gr.patch_version
             FROM game_runs gr
             JOIN players p ON gr.player_id = p.id
@@ -178,6 +181,7 @@ router.get('/patch/:version', async (req, res) => {
                 gr.portals_used,
                 gr.hex_levelup_order,
                 gr.snitches_caught,
+                gr.death_cause,
                 gr.patch_version
             FROM game_runs gr
             JOIN players p ON gr.player_id = p.id

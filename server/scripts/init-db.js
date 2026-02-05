@@ -58,7 +58,10 @@ export async function initializeDatabase() {
                 radar_counts JSONB DEFAULT '{}'::jsonb,
                 
                 -- Snitch tracking
-                snitches_caught INTEGER DEFAULT 0
+                snitches_caught INTEGER DEFAULT 0,
+
+                -- Death Cause
+                death_cause VARCHAR(255) DEFAULT 'Unknown'
             )
         `;
         console.log('✅ Game runs table created');

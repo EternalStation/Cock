@@ -1,3 +1,4 @@
+
 import type { GameState, Enemy } from './types';
 import { getPlayerThemeColor } from './helpers';
 import { isInMap, ARENA_CENTERS, PORTALS, getHexWallLine, ARENA_RADIUS } from './MapLogic';
@@ -172,14 +173,13 @@ export function updatePlayer(state: GameState, keys: Record<string, boolean>, on
                     player.damageTaken += finalWallDmg;
                 }
                 spawnFloatingNumber(state, player.x, player.y, Math.round(wallDmg).toString(), '#ef4444', false);
-
-                // --- CLASS CAPABILITIES (Legacy removed) ---
             }
 
             if (onEvent) onEvent('player_hit', { dmg: wallDmg });
 
             if (player.curHp <= 0) {
                 state.gameOver = true;
+                player.deathCause = 'Wall Impact';
                 if (onEvent) onEvent('game_over');
             }
         }
@@ -292,17 +292,9 @@ export function updatePlayer(state: GameState, keys: Record<string, boolean>, on
 
                 if (isLinked) {
                     // LINKED COLLISION LOGIC
-                    // LINKED COLLISION LOGIC
-                    // (linkSourceTime logic removed as it was for Era Color which is now replaced)
-
-                    // Determine Link Color
-                    // User Request: Prevent specific green color change. Use Theme Color.
                     const linkColor = getPlayerThemeColor(state);
-
-                    // 1. Player takes 30% Damage (Double normal)
                     rawDmg = e.hp * 0.30;
 
-                    // 2. Resolve Link Damage (Distribute MaxHP to others)
                     let linkedTargets: Enemy[] = [];
                     if (e.soulLinkHostId) {
                         const host = state.enemies.find(h => h.id === e.soulLinkHostId && !h.dead);
@@ -334,7 +326,6 @@ export function updatePlayer(state: GameState, keys: Record<string, boolean>, on
                     // 3. Instant Death for the collider
                     if (!e.boss) {
                         e.hp = 0;
-                        // spawnFloatingNumber(state, e.x, e.y, "LINK BREAK", linkColor, true); // Removed as requested
                     }
 
                 } else if (e.shape === 'minion' && e.parentId !== undefined) {
@@ -410,8 +401,6 @@ export function updatePlayer(state: GameState, keys: Record<string, boolean>, on
                         player.damageTaken += actualDmg;
                     }
                     spawnFloatingNumber(state, player.x, player.y, Math.round(finalDmg).toString(), '#ef4444', false);
-
-                    // --- CLASS CAPABILITIES (Legacy removed) ---
                 }
             }
 
@@ -450,6 +439,25 @@ export function updatePlayer(state: GameState, keys: Record<string, boolean>, on
             // Check Game Over
             if (player.curHp <= 0 && !state.gameOver) {
                 state.gameOver = true;
+
+                // Determine Death Cause
+                if (e.legionId) player.deathCause = 'Legion Swarm';
+                else if (e.isZombie) player.deathCause = 'Zombie Horde';
+                else if (e.shape === 'minion') player.deathCause = 'Pentagon Minion';
+                else if (e.boss) {
+                    const tier = e.bossTier || 1;
+                    const shape = e.shape.charAt(0).toUpperCase() + e.shape.slice(1);
+                    player.deathCause = `Boss ${shape} (Lvl ${tier})`;
+                }
+                else if (e.isElite) {
+                    const shape = e.shape.charAt(0).toUpperCase() + e.shape.slice(1);
+                    player.deathCause = `Collision with Elite ${shape}`;
+                }
+                else {
+                    const shape = e.shape.charAt(0).toUpperCase() + e.shape.slice(1);
+                    player.deathCause = `Collision with ${shape}`;
+                }
+
                 if (onEvent) onEvent('game_over');
             }
         }

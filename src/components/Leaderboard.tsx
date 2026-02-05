@@ -24,8 +24,9 @@ interface LeaderboardEntry {
     damage_blocked_shield?: number;
     radar_counts?: any;
     portals_used?: number;
-    hex_levelup_order?: Array<{ hexId: string; level: number; killCount: number }>;
+    hex_levelup_order?: Array<{ hexId: string; level: number; killCount: number; gameTime?: number }>;
     snitches_caught?: number;
+    death_cause?: string;
     patch_version?: string;
 }
 
@@ -190,12 +191,26 @@ export default function Leaderboard({ onClose, currentUsername }: LeaderboardPro
                     <div className="leaderboard-filters">
                         <div className="filter-group">
                             <label>CLASS:</label>
-                            <select value={classFilter} onChange={(e) => setClassFilter(e.target.value)}>
-                                <option value="All">ALL CLASSES</option>
+                            <div className="class-filter-row">
+                                <button
+                                    className={`class-filter-btn ${classFilter === 'All' ? 'active' : ''}`}
+                                    onClick={() => setClassFilter('All')}
+                                    title="ALL CLASSES"
+                                >
+                                    <div className="hex-icon-placeholder">ALL</div>
+                                </button>
                                 {PLAYER_CLASSES.map(cls => (
-                                    <option key={cls.id} value={cls.id}>{cls.name.toUpperCase()}</option>
+                                    <button
+                                        key={cls.id}
+                                        className={`class-filter-btn ${classFilter === cls.id ? 'active' : ''}`}
+                                        onClick={() => setClassFilter(cls.id)}
+                                        title={cls.name.toUpperCase()}
+                                        style={{ '--class-color': cls.themeColor } as React.CSSProperties}
+                                    >
+                                        <img src={cls.iconUrl} alt={cls.name} />
+                                    </button>
                                 ))}
-                            </select>
+                            </div>
                         </div>
                         <div className="filter-group">
                             <label>SEARCH:</label>
@@ -235,6 +250,7 @@ export default function Leaderboard({ onClose, currentUsername }: LeaderboardPro
                                     <th>Player</th>
                                     <th>Time</th>
                                     <th>Class</th>
+                                    <th>Cause</th>
                                     <th>Date</th>
                                     <th>Patch</th>
                                 </tr>
@@ -260,6 +276,7 @@ export default function Leaderboard({ onClose, currentUsername }: LeaderboardPro
                                                 </td>
                                                 <td className="time-val">{formatTime(entry.survival_time)}</td>
                                                 <td className="class-name" style={{ color: classColor }}>{getClassName(entry.class_used)}</td>
+                                                <td className="cause-val" style={{ color: '#ef4444', fontSize: '0.9em' }}>{entry.death_cause || 'Unknown'}</td>
                                                 <td className="date">{formatDate(entry.completed_at)}</td>
                                                 <td className="patch-val" style={{ opacity: 0.5 }}>{entry.patch_version || '1.0.0'}</td>
                                             </tr>
@@ -337,7 +354,7 @@ export default function Leaderboard({ onClose, currentUsername }: LeaderboardPro
                                                                                         />
                                                                                     </div>
                                                                                     <div className="hex-step-level">LVL {step.level}</div>
-                                                                                    <div className="hex-step-kills">{step.killCount} KILLS</div>
+                                                                                    <div className="hex-step-kills">{step.gameTime ? formatTime(step.gameTime) : ''}</div>
                                                                                 </div>
                                                                             );
                                                                         })
